@@ -117,7 +117,7 @@ describe("an operator's ban of the account", () => {
 
     // A welcome had carried the operator's role.
     contexts().at(-1)?.onRoles([CONTRACT_ROLES.operator])
-    expect([...session.roles()]).toEqual(['operator'])
+    expect([...session.roles()]).toEqual([CONTRACT_ROLES.operator])
     session.onRoles((roles) => heard.push([...roles]))
 
     stub.closeChannels(ann.identity.id, id, CLOSE.banned)

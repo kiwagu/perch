@@ -156,9 +156,9 @@ describe('syncTransport: the channel the browser and the seed open', () => {
 
     opened().receive(welcomeWith([CONTRACT_ROLES.operator]))
 
-    expect(savedRoles(storage, session)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(told).toEqual([['operator']])
+    expect(savedRoles(storage, session)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(told).toEqual([[CONTRACT_ROLES.operator]])
   })
 
   it('takes the role away when a later welcome does not carry it', async () => {
@@ -172,7 +172,7 @@ describe('syncTransport: the channel the browser and the seed open', () => {
 
     expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
-    expect(told).toEqual([['operator'], []])
+    expect(told).toEqual([[CONTRACT_ROLES.operator], []])
   })
 
   it("hands the welcome's memberships to the context", () => {

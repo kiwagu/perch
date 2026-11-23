@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import { rolesOf } from './platform-roles'
 
 describe('rolesOf', () => {
   it('reads an operator as the platform role operator', () => {
-    expect(rolesOf('operator')).toEqual(['operator'])
+    expect(rolesOf('operator')).toEqual([CONTRACT_ROLES.operator])
   })
 
   it.each<{ readonly role: string | null | undefined; readonly what: string }>([

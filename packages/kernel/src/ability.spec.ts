@@ -59,7 +59,7 @@ describe('defineAbilityFor', () => {
   })
 
   it('names the two roles and takes the key of an owner reference', () => {
-    expect(TENANT_ROLES).toEqual(['member', 'admin'])
+    expect(TENANT_ROLES).toEqual([CONTRACT_ROLES.member, CONTRACT_ROLES.admin])
     expect(ownerKeyOf('member:idn_a')).toBe('idn_a')
     expect(ownerKeyOf('idn_a')).toBe('idn_a')
     expect(ownerKeyOf('')).toBeUndefined()

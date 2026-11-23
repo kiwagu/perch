@@ -219,7 +219,7 @@ describe('createOrganisations', () => {
     expect((await organisations.revokeInvitation('acme', invitationToBob.id)).isOk()).toBe(true)
     expect((await organisations.remove('acme', bob.identity.id)).isOk()).toBe(true)
     expect(calls).toEqual([
-      ['invite', 'acme', bob.identity.email, 'admin'],
+      ['invite', 'acme', bob.identity.email, CONTRACT_ROLES.admin],
       ['invitations', 'acme'],
       ['revokeInvitation', 'acme', invitationToBob.id],
     ])
@@ -240,7 +240,7 @@ describe('createOrganisations', () => {
     expect(
       (await organisations.setRole('acme', bob.identity.id, CONTRACT_ROLES.admin)).isOk(),
     ).toBe(true)
-    expect(calls).toEqual([['setRole', 'acme', bob.identity.id, 'admin']])
+    expect(calls).toEqual([['setRole', 'acme', bob.identity.id, CONTRACT_ROLES.admin]])
     expect(session.memberships()).toEqual([acme])
     expect(savedMemberships(storage, annSession)).toEqual(before)
     expect(tenantsOpened()).toEqual(opened)

@@ -201,8 +201,8 @@ describe('ConnectionRegistry', () => {
 
     // Both connections were reached at once, but the call resolves only once the busy one has.
     await settle()
-    expect(laptop.reroled).toEqual([['tenant:acme', 'admin']])
-    expect(phone.reroled).toEqual([['tenant:acme', 'admin']])
+    expect(laptop.reroled).toEqual([['tenant:acme', CONTRACT_ROLES.admin]])
+    expect(phone.reroled).toEqual([['tenant:acme', CONTRACT_ROLES.admin]])
     expect(rerolling.resolved).toBe(false)
 
     busy.resolve()

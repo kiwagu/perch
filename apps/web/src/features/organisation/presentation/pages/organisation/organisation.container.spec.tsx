@@ -165,7 +165,9 @@ describe('OrganisationContainer', () => {
       await openPage([acme], gatewayWith({ invite }))
       type('organisation.invite.email-input', 'bea@example.test')
       fireEvent.click(screen.getByTestId('organisation.invite.submit-button'))
-      await waitFor(() => expect(invite).toHaveBeenCalledWith('acme', 'bea@example.test', 'member'))
+      await waitFor(() =>
+        expect(invite).toHaveBeenCalledWith('acme', 'bea@example.test', CONTRACT_ROLES.member),
+      )
 
       expect(field('organisation.invite.email-input').value).toBe('bea@example.test')
 
@@ -185,7 +187,7 @@ describe('OrganisationContainer', () => {
       type('organisation.invite.email-input', 'late@example.test')
       fireEvent.click(screen.getByTestId('organisation.invite.submit-button'))
       await waitFor(() =>
-        expect(invite).toHaveBeenCalledWith('acme', 'late@example.test', 'member'),
+        expect(invite).toHaveBeenCalledWith('acme', 'late@example.test', CONTRACT_ROLES.member),
       )
 
       // The membership in Acme goes away on another device, which makes Globex current here.
@@ -287,7 +289,9 @@ describe('OrganisationContainer', () => {
       const { select } = await openPage([acme, globex], gatewayWith({ members, setRole }))
 
       await makeAdmin(beaMember)
-      await waitFor(() => expect(setRole).toHaveBeenCalledWith('acme', bea.id, 'admin'))
+      await waitFor(() =>
+        expect(setRole).toHaveBeenCalledWith('acme', bea.id, CONTRACT_ROLES.admin),
+      )
 
       expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
@@ -316,7 +320,9 @@ describe('OrganisationContainer', () => {
       expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member)
 
       await makeAdmin(beaMember)
-      await waitFor(() => expect(setRole).toHaveBeenCalledWith('acme', bea.id, 'admin'))
+      await waitFor(() =>
+        expect(setRole).toHaveBeenCalledWith('acme', bea.id, CONTRACT_ROLES.admin),
+      )
       // The members are read again once the change is done; that read has not come yet.
       await waitFor(() => expect(members).toHaveBeenCalledTimes(2))
 

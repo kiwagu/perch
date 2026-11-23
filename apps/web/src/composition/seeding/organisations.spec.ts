@@ -45,7 +45,7 @@ describe('ensureInvited', () => {
       kind: 'invited',
       invitation: invitation.id,
     })
-    expect(asked).toEqual([['acme', beto, 'member']])
+    expect(asked).toEqual([['acme', beto, CONTRACT_ROLES.member]])
   })
 
   it('finds an account that is a member already: there is no invitation to accept', async () => {

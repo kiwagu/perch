@@ -206,7 +206,7 @@ describe('organisation machine', () => {
     })
     await region('invite', 'idle')
 
-    expect(deps.invite).toHaveBeenCalledWith('bea@example.test', 'admin')
+    expect(deps.invite).toHaveBeenCalledWith('bea@example.test', CONTRACT_ROLES.admin)
     expect(emitted).toEqual([
       { type: 'clear', anchor: 'organisation.invite.email-input' },
       { type: 'clear', anchor: 'organisation.invite.role-select' },

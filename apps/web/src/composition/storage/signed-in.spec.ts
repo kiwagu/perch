@@ -149,7 +149,7 @@ describe('the signed-in device', () => {
 
     expect(savedSession(storage)).toEqual(current)
     expect(savedMemberships(storage, current)).toEqual([acme])
-    expect(savedRoles(storage, current)).toEqual(['operator'])
+    expect(savedRoles(storage, current)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it("lets an account's next sign-in replace its earlier one: what the earlier kept goes once the pointer moved", () => {

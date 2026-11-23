@@ -771,7 +771,7 @@ describe('OrganisationInvitations', () => {
           role: CONTRACT_ROLES.admin,
         })
         expect((await organisations.membershipsOf(bob.id))._unsafeUnwrap()).toEqual([membership])
-        expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+        expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
         expect((await memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
         expect(heard.at(-1)).toEqual([bob.id, [membership]])
         expect(await rows()).toEqual([])
@@ -855,7 +855,7 @@ describe('OrganisationInvitations', () => {
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrapErr(),
       ).toEqual(refused('already-member'))
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['admin'])
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
       expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
       expect(heard).toHaveLength(told)
@@ -884,7 +884,7 @@ describe('OrganisationInvitations', () => {
 
       expect((await first).isOk()).toBe(true)
       expect((await second)._unsafeUnwrapErr()).toEqual(refused('invitation-gone'))
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
       expect(heard.filter(([identity]) => identity === bob.id)).toHaveLength(1)
     })
 
@@ -951,7 +951,7 @@ describe('OrganisationInvitations', () => {
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrap(),
       ).toMatchObject({ role: CONTRACT_ROLES.member })
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
       expect(await everything.rows()).toEqual([])
     })
 
@@ -987,7 +987,7 @@ describe('OrganisationInvitations', () => {
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrap(),
       ).toMatchObject({ role: CONTRACT_ROLES.member })
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
       expect(await everything.rows()).toEqual([])
     })
 
@@ -1007,7 +1007,7 @@ describe('OrganisationInvitations', () => {
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrap(),
       ).toEqual({ tenant: acme.tenant, role: CONTRACT_ROLES.member })
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
       expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.member)
       expect(await everything.rows()).toEqual([])
       expect((await organisations.invitations.read({ token }))._unsafeUnwrapErr()).toEqual(

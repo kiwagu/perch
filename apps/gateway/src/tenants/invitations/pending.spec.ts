@@ -171,7 +171,7 @@ describe('PendingInvitations', () => {
     expect((await invitations.byId(first.id))._unsafeUnwrap()).toBeUndefined()
     expect((await invitations.read(second.token))._unsafeUnwrap()).toEqual({
       kind: 'invitation',
-      invitation: pending(second, acme, 'carol@example.test', 'admin'),
+      invitation: pending(second, acme, 'carol@example.test', CONTRACT_ROLES.admin),
     })
   })
 
@@ -279,8 +279,8 @@ describe('PendingInvitations', () => {
 
     // Bob belongs to acme now, and still shows: the admin may revoke what it sent.
     expect((await invitations.ofTenant(acme))._unsafeUnwrap()).toEqual([
-      pending(bobs, acme, 'bob@example.test', 'member'),
-      pending(dave, acme, 'dave@example.test', 'admin'),
+      pending(bobs, acme, 'bob@example.test', CONTRACT_ROLES.member),
+      pending(dave, acme, 'dave@example.test', CONTRACT_ROLES.admin),
     ])
   })
 

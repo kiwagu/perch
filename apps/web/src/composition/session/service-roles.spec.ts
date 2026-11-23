@@ -122,12 +122,12 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
 
     welcomed(a, [CONTRACT_ROLES.operator])
 
-    expect(savedRoles(storageA, anns)).toEqual(['operator'])
-    expect([...a.session.roles()]).toEqual(['operator'])
-    expect(heardA).toEqual([['operator']])
+    expect(savedRoles(storageA, anns)).toEqual([CONTRACT_ROLES.operator])
+    expect([...a.session.roles()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heardA).toEqual([[CONTRACT_ROLES.operator]])
 
-    await vi.waitFor(() => expect(heardB).toEqual([['operator']]))
-    expect([...b.session.roles()]).toEqual(['operator'])
+    await vi.waitFor(() => expect(heardB).toEqual([[CONTRACT_ROLES.operator]]))
+    expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     // The following tab reads and tells: it writes no record, and no channel opens again.
     expect(writesB()).toEqual([])
     expect(b.contexts()).toHaveLength(channels.b)
@@ -139,7 +139,7 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const heardB = rolesHeard(b.session)
 
     welcomed(a, [CONTRACT_ROLES.operator])
-    await vi.waitFor(() => expect(heardB).toEqual([['operator']]))
+    await vi.waitFor(() => expect(heardB).toEqual([[CONTRACT_ROLES.operator]]))
 
     // The leading tab connects again: the gateway's welcome carries no role.
     a.transports().at(-1)?.goOnline()
@@ -176,9 +176,9 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     welcomed(tab, [CONTRACT_ROLES.operator])
 
     expect(writes()).toEqual([rolesKeyOf(kept.signIn)])
-    expect(savedRoles(storage, kept)).toEqual(['operator'])
-    expect([...tab.session.roles()]).toEqual(['operator'])
-    expect(heard.at(-1)).toEqual(['operator'])
+    expect(savedRoles(storage, kept)).toEqual([CONTRACT_ROLES.operator])
+    expect([...tab.session.roles()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard.at(-1)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('restores the roles kept for the saved identity with it, while its space opens and after', async () => {
@@ -191,9 +191,9 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const restoring = tab.session.restore()
 
     expect(tab.session.current()?.id).toBe(ann.identity.id)
-    expect([...tab.session.roles()]).toEqual(['operator'])
+    expect([...tab.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     expect((await restoring).isOk()).toBe(true)
-    expect([...tab.session.roles()]).toEqual(['operator'])
+    expect([...tab.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     expect(writes()).toEqual([])
   })
 
@@ -201,7 +201,7 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const { a, b, storageA, anns } = await annInTwoTabs()
 
     welcomed(a, [CONTRACT_ROLES.operator])
-    await vi.waitFor(() => expect([...b.session.roles()]).toEqual(['operator']))
+    await vi.waitFor(() => expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator]))
 
     const heardA = rolesHeard(a.session)
     const heardB = rolesHeard(b.session)
@@ -266,8 +266,8 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     saveRoles(other, signedIn(other, bob), [CONTRACT_ROLES.operator])
 
     await vi.waitFor(() => expect(b.session.current()?.id).toBe(bob.identity.id))
-    expect([...b.session.roles()]).toEqual(['operator'])
-    await vi.waitFor(() => expect(heardB.at(-1)).toEqual(['operator']))
+    expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator])
+    await vi.waitFor(() => expect(heardB.at(-1)).toEqual([CONTRACT_ROLES.operator]))
     expect(writesB()).toEqual([])
     await vi.waitFor(() => expect(a.session.current()?.id).toBe(bob.identity.id))
   })
@@ -276,7 +276,7 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const { a, b, storageA, anns } = await annInTwoTabs()
 
     welcomed(a, [CONTRACT_ROLES.operator])
-    await vi.waitFor(() => expect([...b.session.roles()]).toEqual(['operator']))
+    await vi.waitFor(() => expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator]))
 
     const heardA = rolesHeard(a.session)
     const heardB = rolesHeard(b.session)
@@ -302,8 +302,8 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
       CONTRACT_ROLES.operator,
     )
 
-    expect(savedRoles(storageA, anns)).toEqual(['operator'])
-    expect([...a.session.roles()]).toEqual(['operator'])
+    expect(savedRoles(storageA, anns)).toEqual([CONTRACT_ROLES.operator])
+    expect([...a.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     expect(writes()).toEqual([])
   })
 

@@ -100,8 +100,9 @@ export async function passwordResetSteps(
   )
 
   const password = freshPassword()
-  const token = await step('the reset mail links to /reset-password with a token', async () =>
-    resetToken(await mailbox.next(account.email, seen)),
+  const token = await step(
+    `the reset mail links to ${CONTRACT_ROUTES['user.reset-password']} with a token`,
+    async () => resetToken(await mailbox.next(account.email, seen)),
   )
 
   await step(

@@ -209,7 +209,7 @@ describe('an ending that began with one sign-in, while another tab signs the nex
 
     expect(savedToken(other)).toBe('token-ann-2')
     expect(savedMemberships(other, again)).toEqual([acme])
-    expect(savedRoles(other, again)).toEqual(['operator'])
+    expect(savedRoles(other, again)).toEqual([CONTRACT_ROLES.operator])
     expect(keptAccountStart(other).kept(ann.id)?.signIn).toBe(again.signIn)
     expect(savedTenant(other, again.signIn)).toBe('acme')
   })

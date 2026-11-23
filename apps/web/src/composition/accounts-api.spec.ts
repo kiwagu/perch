@@ -211,7 +211,7 @@ describe('accountsApi', () => {
     expect((await refused.client.read(cara))._unsafeUnwrapErr().code).toBe('not-operator')
     expect((await gone.client.read(cara))._unsafeUnwrapErr().code).toBe('account-gone')
 
-    expect(refused.dropped).toEqual([[ann.identity.id, 'operator']])
+    expect(refused.dropped).toEqual([[ann.identity.id, CONTRACT_ROLES.operator]])
     expect(gone.dropped).toEqual([])
   })
 })
@@ -273,9 +273,9 @@ describe('a not-operator answered after the browser changed accounts', () => {
     expect((await asked)._unsafeUnwrapErr().code).toBe('not-operator')
     expect(held.sent.map(({ authorization }) => authorization)).toEqual(['Bearer token-ann'])
     expect(savedRoles(here, annSession)).toEqual([])
-    expect(savedRoles(here, bobSession)).toEqual(['operator'])
-    expect(savedRoles(other, bobSession)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
+    expect(savedRoles(here, bobSession)).toEqual([CONTRACT_ROLES.operator])
+    expect(savedRoles(other, bobSession)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
     expect(told).toHaveBeenCalled()
   })
 
@@ -306,9 +306,9 @@ describe('a not-operator answered after the browser changed accounts', () => {
     held.release()
 
     expect((await asked)._unsafeUnwrapErr().code).toBe('not-operator')
-    expect(savedRoles(here, again)).toEqual(['operator'])
-    expect(savedRoles(other, again)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
+    expect(savedRoles(here, again)).toEqual([CONTRACT_ROLES.operator])
+    expect(savedRoles(other, again)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('creates no record for an identity that had none', async () => {

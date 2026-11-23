@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import type { AccountsPort, Acted } from '../platform/accounts.port'
 
@@ -191,7 +192,7 @@ describe("accountsApi's actions on an account", () => {
       const { client, dropped } = api(fakeFetch(respond(403, { code: 'not-operator' })).fetcher)
 
       expect((await action.run(client))._unsafeUnwrapErr().code).toBe('not-operator')
-      expect(dropped).toEqual([[ann.identity, 'operator']])
+      expect(dropped).toEqual([[ann.identity, CONTRACT_ROLES.operator]])
     },
   )
 

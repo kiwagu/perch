@@ -123,7 +123,7 @@ describe('AccountDeparture', () => {
     expect(await departure.blocked(ann)).toEqual(ok(false))
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
-    expect(await rolesIn(bob, 't3')).toEqual(['admin'])
+    expect(await rolesIn(bob, 't3')).toEqual([CONTRACT_ROLES.admin])
     expect(await organisations.membershipsOf(bob)).toEqual(ok([t3]))
     expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
     expect(await notesIn('t3')).toEqual([{ author: ann, text: 'written by ann' }])
@@ -168,8 +168,8 @@ describe('AccountDeparture', () => {
 
     expect(await departure.blocked(ann)).toEqual(ok(false))
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
-    expect(await rolesIn(cat, 't4')).toEqual(['admin'])
-    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect(await rolesIn(cat, 't4')).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesIn(bob, 't4')).toEqual([CONTRACT_ROLES.member])
     expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
   })
 
@@ -220,7 +220,7 @@ describe('AccountDeparture', () => {
       code: 'data:WRITE_FAILED',
     })
     // The membership stays until the member row went: the next run still finds the organisation.
-    expect(await rolesIn(ann, 't3')).toEqual(['member'])
+    expect(await rolesIn(ann, 't3')).toEqual([CONTRACT_ROLES.member])
 
     refuse(undefined)
 
@@ -240,14 +240,14 @@ describe('AccountDeparture', () => {
     expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toMatchObject({
       code: 'data:WRITE_FAILED',
     })
-    expect(await rolesIn(ann, 't3')).toEqual(['member'])
+    expect(await rolesIn(ann, 't3')).toEqual([CONTRACT_ROLES.member])
     expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
 
     refuse(undefined)
 
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
-    expect(await rolesIn(bob, 't3')).toEqual(['admin'])
+    expect(await rolesIn(bob, 't3')).toEqual([CONTRACT_ROLES.admin])
     expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
   })
 
@@ -345,8 +345,8 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
     expect(await annLeaves).toEqual(ok(undefined))
     expect((await catLeaves)._unsafeUnwrapErr()).toEqual(lastAdmin)
     expect(await rolesIn(ann, 't4')).toEqual([])
-    expect(await rolesIn(cat, 't4')).toEqual(['admin'])
-    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect(await rolesIn(cat, 't4')).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesIn(bob, 't4')).toEqual([CONTRACT_ROLES.member])
     expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
   })
 
@@ -454,7 +454,7 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
 
     expect(await annLeaves).toEqual(ok(undefined))
     expect((await removal)._unsafeUnwrapErr()).toEqual({ kind: 'refused', code: 'not-a-member' })
-    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect(await rolesIn(bob, 't4')).toEqual([CONTRACT_ROLES.member])
     expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
   })
 
@@ -521,8 +521,8 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
       role: CONTRACT_ROLES.member,
     })
     expect((await annLeaves)._unsafeUnwrapErr()).toEqual(lastAdmin)
-    expect(await rolesIn(ann, 't1')).toEqual(['admin'])
-    expect(await rolesIn(bob, 't1')).toEqual(['member'])
+    expect(await rolesIn(ann, 't1')).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesIn(bob, 't1')).toEqual([CONTRACT_ROLES.member])
     expect(await membersIn('t1')).toEqual([
       { identity: ann, role: CONTRACT_ROLES.admin },
       { identity: bob, role: CONTRACT_ROLES.member },

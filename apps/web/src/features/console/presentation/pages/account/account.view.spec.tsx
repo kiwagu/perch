@@ -156,7 +156,7 @@ describe('AccountView', () => {
           .getByTestId('console.account.organisations.role-badge')
           .getAttribute('data-value'),
       ),
-    ).toEqual(['admin', 'member'])
+    ).toEqual([CONTRACT_ROLES.admin, CONTRACT_ROLES.member])
     expect(
       items.map(
         (item) => within(item).getByTestId('console.account.organisations.role-badge').textContent,

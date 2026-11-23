@@ -606,7 +606,7 @@ describe('SyncConnection', () => {
     }
 
     await roleOf('operator')
-    expect(await welcomedRoles()).toEqual([['operator']])
+    expect(await welcomedRoles()).toEqual([[CONTRACT_ROLES.operator]])
 
     // Taken back: the next hello reads it so, nothing kept from the one before.
     await roleOf('user')

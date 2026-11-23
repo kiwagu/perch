@@ -929,7 +929,7 @@ describe('Organisations.setRole', () => {
         role: CONTRACT_ROLES.admin,
       }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.admin,
@@ -948,8 +948,8 @@ describe('Organisations.setRole', () => {
         role: CONTRACT_ROLES.member,
       }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
@@ -968,7 +968,7 @@ describe('Organisations.setRole', () => {
         role: CONTRACT_ROLES.member,
       }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', ann.id)).toEqual(['member'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.member])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.member,
       [bob.id]: CONTRACT_ROLES.admin,
@@ -989,7 +989,7 @@ describe('Organisations.setRole', () => {
         })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
@@ -1058,7 +1058,7 @@ describe('Organisations.setRole', () => {
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
     // Both rows were written before.
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.admin,
@@ -1127,7 +1127,7 @@ describe('Organisations.setRole', () => {
         role: CONTRACT_ROLES.member,
       }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
@@ -1150,7 +1150,7 @@ describe('Organisations.setRole', () => {
         })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
@@ -1194,7 +1194,7 @@ describe('Organisations.setRole', () => {
         })
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
     expect(heard).toEqual([])
 
     refuseInTenants(undefined)
@@ -1207,7 +1207,7 @@ describe('Organisations.setRole', () => {
         role: CONTRACT_ROLES.admin,
       }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.admin,
@@ -1240,7 +1240,7 @@ describe('Organisations.setRole', () => {
       [ann.id]: CONTRACT_ROLES.member,
       [bob.id]: CONTRACT_ROLES.admin,
     })
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(heard).toEqual([])
 
     onDirectoryQuery(undefined)
@@ -1254,7 +1254,7 @@ describe('Organisations.setRole', () => {
         role: CONTRACT_ROLES.member,
       }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', ann.id)).toEqual(['member'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.member])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.member,
       [bob.id]: CONTRACT_ROLES.admin,
@@ -1297,7 +1297,7 @@ describe('Organisations.setRole', () => {
         role: CONTRACT_ROLES.member,
       }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.member,
       [bob.id]: CONTRACT_ROLES.member,
@@ -1314,7 +1314,7 @@ describe('Organisations.setRole', () => {
         })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
@@ -1337,7 +1337,7 @@ describe('Organisations.setRole', () => {
       }),
     ).toEqual(ok(undefined))
     // Both rows were written before the telling.
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
@@ -1400,8 +1400,8 @@ describe('Organisations.setRole', () => {
 
     expect(await first).toEqual(ok(undefined))
     expect((await second)._unsafeUnwrapErr()).toEqual(refused('not-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
     expect(await memberRolesIn('acme')).toEqual({ [bob.id]: CONTRACT_ROLES.member })
     expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
@@ -1428,8 +1428,8 @@ describe('Organisations.setRole', () => {
 
     expect(await demotion).toEqual(ok(undefined))
     expect((await departure)._unsafeUnwrapErr()).toEqual({ kind: 'refused', code: 'last-admin' })
-    expect(await rolesOf('acme', ann.id)).toEqual(['member'])
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
 
@@ -1455,7 +1455,7 @@ describe('Organisations.setRole', () => {
 
     expect(await departure).toEqual(ok(undefined))
     expect((await demotion)._unsafeUnwrapErr()).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await rolesOf('acme', bob.id)).toEqual([])
     expect(heard).toEqual([])
   })
@@ -1672,7 +1672,7 @@ describe('Organisations, a failed tell', () => {
     await queued
     await flush()
     expect(written).toHaveLength(1)
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.admin,
@@ -1816,7 +1816,7 @@ describe('Organisations, a failed tell', () => {
       code: 'data:WRITE_FAILED',
     })
     expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(heard).toEqual([])
     onDirectoryQuery(undefined)
 
@@ -1838,7 +1838,7 @@ describe('OrganisationAdmission', () => {
     })
 
     expect((await admission.admit(acme.tenant, bob.id, CONTRACT_ROLES.admin)).isOk()).toBe(true)
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.admin,
@@ -1863,7 +1863,7 @@ describe('OrganisationAdmission', () => {
     expect(
       (await admission.admit(acme.tenant, ann.id, CONTRACT_ROLES.member))._unsafeUnwrapErr(),
     ).toEqual(refused('already-member'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await memberRolesIn('acme')).toEqual({
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
@@ -2009,7 +2009,7 @@ describe('the members list', () => {
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
     })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('lists a member whose departure failed at the directory after its member row went, and writes its row again', async () => {
@@ -2034,7 +2034,7 @@ describe('the members list', () => {
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
     })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('deletes a member row no membership wants', async () => {
@@ -2065,7 +2065,7 @@ describe('the members list', () => {
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
     })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('writes the missing row of a membership whose identity is gone too', async () => {
@@ -2233,7 +2233,7 @@ describe('the members list', () => {
       [ann.id]: CONTRACT_ROLES.admin,
       [bob.id]: CONTRACT_ROLES.member,
     })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('waits for a departure paused between its member-row delete and its membership delete', async () => {
@@ -2303,6 +2303,6 @@ describe('the members list', () => {
     expect(created).toEqual(ok(acme))
     expect(listing).toEqual(members([ann, CONTRACT_ROLES.admin]))
     expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
   })
 })

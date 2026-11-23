@@ -46,7 +46,7 @@ describe('SessionRoles', () => {
     saveRoles(storage, session, [CONTRACT_ROLES.operator])
     roles.followSaved()
 
-    expect([...roles.current()]).toEqual(['operator'])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('holds no role while nobody is shown', () => {
@@ -72,7 +72,9 @@ describe('SessionRoles', () => {
 
     saveRoles(storage, signedInAs(storage, ann), [CONTRACT_ROLES.operator])
 
-    expect([...new SessionRoles({ storage, shown: () => ann }).current()]).toEqual(['operator'])
+    expect([...new SessionRoles({ storage, shown: () => ann }).current()]).toEqual([
+      CONTRACT_ROLES.operator,
+    ])
   })
 
   it('gives the same set until the roles change', () => {
@@ -93,9 +95,9 @@ describe('SessionRoles', () => {
 
     roles.apply(session, [CONTRACT_ROLES.operator])
 
-    expect(savedRoles(storage, session)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard).toEqual([['operator']])
+    expect(savedRoles(storage, session)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator]])
   })
 
   it('takes a role away when a later welcome does not carry it', () => {
@@ -106,7 +108,7 @@ describe('SessionRoles', () => {
 
     expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
-    expect(heard).toEqual([['operator'], []])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator], []])
   })
 
   it.each([
@@ -145,8 +147,8 @@ describe('SessionRoles', () => {
 
     roles.followSaved()
 
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard).toEqual([['operator']])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator]])
     expect(set).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
   })
@@ -165,8 +167,8 @@ describe('SessionRoles', () => {
     shown = ann
     roles.tell()
 
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard).toEqual([['operator'], [], ['operator']])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator], [], [CONTRACT_ROLES.operator]])
   })
 
   it('drops a role from the record of the sign-in that asked, whichever sign-in is shown or current', () => {
@@ -185,9 +187,9 @@ describe('SessionRoles', () => {
     roles.followSaved()
     roles.drop(anns, CONTRACT_ROLES.operator)
 
-    expect(savedRoles(storage, bobs)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard.at(-1)).toEqual(['operator'])
+    expect(savedRoles(storage, bobs)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard.at(-1)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it("takes the role off the shown identity's roles when it asked", () => {
@@ -198,7 +200,7 @@ describe('SessionRoles', () => {
 
     expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
-    expect(heard).toEqual([['operator'], []])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator], []])
   })
 
   it("leaves the role of the same account's later sign-in, asked for by an earlier one", () => {
@@ -211,8 +213,8 @@ describe('SessionRoles', () => {
     saveRoles(storage, again, [CONTRACT_ROLES.operator])
     roles.drop(first, CONTRACT_ROLES.operator)
 
-    expect(savedRoles(storage, again)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
+    expect(savedRoles(storage, again)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('creates no record when it drops a role of a sign-in without one', () => {

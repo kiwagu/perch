@@ -330,7 +330,7 @@ describe('OrganisationService', () => {
     expect((await service.remove('acme', bea.identity.id)).isOk()).toBe(true)
     expect(organisations.calls).toEqual([
       ['members', 'acme'],
-      ['invite', 'acme', 'bea@example.test', 'admin'],
+      ['invite', 'acme', 'bea@example.test', CONTRACT_ROLES.admin],
       ['remove', 'acme', bea.identity.id],
     ])
   })
@@ -342,7 +342,7 @@ describe('OrganisationService', () => {
     expect(organisations.calls).toEqual([
       ['invitations', 'acme'],
       ['revokeInvitation', 'acme', toBea.id],
-      ['setRole', 'acme', bea.identity.id, 'admin'],
+      ['setRole', 'acme', bea.identity.id, CONTRACT_ROLES.admin],
     ])
   })
 
