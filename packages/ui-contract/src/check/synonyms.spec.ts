@@ -191,7 +191,7 @@ describe('synonymsProblems', () => {
 
     if (thing !== undefined) {
       thing.fields['org'] = { type: 'string', readonly: false, crdt: 'none' }
-      thing.fields['kind'] = { enum: ['workspace', 'organisation'], readonly: false, crdt: 'none' }
+      thing.fields['kind'] = { enum: ['personal', 'tenant'], readonly: false, crdt: 'none' }
     }
 
     expect(synonymsProblems(contract)).toEqual([
@@ -207,6 +207,10 @@ describe('synonymsProblems', () => {
         file: MODEL_FILE,
         message: `$defs.thing.properties.org: the field's name says "org", a synonym of the term "organisation"; write "organisation"`,
       },
+      {
+        file: MODEL_FILE,
+        message: `$defs.thing.properties.kind.enum[1]: the field's enum says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
     ])
   })
   it("refuses one in an anchor's name, which FIELD_FACTS and the code carry", () => {
@@ -221,6 +225,38 @@ describe('synonymsProblems', () => {
       {
         file: SCREEN_FILE,
         message: `anchors["sample.tenant-input"]: the anchor's name says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one in an entity's name, which every key of its fields carries, once", () => {
+    const contract = withTerms(TERMS)
+    const thing = contract.model.entities['thing']
+
+    if (thing !== undefined) {
+      contract.model.entities = { 'tenant-thing': { ...thing, name: 'tenant-thing' } }
+    }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: MODEL_FILE,
+        message: `$defs["tenant-thing"]: the entity's name says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one a derived anchor's name says and its base does not, at the base", () => {
+    const contract = withTerms({
+      ...TERMS,
+      terms: { ...TERMS.terms, option: { meaning: 'A choice.', synonyms: ['select option'] } },
+    })
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: SCREEN_FILE,
+        message: `anchors["sample.mode-select"]: the derived anchor's name sample.mode-select.option says "select.option", a synonym of the term "option"; write "option"`,
+      },
+      {
+        file: SCREEN_FILE,
+        message: `anchors["sample.key-select"]: the derived anchor's name sample.key-select.option says "select.option", a synonym of the term "option"; write "option"`,
       },
     ])
   })
