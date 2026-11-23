@@ -32,6 +32,12 @@ function signingIn(
   return contract
 }
 
+/** `contract` as a contract at `version` declares itself. */
+const atVersion = (version: number, contract: Contract): Contract => ({
+  ...contract,
+  screens: { ...contract.screens, version },
+})
+
 const AT_BUDGET = 'é'.repeat(DESCRIPTION_BUDGET)
 const PAST = `${'a'.repeat(DESCRIPTION_BUDGET)}é`
 const problem = (message: string) => ({ file: PLATFORM_FILE, message })
@@ -95,8 +101,16 @@ describe('behaviourTextsProblems', () => {
       ),
     ])
   })
-  it('leaves a result written as one string to its older form, whatever its length', () => {
-    expect(behaviourTextsProblems(signingIn(PAST.repeat(5), ['failed']))).toEqual([])
+  it('holds a result written as one string to the budget from version 6, at the result', () => {
+    expect(behaviourTextsProblems(atVersion(6, signingIn(PAST, {})))).toEqual([
+      problem(
+        `actions["sign-in"].result: the outcome line is ${DESCRIPTION_BUDGET + 1} characters, past its budget of ${DESCRIPTION_BUDGET}; its purpose: "${BEHAVIOUR_PURPOSES.outcome}"`,
+      ),
+    ])
+    expect(behaviourTextsProblems(atVersion(6, signingIn(AT_BUDGET, {})))).toEqual([])
+  })
+  it('leaves a result written as one string to a contract before version 6, whatever its length', () => {
+    expect(behaviourTextsProblems(atVersion(5, signingIn(PAST.repeat(5), ['failed'])))).toEqual([])
   })
   it('runs among the rules of the contract check', () => {
     expect(contractProblems(signingIn(['ok', PAST], []))).toContainEqual(

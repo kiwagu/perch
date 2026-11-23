@@ -135,8 +135,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   invariant. An invariant, under `invariants`, is a rule
   several actions keep, said once with the code it `refuses` with; each action that keeps it
   names it under that code, and the engine derives the actions it limits, which the manifest
-  carries. Each outcome line, condition and rule keeps the budget of a description; the older
-  forms, a list of the codes' names and a `result` of one long string, still load:
+  carries. Each outcome line, condition and rule keeps the budget of a description. From version
+  6 the check refuses the older forms, a list of the codes' names and a `result` of one string
+  past the budget; a contract at an older version still loads them:
 
   ```yaml
   invariants:

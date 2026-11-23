@@ -83,7 +83,8 @@ links to as `contract/REFERENCE.md#<slug>`.
   - `codeNamesOf(codes)`, `codeEntriesOf(codes)` and `outcomesOf(result)`
     (`files/action-codes.ts`): a platform action's codes by name, each with its place and its
     invariants and condition, and its outcome lines, read one way whether it writes the codes as a
-    map or as the older list, its result as a list or as one string; `invariantActions(platform)`
+    map or as the older list a contract before version 6 may write, its result as a list or as one
+    string; `invariantActions(platform)`
     (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, in
     the platform file's order (`contract/REFERENCE.md#rule-action-outcomes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
@@ -136,9 +137,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     - `vocabularyProblems`, `screensProblems`, `descriptionsProblems`: the vocabulary's words,
       the anchors' uniqueness and their facets, the descriptions' budget
       (`contract/REFERENCE.md#rule-check-files`);
-    - `invariantsProblems`, `behaviourTextsProblems`: each invariant an action names exists and
-      refuses with the code it is named under, every invariant is named, and each outcome line,
-      condition and rule keeps the budget (`contract/REFERENCE.md#rule-action-outcomes`);
+    - `invariantsProblems`, `behaviourTextsProblems`, `actionFormsProblems`: each invariant an
+      action names exists and refuses with the code it is named under, every invariant is named,
+      each outcome line, condition and rule keeps the budget, and from version 6
+      (`BEHAVIOUR_EDITION`) a `result` of one string keeps it too and an action's codes are a map,
+      never a list (`contract/REFERENCE.md#rule-action-outcomes`);
     - `bindingsProblems`, `searchProblems`, `routesProblems` with `parseRoutePath(path)` (the
       router's path syntax): model fields, actions and their params, routes and the search
       parameters (`contract/REFERENCE.md#rule-check-bindings`);

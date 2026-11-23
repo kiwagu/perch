@@ -24,6 +24,7 @@ import {
 import { referenceDrift, referenceLinkProblems } from '../reference'
 
 import { accessProblems } from './access'
+import { actionFormsProblems } from './action-forms'
 import { activitiesProblems } from './activities'
 import { attributionProblems } from './attribution'
 import { behaviourTextsProblems } from './behaviour-texts'
@@ -123,6 +124,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   unsavedInputProblems,
   valueProblems,
   attributionProblems,
+  actionFormsProblems,
   invariantsProblems,
   searchProblems,
   keyProblems,
