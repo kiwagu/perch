@@ -217,7 +217,8 @@
           "result": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "description": "One outcome; from version 6 at most 200 characters."
               },
               {
                 "minItems": 1,
@@ -291,7 +292,7 @@
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                   "description": "A code of the vocabulary (data-code)."
                 },
-                "description": "The older form: the codes by name alone, with no condition."
+                "description": "The older form, before version 6: the codes by name alone, with no condition."
               }
             ],
             "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`."
@@ -302,7 +303,7 @@
             "items": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
+              "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
             }
           },
           "paged": {

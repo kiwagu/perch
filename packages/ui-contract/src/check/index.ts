@@ -1,4 +1,5 @@
 export { accessProblems } from './access'
+export { actionFormsProblems, BEHAVIOUR_EDITION } from './action-forms'
 export { activitiesProblems } from './activities'
 export { behaviourTextsProblems } from './behaviour-texts'
 export { bindingsProblems } from './bindings'

@@ -93,6 +93,7 @@ const model: ReferenceRule = {
     '`model` is the data model: a JSON Schema 2020-12 document with one `$defs` entry per entity.',
     "An entity's `x-perch` says its `table`, its `region` (`private`: the account's own data; `tenant`: the current organisation's), its `id` prefix, its `owner` field, `can` (per role, the actions allowed on any entry or only on its own), its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it), and `unique` and `index`.",
     "A field's `x-perch` says whether it is `readonly`, the entity a `record` points at, and its `crdt`: how concurrent edits merge (`text`, `list`, `counter`, or `none` for the last writer).",
+    "`terms`, when present, says what each of the platform's nouns and each role means, the words the contract never uses for it, and its name in storage where that differs (`storage`).",
   ].join(' '),
   keys: [instructionsKey('model')],
 }

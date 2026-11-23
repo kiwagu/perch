@@ -245,7 +245,7 @@
           "propertyNames": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-            "description": "A role of the vocabulary."
+            "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
           },
           "additionalProperties": {
             "type": "string",
@@ -399,6 +399,117 @@
       "additionalProperties": false,
       "description": "The vocabulary of the contract, with instructions for an agent."
     },
+    "terms": {
+      "description": "`contract/domain/terms.yaml`, verbatim, when the contract writes it: the contexts, the platform's terms and the roles. See the rule `terms`.",
+      "type": "object",
+      "properties": {
+        "contexts": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "meaning": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What the bounded context is: the part of the product whose terms mean one thing in it. At most 200 characters."
+              }
+            },
+            "required": [
+              "meaning"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The bounded contexts, by name: one while the product is one."
+        },
+        "terms": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "meaning": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What the term means in the contract: the one word its texts use for it. Its synonyms are the words they never use for it, and `storage` names it where storage does otherwise. At most 200 characters."
+              },
+              "synonyms": {
+                "description": "The words the contract's texts and the emitted constants never use for it.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*([ -][a-z0-9]+)*$",
+                  "description": "A word the texts never use for it: lowercase, `tenant`, `device session`."
+                },
+                "uniqueItems": true
+              },
+              "storage": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)?$",
+                "description": "Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`."
+              }
+            },
+            "required": [
+              "meaning"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The platform's terms, by the one word the contract uses for each."
+        },
+        "roles": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "meaning": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What holding the role means on a device: whose account is signed in and what applies to it. At most 200 characters."
+              },
+              "synonyms": {
+                "description": "The words the contract's texts and the emitted constants never use for it.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*([ -][a-z0-9]+)*$",
+                  "description": "A word the texts never use for it: lowercase, `tenant`, `device session`."
+                },
+                "uniqueItems": true
+              },
+              "storage": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)?$",
+                "description": "Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`."
+              }
+            },
+            "required": [
+              "meaning"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The roles a device holds, by name: what `roles` of a binding, an anchor or an action list."
+        }
+      },
+      "required": [
+        "contexts",
+        "terms",
+        "roles"
+      ],
+      "additionalProperties": false
+    },
     "screens": {
       "type": "array",
       "items": {
@@ -447,7 +558,7 @@
                   "items": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                    "description": "A role of the vocabulary."
+                    "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
                   },
                   "description": "The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other."
                 },
@@ -1090,7 +1201,7 @@
                   "items": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                    "description": "A role of the vocabulary."
+                    "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
                   }
                 },
                 "own": {
@@ -6781,7 +6892,7 @@
             "items": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
+              "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
             }
           },
           "own": {
@@ -7232,7 +7343,8 @@
               "result": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "description": "One outcome; from version 6 at most 200 characters."
                   },
                   {
                     "minItems": 1,
@@ -7306,7 +7418,7 @@
                       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                       "description": "A code of the vocabulary (data-code)."
                     },
-                    "description": "The older form: the codes by name alone, with no condition."
+                    "description": "The older form, before version 6: the codes by name alone, with no condition."
                   }
                 ],
                 "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`."
@@ -7317,7 +7429,7 @@
                 "items": {
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                  "description": "A role of the vocabulary."
+                  "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
                 }
               },
               "paged": {
@@ -7722,7 +7834,7 @@
             "items": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
+              "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
             },
             "description": "The roles that take part in the activity."
           },
@@ -7960,7 +8072,7 @@
             "additionalProperties": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
+              "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
             },
             "description": "A letter per browser, each with the role it acts as."
           },

@@ -82,10 +82,13 @@ export {
   PLATFORM_FILE,
   PLATFORM_SCHEMA_FILE,
   REFERENCE_FILE,
+  routeKeyOf,
   SCENARIOS_DIR,
   SCREEN_SCHEMA_FILE,
   SCREENS_DIR,
   scenarioFile,
+  TERMS_FILE,
+  TERMS_SCHEMA_FILE,
   VOCABULARY_FILE,
 } from './paths'
 export {
@@ -126,6 +129,7 @@ export {
   type Screen,
   type ScreensFile,
 } from './screens'
+export { loadTerms, type TermEntry, type Terms } from './terms'
 export { createValidator, jsonSchemaProblems, validateAgainst } from './validator'
 export {
   DEFAULTS_EDITION,

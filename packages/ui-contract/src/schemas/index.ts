@@ -53,3 +53,4 @@ export {
   valueRefSchema,
   valueSchema,
 } from './screens-schema'
+export { termsFileSchema } from './terms.schema'

@@ -1,8 +1,8 @@
 /**
- * `ui-contract emit values|fields --out <file>`, from the root or any folder under it: writes the
- * module of plain data a layer below the contract reads (`valuesModuleOf`, `fieldFactsModuleOf`)
- * into the file the caller names, relative to the folder it runs from. The engine knows no package
- * and writes nowhere by default. A contract that fails the contract check is not emitted: its
+ * `ui-contract emit values|fields|terms --out <file>`, from the root or any folder under it: writes
+ * the module of plain data a layer below the contract reads (`valuesModuleOf`,
+ * `fieldFactsModuleOf`, `termsModuleOf`) into the file the caller names, relative to the folder
+ * it runs from. The engine knows no package and writes nowhere by default. A contract that fails the contract check is not emitted: its
  * problems are printed and nothing is written.
  */
 
@@ -10,7 +10,7 @@ import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { type Contract, checkContract, loadContract } from '../check'
-import { fieldFactsModuleOf, valuesModuleOf } from '../emit'
+import { fieldFactsModuleOf, termsModuleOf, valuesModuleOf } from '../emit'
 import { PLATFORM_FILE } from '../files'
 
 import { contractRoot } from './contract-root'
@@ -19,6 +19,7 @@ import { reported } from './problems'
 const MODULES: Readonly<Record<string, (contract: Contract) => string>> = {
   values: valuesModuleOf,
   fields: fieldFactsModuleOf,
+  terms: termsModuleOf,
 }
 
 const USAGE = `use "emit ${Object.keys(MODULES).join('|')} --out <file>"`

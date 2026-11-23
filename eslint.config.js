@@ -41,7 +41,7 @@ export default [
     // is the kit's, whose saved submit clears its fields' unsaved input. The shared config's raw
     // fields are listed again, since this block's list replaces its list for these files.
     files: ['apps/web/src/features/**/presentation/**/*.{ts,tsx}'],
-    ignores: ['**/*.spec.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}', '**/__fixtures__/**'],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',

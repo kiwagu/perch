@@ -27,7 +27,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     (`file:line: message` through `formatProblem`):
     - `parseVocabulary(markdown)`: the closed lists of `contract/vocabulary.md`, one `## `
       section each (`VOCABULARY_SECTIONS`); a vocabulary without its "Composites" section reads
-      as an empty table.
+      as an empty table, and one without its "Roles" section too (a terms file holds them;
+      `writesRoles` says whether the section is there).
+    - `loadTerms(root)`: `contract/domain/terms.yaml` (`TERMS_FILE`) through `termsFileSchema`,
+      none when the contract leaves it out; `loadContract` then takes the contract's roles from
+      it (`contract/REFERENCE.md#rule-terms`).
     - `loadScreens(root)` and `loadScreensWith(root, model)` (with a model already loaded, as
       the contract check does, which takes back the model with its lengths resolved): every
       `.yaml` file under `contract/domain/screens`, sorted by path, the platform's values, the
@@ -83,7 +87,8 @@ links to as `contract/REFERENCE.md#<slug>`.
   - `codeNamesOf(codes)`, `codeEntriesOf(codes)` and `outcomesOf(result)`
     (`files/action-codes.ts`): a platform action's codes by name, each with its place and its
     invariants and condition, and its outcome lines, read one way whether it writes the codes as a
-    map or as the older list, its result as a list or as one string; `invariantActions(platform)`
+    map or as the older list a contract before version 6 may write, its result as a list or as one
+    string; `invariantActions(platform)`
     (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, in
     the platform file's order (`contract/REFERENCE.md#rule-action-outcomes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
@@ -136,9 +141,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     - `vocabularyProblems`, `screensProblems`, `descriptionsProblems`: the vocabulary's words,
       the anchors' uniqueness and their facets, the descriptions' budget
       (`contract/REFERENCE.md#rule-check-files`);
-    - `invariantsProblems`, `behaviourTextsProblems`: each invariant an action names exists and
-      refuses with the code it is named under, every invariant is named, and each outcome line,
-      condition and rule keeps the budget (`contract/REFERENCE.md#rule-action-outcomes`);
+    - `invariantsProblems`, `behaviourTextsProblems`, `actionFormsProblems`: each invariant an
+      action names exists and refuses with the code it is named under, every invariant is named,
+      each outcome line, condition and rule keeps the budget, and from version 6
+      (`BEHAVIOUR_EDITION`) a `result` of one string keeps it too and an action's codes are a map,
+      never a list (`contract/REFERENCE.md#rule-action-outcomes`);
     - `bindingsProblems`, `searchProblems`, `routesProblems` with `parseRoutePath(path)` (the
       router's path syntax): model fields, actions and their params, routes and the search
       parameters (`contract/REFERENCE.md#rule-check-bindings`);
@@ -236,8 +243,10 @@ links to as `contract/REFERENCE.md#<slug>`.
   - The emitted modules (`emit/`): `valuesModuleOf(contract)` is the text of a module of plain
     data, `CONTRACT_VALUES`, every value of the platform and every field of the model as the
     contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
-    element of each field carries that the contract decides, by its anchor
-    (`contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
+    element of each field carries that the contract decides, by its anchor, and
+    `termsModuleOf(contract)` that of `CONTRACT_ROLES` and `CONTRACT_ROUTES`, every role by its
+    name and every route path by its screen's id, a further binding's by `<id>@<path>`
+    (`routeKeyOf`; `contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
     is the text a package's committed module must equal (see `./testing` below).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
     `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns
@@ -358,8 +367,9 @@ links to as `contract/REFERENCE.md#<slug>`.
   folder under the root; prints the problems and exits 1 when the contract check finds any
   or the manifest does not match its schema). The web app's build runs it into
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
-- `ui-contract emit values|fields --out <file>`, from the root or any folder under it: writes
-  the module of plain data `CONTRACT_VALUES` or `FIELD_FACTS` into `<file>`, relative to the
+- `ui-contract emit values|fields|terms --out <file>`, from the root or any folder under it:
+  writes the module of plain data `CONTRACT_VALUES`, `FIELD_FACTS` or `CONTRACT_ROLES` with
+  `CONTRACT_ROUTES` into `<file>`, relative to the
   working directory, which the caller always names; prints the problems and exits 1, writing
   nothing, when the contract check finds any. From the root, `bun run contract:emit`
   (`turbo run emit`) runs the `emit` script of every package that keeps one. Not part of

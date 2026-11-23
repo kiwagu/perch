@@ -200,7 +200,7 @@ describe('checkContract', () => {
     edit(MODEL_FILE, (text) => text.replace('"member": { "create"', '"memebr": { "create"'))
 
     expect(printed()).toEqual([
-      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the contract',
     ])
   })
   it('loads the descriptions as the domain files write them', () => {

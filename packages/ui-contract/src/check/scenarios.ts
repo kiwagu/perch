@@ -8,7 +8,7 @@
  * anchor named last before it in the same text carries (`anchorCarries`; a mail or a notice
  * ends the pairing), the
  * activity a scenario names is one of `contract/domain/activities`, and every device acts as
- * a role of the vocabulary. Each problem is one of the scenario's file, named by its field and
+ * a role of the contract. Each problem is one of the scenario's file, named by its field and
  * at the line of that field (of the deepest part of its path the file holds); the ids are
  * paths, so each is used once.
  */
@@ -138,7 +138,7 @@ export function scenariosProblems(contract: Contract): Problem[] {
       ...Object.entries(scenario.devices).flatMap(([device, role]) =>
         has(contract.vocabulary.roles, role)
           ? []
-          : [problem(['devices', device], `"${role}" is not a role of the vocabulary`)],
+          : [problem(['devices', device], `"${role}" is not a role of the contract`)],
       ),
       ...textsOf(scenario).flatMap(({ text, at }) => {
         const { references, problems } = referencesIn(text)
