@@ -248,7 +248,7 @@ flow:
               - show: user.sign-in.error
           - target: sign-in
             actions:
-              - show: user.sign-in.error
+              - show: { user.sign-in.error: [ invalid-credentials, account-banned, rate-limited, other-account, failed ] }
     device-limit:
       description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed.
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.device-limit-dialog ] }
@@ -277,7 +277,7 @@ flow:
               - show: user.sign-in.error
           - target: sign-in
             actions:
-              - show: user.sign-in.error
+              - show: { user.sign-in.error: [ invalid-credentials, account-banned, rate-limited, other-account, failed ] }
     code:
       description: The form in the mode sign-in with the dialog of the code.
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
@@ -316,7 +316,7 @@ flow:
               - show: user.sign-in.error
           - target: code
             actions:
-              - show: user.sign-in.code.error
+              - show: { user.sign-in.code.error: [ invalid-code, failed ] }
     code-anyway:
       description: The form in the mode sign-in with the dialog of the code; the device-limit dialog was confirmed already.
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
@@ -350,7 +350,7 @@ flow:
               - show: user.sign-in.error
           - target: code-anyway
             actions:
-              - show: user.sign-in.code.error
+              - show: { user.sign-in.code.error: [ invalid-code, failed ] }
     signing-in-passkey:
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button ] }
       entry:
@@ -369,7 +369,7 @@ flow:
         onError:
           target: sign-in
           actions:
-            - show: user.sign-in.error
+            - show: { user.sign-in.error: [ passkey-cancelled, passkey-unknown, account-banned, other-account, failed ] }
     passkey-device-limit:
       description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed, and its confirmation asks for the passkey again.
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button, user.sign-in.device-limit-dialog ] }
@@ -395,7 +395,7 @@ flow:
         onError:
           target: sign-in
           actions:
-            - show: user.sign-in.error
+            - show: { user.sign-in.error: [ passkey-cancelled, passkey-unknown, account-banned, other-account, failed ] }
     signing-up:
       meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
