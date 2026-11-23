@@ -96,6 +96,12 @@ tester.run('contract-terms', contractTerms, {
     typed(
       "type Target = { kind: 'member'; key: string } | { kind: 'members'; key: string }\ndeclare const target: Target\nif (target.kind !== 'members') {\n  console.log(target.kind === 'member')\n}\nswitch (target.kind) {\n  case 'member':\n    break\n}",
     ),
+    typed(
+      "type Target = { kind: 'member'; key: string } | { kind: 'members'; key: string }\ndeclare const target: Target | undefined\nif (target === undefined || target.kind === 'member') {\n  switch (target?.kind) {\n    case 'member':\n      break\n  }\n  console.log(target!.kind === 'member')\n}",
+    ),
+    typed(
+      'declare function make(opts?: { identity: string }): void\ndeclare const identity: string\nmake({ identity })',
+    ),
     byValue("void page.goto('/settings/x')"),
     byValue("void page.goto('/settingsx')"),
     byValue("void page.goto('/')"),
@@ -152,6 +158,18 @@ tester.run('contract-terms', contractTerms, {
         "declare const byName: Record<string, Role>\nexport const isAdmin = byName['ann'] === 'admin'",
       ),
       errors: [role('admin')],
+    },
+    {
+      ...typed(
+        "declare const byIdentity: { [id: `idn_${string}`]: Role }\nexport const a = byIdentity[`idn_alice`] === 'admin'\ndeclare const byNumber: { [n: number]: Role }\nexport const b = byNumber['1'] === 'guest'",
+      ),
+      errors: [role('admin'), role('guest')],
+    },
+    {
+      ...typed(
+        "declare function makeNote(can?: Partial<Record<Role, boolean>>): void\ndeclare const member: boolean\nmakeNote({ member, admin: true, 'guest': false })",
+      ),
+      errors: [role('member'), role('admin'), role('guest')],
     },
     {
       ...typed(
