@@ -82,3 +82,11 @@ export const GUIDE_FILES: readonly string[] = [
 
 /** The coverage note: prose around a block `ui-contract coverage --write` fills. */
 export const COVERAGE_FILE = 'contract/COVERAGE.md'
+
+/**
+ * The key `CONTRACT_ROUTES` names a binding by: its screen's id for the first binding (the one
+ * the screen's file is named by), and the id with the binding's path for a further one,
+ * `<id>@<path>`, so a binding added before it moves no key.
+ */
+export const routeKeyOf = (id: string, index: number, path: string): string =>
+  index === 0 ? id : `${id}@${path}`

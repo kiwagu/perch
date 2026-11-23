@@ -260,4 +260,41 @@ describe('synonymsProblems', () => {
       },
     ])
   })
+  it("refuses one the key of a further route says across its screen's id and its path", () => {
+    const contract = withTerms({
+      ...TERMS,
+      terms: { ...TERMS.terms, visit: { meaning: 'A visit.', synonyms: ['sample session'] } },
+    })
+    const sample = contract.screens.screens[1]
+    const first = sample?.bindings[0]
+
+    if (sample !== undefined && first !== undefined) {
+      sample.bindings = [first, { ...first, path: '/session' }]
+    }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: SCREEN_FILE,
+        message: `bindings[1].path: the route's key sample@/session says "sample@/session", a synonym of the term "visit"; write "visit"`,
+      },
+    ])
+  })
+  it("refuses one a paged list's size option says beyond its size select", () => {
+    const contract = withTerms({
+      ...TERMS,
+      terms: { ...TERMS.terms, size: { meaning: 'A size.', synonyms: ['size select option'] } },
+    })
+    const list = contract.screens.screens[1]?.anchors['sample.list']
+
+    if (list !== undefined) {
+      list.derived = ['size-select']
+    }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: SCREEN_FILE,
+        message: `anchors["sample.list"]: the derived anchor's name sample.list.size-select.option says "size-select.option", a synonym of the term "size"; write "size"`,
+      },
+    ])
+  })
 })

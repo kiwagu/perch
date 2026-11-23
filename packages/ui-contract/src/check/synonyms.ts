@@ -16,8 +16,8 @@
  * term or role to write instead. Code and storage keep their names: this reads the contract only.
  */
 
-import { testIdFor } from '../anchors'
-import { jsonPath, MODEL_FILE, type Problem, TERMS_FILE, type Terms } from '../files'
+import { SIZE_SELECT, sizeOptionOf, testIdFor } from '../anchors'
+import { jsonPath, MODEL_FILE, type Problem, routeKeyOf, TERMS_FILE, type Terms } from '../files'
 
 import { BEHAVIOUR_NOUNS, behaviourTexts } from './behaviour-texts'
 import { type Contract, inFile, locate } from './contract'
@@ -38,12 +38,20 @@ const patternOf = (synonym: string): RegExp =>
   new RegExp(`(?<![A-Za-z0-9])${wordsOf(synonym)}(?![A-Za-z0-9])`, 'i')
 
 /**
- * Whether two words (a synonym, a name) read as the same synonym, as this check reads a text:
- * either one, whole, is what the other's pattern matches (`tenant` and `tenants`, `device
- * session` and `device-session`).
+ * Whether two words (a synonym, a name) can meet in one text as this check reads it: a spelling
+ * one's pattern accepts (the words, or with a plural `s` or `es`) is one the other's accepts too
+ * (`tenant` and `tenants`, `ax` and `axe` in `axes`, `device session` and `device-session`).
  */
-export const sameSynonym = (a: string, b: string): boolean =>
-  new RegExp(`^${wordsOf(a)}$`, 'i').test(b) || new RegExp(`^${wordsOf(b)}$`, 'i').test(a)
+export function sameSynonym(a: string, b: string): boolean {
+  const spellings = (words: string): string[] => {
+    const plain = words.toLowerCase().split(/[ -]/).join(' ')
+
+    return [plain, `${plain}s`, `${plain}es`]
+  }
+  const ofB = spellings(b)
+
+  return spellings(a).some((spelling) => ofB.includes(spelling))
+}
 
 /** The synonyms `base` does not say already: what a longer name built on it says beyond it. */
 const beyond = (base: string, forbidden: readonly Forbidden[]): Forbidden[] =>
@@ -107,14 +115,23 @@ export function synonymsProblems(contract: Contract): Problem[] {
     ),
     ...screens.screens.flatMap((screen, index) => [
       ...saidIn(screen.id, "the screen's id", forbidden, at(['screens', index, 'id'])),
-      ...screen.bindings.flatMap(({ path }, binding) =>
-        saidIn(
-          path,
-          "the route's path",
-          forbidden,
-          at(['screens', index, 'bindings', binding, 'path']),
-        ),
-      ),
+      ...screen.bindings.flatMap(({ path }, binding) => {
+        const here = at(['screens', index, 'bindings', binding, 'path'])
+        const key = routeKeyOf(screen.id, binding, path)
+
+        return [
+          ...saidIn(path, "the route's path", forbidden, here),
+          // A further binding's key joins the id and the path: what the join says beyond both.
+          ...(key === screen.id
+            ? []
+            : saidIn(
+                key,
+                `the route's key ${key}`,
+                beyond(path, beyond(screen.id, forbidden)),
+                here,
+              )),
+        ]
+      }),
     ]),
     ...Object.entries(screens.platform.values ?? {}).flatMap(([name, value]) => [
       ...saidIn(name, "the value's name", forbidden, at(['platform', 'values', name])),
@@ -161,12 +178,16 @@ export function synonymsProblems(contract: Contract): Problem[] {
           // A derived part is an anchor too (`<list>.size-select` in `FIELD_FACTS`).
           ...(derived ?? []).flatMap((suffix) => {
             const part = testIdFor(anchor, suffix)
+            const parts = [
+              [part, beyond(anchor, forbidden)] as const,
+              // A paged list's size select derives its options in turn.
+              ...(suffix === SIZE_SELECT
+                ? [[sizeOptionOf(anchor), beyond(part, beyond(anchor, forbidden))] as const]
+                : []),
+            ]
 
-            return saidIn(
-              part,
-              `the derived anchor's name ${part}`,
-              beyond(anchor, forbidden),
-              here,
+            return parts.flatMap(([name, unsaid]) =>
+              saidIn(name, `the derived anchor's name ${name}`, unsaid, here),
             )
           }),
         ]

@@ -138,6 +138,22 @@ describe('termsProblems', () => {
       ),
     ])
   })
+  it('refuses two synonyms whose spellings meet in a plural', () => {
+    const terms: Terms = {
+      ...TERMS,
+      terms: {
+        ...TERMS.terms,
+        organisation: { meaning: 'Accounts that work together.', synonyms: ['ax'] },
+        region: { meaning: 'Where data lives.', synonyms: ['axe'] },
+      },
+    }
+
+    expect(termsProblems(withTerms(terms))).toEqual([
+      atTerms(
+        'terms.region.synonyms[0]: "axe" is a synonym of "organisation" already; a synonym belongs to one term',
+      ),
+    ])
+  })
   it('refuses a name that is a term and a role at once', () => {
     const terms: Terms = {
       ...TERMS,
