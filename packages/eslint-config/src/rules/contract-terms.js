@@ -75,8 +75,9 @@ const fromKeyUnion = (property) =>
       !ts.isShorthandPropertyAssignment(declaration),
   )
 
-/** Whether every value of `values` is a key of `known`. */
-const within = (values, known) => values?.every((value) => known.has(value)) ?? false
+/** Whether `values` names something, and every value of it is a key of `known`. */
+const within = (values, known) =>
+  values !== undefined && values.length > 0 && values.every((value) => known.has(value))
 
 /** How the constant names `key`: `NAME.key`, or `NAME["key"]` for a key that is no identifier. */
 const access = (name, key) =>
@@ -115,16 +116,22 @@ export const contractTerms = {
     const checker = services.program.getTypeChecker()
     const tsNodeOf = (node) => services.esTreeNodeToTSNodeMap.get(node)
 
-    /** The name of the property `a.b` or `a['b']` reads, when it is written out. */
+    /** The name of the property `a.b`, `a['b']` or ``a[`b`]`` reads, when it is written out. */
     function propertyNameOf(node) {
       if (!node.computed && node.property.type === 'Identifier') {
         return node.property.name
       }
 
-      return node.computed &&
-        node.property.type === 'Literal' &&
-        typeof node.property.value === 'string'
-        ? node.property.value
+      if (!node.computed) {
+        return undefined
+      }
+
+      if (node.property.type === 'Literal' && typeof node.property.value === 'string') {
+        return node.property.value
+      }
+
+      return node.property.type === 'TemplateLiteral' && node.property.expressions.length === 0
+        ? (node.property.quasis[0]?.value.cooked ?? undefined)
         : undefined
     }
 
@@ -161,7 +168,16 @@ export const contractTerms = {
         const values = (declared.isUnion() ? declared.types : [declared]).map((member) => {
           const field = checker.getPropertyOfType(member, property)
 
-          return field === undefined ? [] : closedValues(checker.getTypeOfSymbol(field), checker)
+          if (field !== undefined) {
+            return closedValues(checker.getTypeOfSymbol(field), checker)
+          }
+
+          // No property of that name: the member's string index says what it holds, if it has one.
+          const index = checker
+            .getIndexInfosOfType(member)
+            .find(({ keyType }) => keyType.flags & ts.TypeFlags.String)
+
+          return index === undefined ? undefined : closedValues(index.type, checker)
         })
 
         return values.some((each) => each === undefined) ? undefined : values.flat()
@@ -309,11 +325,11 @@ export const contractTerms = {
 
     return {
       Property(node) {
-        // A key written as a name (`{ operator: … }`) is a role as much as a quoted one.
+        // A key written as a name (`{ operator: … }`, or `{ member }` with a variable of that name)
+        // is a role as much as a quoted one.
         if (
           node.key.type === 'Identifier' &&
           !node.computed &&
-          !node.shorthand &&
           node.kind === 'init' &&
           node.parent?.type === 'ObjectExpression'
         ) {
