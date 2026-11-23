@@ -127,10 +127,12 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
   await page.getByTestId('user.sign-in.password-input').fill(account.password)
   await page.getByTestId('user.sign-in.submit-button').click()
 
+  // The page runs this function by itself: the route goes in as its argument.
   const outcome = await page.waitForFunction(
-    () =>
-      window.location.pathname === CONTRACT_ROUTES['user.profile'] ||
+    (profile) =>
+      window.location.pathname === profile ||
       document.querySelector('[data-testid="user.sign-in.error"]')?.getAttribute('data-code'),
+    CONTRACT_ROUTES['user.profile'],
   )
 
   expect(await outcome.jsonValue(), 'the sign-in page answered with its error code').toBe(true)
