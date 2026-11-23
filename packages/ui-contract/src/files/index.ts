@@ -1,3 +1,4 @@
+export { type CodeEntry, codeEntriesOf, codeNamesOf, outcomesOf } from './action-codes'
 export {
   type Activity,
   type ActivityState,
@@ -48,6 +49,8 @@ export {
   rootOf,
   transitionsOf,
 } from './flow-nodes'
+export { hintBudgetProblems } from './hint-budget'
+export { invariantActions } from './invariants'
 export {
   MIGRATIONS,
   type Migration,

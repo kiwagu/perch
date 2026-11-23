@@ -127,6 +127,47 @@ The authored files, edited by hand or by a model in the modeling thread:
   the lists with their items a screen derives by opting in (see "What a screen leaves out"),
   the reserved anchors and the readiness line.
 
+  An action says what it answers ([the rule](REFERENCE.md#rule-action-outcomes)): its
+  `result` is one outcome or a list of outcome lines, the plain success first, then each other
+  outcome under its own condition; its `codes` map each code a failure shows to the condition
+  it answers on, or to the invariants it refuses for, `{ invariant: <name> }` or
+  `{ invariant: [<name>, <name>] }`, with `condition: <text>` beside them for a cause that is no
+  invariant. An invariant, under `invariants`, is a rule
+  several actions keep, said once with the code it `refuses` with; each action that keeps it
+  names it under that code, and the engine derives the actions it limits, which the manifest
+  carries. Each outcome line, condition and rule keeps the budget of a description; the older
+  forms, a list of the codes' names and a `result` of one long string, still load:
+
+  ```yaml
+  invariants:
+    device-limit:
+      rule: An account is signed in on ten devices at most at once, each counted once while its session lasts.
+      refuses: device-limit
+    failed-sign-ins:
+      rule: Ten wrong passwords of one email within a quarter of an hour keep its password out.
+      refuses: rate-limited
+    address-mails:
+      rule: A network address is charged 200 mail requests a quarter of an hour at most.
+      refuses: rate-limited
+  actions:
+    sign-in:
+      # description, params, changes
+      result:
+        - the device is signed in, and the app moves to /me with code welcome
+        - "with the second factor on: the answer asks for a code and signs no device in"
+      codes:
+        invalid-credentials: the email or the password is wrong
+        device-limit: { invariant: device-limit }
+        rate-limited: { invariant: failed-sign-ins }
+        failed: anything else fails
+    change-email:
+      # description, params, result, changes
+      codes:
+        rate-limited:
+          invariant: [ failed-sign-ins, address-mails ]
+          condition: a fourth change by the account within a quarter of an hour
+  ```
+
   An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
   mail goes to, or `account`, the email of the account the action acts on; `language`, the
   parameter that holds the mail's language, `account`, that account's settings once it has
@@ -230,8 +271,9 @@ piece of its data's, each visit's and each transition's. Four maps hold descript
 the key: a screen's `states` (what is visible in each container state), the platform's `events`
 (what each means), a composite's `items` (each the description of the item anchor a screen
 derives from it) and the sentence guards of a `meta.guards` (a guard by failure code is
-structure). A platform action's `result` is no description: it is the action's behaviour, which
-the hand-over diff lists among the action's lines.
+structure). A platform action's `result`, the conditions of its codes and the rules of the
+invariants are no descriptions: they are behaviour, which the hand-over diff lists with their
+text, and they keep the same budget.
 
 A description says what its element is for, as a tester or a user tells it apart, and leaves
 out what the structure, another element, the platform, the model, the vocabulary or the flow
@@ -753,14 +795,19 @@ sequence of more than one carries its position, `#<n>`. Descriptions are left ou
 lines, as they change nothing that runs, so a screen file written shorter that loads to the same
 flow shows no flow line. A platform action is listed by its name, and its lines as `platform action lines
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
-each parameter with its type (`param email: string`), its result (`result: <the text>`, the
-one prose that stays, since it says what holds once the action succeeds), each code its failure
-shows (`code rate-limited`), each role that may run it, its page sizes when it pages (`paged by
+each parameter with its type (`param email: string`), each line of its result (`result: <the
+line>`, `result #<n>: <the line>` by position when there are several, the first being the plain
+success; the prose that stays, since it says what the action answers), each code its failure
+shows with its invariants and its condition (`code invalid-code: <the condition>`, `code
+device-limit: invariant device-limit`, `code rate-limited: invariant failed-sign-ins,
+address-mails; <the condition>`), each role that may run it, its page sizes when it pages (`paged by
 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
-removed whole shows every line, as nothing else in the summary says its mail. The reads an
+removed whole shows every line, as nothing else in the summary says its mail. An invariant is
+listed by its name, as `invariant lines added in <name>` and `invariant lines removed in
+<name>`, its rule (`rule: <the text>`) and its code (`refuses <code>`). The reads an
 action of the model changes are listed by the entity and the action, as `model action lines
 added in <entity>.<action>` and `model action lines removed in <entity>.<action>`, a line each
 in the same form (`model action lines added in profile.updateName: changes accounts.list,

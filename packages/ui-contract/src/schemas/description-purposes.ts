@@ -7,14 +7,17 @@
  * or the flow already says is left to them.
  */
 
-/** The most characters a written description may have, whatever it describes. */
+/**
+ * The most characters a written description may have, whatever it describes; a field hint the
+ * engine writes into the schemas keeps the same budget (`hintBudgetProblems`).
+ */
 export const DESCRIPTION_BUDGET = 200
 
 const AT_MOST = `At most ${DESCRIPTION_BUDGET} characters.`
 
 export const DESCRIPTION_PURPOSES = {
-  screen: `What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. ${AT_MOST}`,
-  anchor: `What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. ${AT_MOST}`,
+  screen: `What the screen is for: the task it serves and when it is shown. Not a list of its parts: each anchor has its own description. See the rule \`description-purposes\`. ${AT_MOST}`,
+  anchor: `What the element is for. Its kind, binding, codes, states, roles and flow say the rest; leave out what the engine says itself. See the rule \`description-purposes\`. ${AT_MOST}`,
   containerState: `What is visible on the screen in this container state; the vocabulary says what the state means, and each anchor what it is for in a description of its own. ${AT_MOST}`,
   flow: `What the flow does as a whole that no single state says: how its areas or its modes go together. Its states, events, guards and effects say the rest. ${AT_MOST}`,
   state: `What a tester or a user tells apart in the state that its events, effects and \`meta.renders\` do not say. ${AT_MOST}`,
@@ -38,6 +41,20 @@ export const DESCRIPTION_PURPOSES = {
   visit: `What the visit is for in the task. Its \`meta\` names the screen and the address, and the screen has a description of its own. ${AT_MOST}`,
   activityTransition: `What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. ${AT_MOST}`,
 } as const
+
+/**
+ * What each text of a platform action's behaviour is for: its outcome lines, the condition each of
+ * its codes answers on, and the rule of an invariant. They are behaviour, which the hand-over diff
+ * lists with their text, not descriptions, and keep the same budget (`behaviourTextsProblems`).
+ */
+export const BEHAVIOUR_PURPOSES = {
+  outcome: `One outcome of the action: the plain success first, then each other outcome under its condition. A refusal is said by its code's condition. ${AT_MOST}`,
+  condition: `When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named under the code with or instead of it. ${AT_MOST}`,
+  rule: `The rule, said once for every action that names it under the code it refuses with. ${AT_MOST}`,
+} as const
+
+/** What a text of a platform action's behaviour is: an outcome line, a condition or a rule. */
+export type BehaviourKind = keyof typeof BEHAVIOUR_PURPOSES
 
 /** What a written description describes: the field whose purpose it keeps. */
 export type DescriptionKind = keyof typeof DESCRIPTION_PURPOSES

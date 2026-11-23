@@ -15,7 +15,7 @@ import {
   roleSchema,
   stateSchema,
 } from '../../names.schema'
-import { DESCRIPTION_PURPOSES } from '../description-purposes'
+import { BEHAVIOUR_PURPOSES, DESCRIPTION_PURPOSES } from '../description-purposes'
 
 import { actionNameSchema, platformActionNameSchema } from './anchor'
 import { platformMailSchema, platformNoticeSchema } from './mail'
@@ -51,18 +51,85 @@ const actionParameterSchema = z
 
 export type PlatformParameter = z.infer<typeof actionParameterSchema>
 
+/**
+ * The invariants a code of an action names: the action refuses with the code when the rule of any
+ * of them would break; a condition of the code's own may stand beside them.
+ */
+const invariantRefSchema = z
+  .strictObject({
+    invariant: z
+      .union([kebabNameSchema, z.array(kebabNameSchema).min(2).meta({ uniqueItems: true })])
+      .refine((named) => typeof named === 'string' || new Set(named).size === named.length, {
+        message: 'an invariant is named once',
+      })
+      .describe(
+        'The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`.',
+      ),
+    condition: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'A cause of the code that is no invariant, beside the ones named: when else the action answers with it. At most 200 characters.',
+      ),
+  })
+  .describe(
+    'The code answers when the rule of an invariant named would break; each rule is said once, under `platform.invariants`. See the rule `action-outcomes`.',
+  )
+
+/**
+ * The codes of an action: a map from each code to the condition it answers on, or to the invariants
+ * it refuses for with a condition of its own beside them, or, the older form, a list of their names.
+ */
+const actionCodesSchema = z
+  .union([
+    z
+      .record(
+        codeSchema,
+        z.union([z.string().min(1).describe(BEHAVIOUR_PURPOSES.condition), invariantRefSchema]),
+      )
+      .describe(
+        'Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`.',
+      ),
+    z.array(codeSchema).describe('The older form: the codes by name alone, with no condition.'),
+  ])
+  .describe(
+    'The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`.',
+  )
+
+export type ActionCodes = z.infer<typeof actionCodesSchema>
+
+/** What an action answers once it runs: one outcome, or a list of outcome lines. */
+const actionResultSchema = z
+  .union([z.string(), z.array(z.string().min(1).describe(BEHAVIOUR_PURPOSES.outcome)).min(1)])
+  .describe(
+    "What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`.",
+  )
+
+export type ActionResult = z.infer<typeof actionResultSchema>
+
+/** A rule several platform actions keep, said once. */
+export const platformInvariantSchema = z
+  .strictObject({
+    rule: z.string().min(1).describe(BEHAVIOUR_PURPOSES.rule),
+    refuses: codeSchema.describe(
+      'The code an action refuses with when the rule would break: each action names the invariant under it.',
+    ),
+  })
+  .describe(
+    'A rule several actions keep, said once: each names it under the code it refuses with, and the engine derives the actions it limits. See the rule `action-outcomes`.',
+  )
+
+export type PlatformInvariant = z.infer<typeof platformInvariantSchema>
+
 const platformActionSchema = z
   .strictObject({
     description: z.string().describe(DESCRIPTION_PURPOSES.action),
     params: z
       .record(z.string().regex(/^[a-z][a-zA-Z0-9]*$/), actionParameterSchema)
       .describe('The parameters by name.'),
-    result: z.string().describe('What holds once the action succeeds.'),
-    codes: z
-      .array(codeSchema)
-      .describe(
-        'The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`.',
-      ),
+    result: actionResultSchema,
+    codes: actionCodesSchema,
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
     paged: z
       .strictObject({
@@ -74,12 +141,12 @@ const platformActionSchema = z
       })
       .optional()
       .describe(
-        'The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.',
+        "The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.",
       ),
     changes: z
       .array(platformActionNameSchema)
       .describe(
-        "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
+        'Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.',
       ),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
     notices: z
@@ -136,7 +203,7 @@ export const platformDefaultsSchema = z
       .int()
       .min(1)
       .describe(
-        'The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.',
+        'Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`.',
       ),
   })
   .describe(
@@ -183,6 +250,12 @@ export const platformSchema = z
     actions: z
       .record(platformActionNameSchema, platformActionSchema)
       .describe('The platform actions by name: `platform.<name>` in a binding.'),
+    invariants: z
+      .record(kebabNameSchema, platformInvariantSchema)
+      .optional()
+      .describe(
+        'The invariants by name: each a rule said once, named by the actions it limits under the code it refuses with. See the rule `action-outcomes`.',
+      ),
     events: z
       .record(kebabNameSchema, z.string().describe(DESCRIPTION_PURPOSES.event))
       .optional()
@@ -193,13 +266,13 @@ export const platformSchema = z
       .array(actionNameSchema)
       .optional()
       .describe(
-        'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.',
+        'Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.',
       ),
     toasts: z
       .record(platformActionNameSchema, codeSchema)
       .optional()
       .describe(
-        'The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.',
+        "The platform actions whose success toasts, each with its toast's code (`organisations.create: organisation-created`); an unlisted platform action never toasts. See the rule `success-toast`.",
       ),
     composites: z
       .record(kebabNameSchema, platformCompositeSchema)

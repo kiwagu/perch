@@ -71,7 +71,7 @@ const readSchema = z
       .describe('Which anchor.'),
   })
   .describe(
-    "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data.",
+    "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`.",
   )
 
 export const effectSchema = z

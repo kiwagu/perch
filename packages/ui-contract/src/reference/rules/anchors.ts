@@ -1,6 +1,7 @@
 /**
- * The rules of an anchor: its grammar, how it is written in code, the attributes it carries, the
- * eye of a password input, how a page is marked and located, and the frame's readiness and notices.
+ * The rules of an anchor: its grammar and the derived parts it lists, how it is written in code,
+ * the eye of a password input, a field that holds a secret, the attributes it carries, what it is
+ * bound to, how a page is marked and located, and the frame's readiness and notices.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -45,6 +46,15 @@ const anchorGrammar: ReferenceRule = {
   ],
 }
 
+const derivedParts: ReferenceRule = {
+  id: 'derived-parts',
+  title: "Derived parts: what an anchor's `derived` lists",
+  text: [
+    "`derived` on an anchor: The derived suffixes the element renders, each from the vocabulary's closed table of derived suffixes and ending with a kind (the kind of the part it marks). The part is `<anchor>.<suffix>`, which code builds only with `testIdFor(base, suffix)` from `@workspace/ui-contract/anchors`; the loaded base lists every suffix it renders here, and a derived part may have no reference in the screens, scenarios or tests at all, since its declaration is found by the base. No declared anchor equals another plus a derived suffix (`<list>.session-item`, never `<list>.item`). A paged list's four parts, `range`, `previous-link`, `next-link` and `size-select`, are listed by the loader on the list whose source says `paged: true`, and a screen file never writes them (see the rule `paged-list`). From version 4 so are the parts a kind brings by itself, `option` on a select, `visibility-button` on a secret input (the eye of a password input, presentation only: see the rule `visibility-button`), `confirm-button` and `cancel-button` on a dialog and a confirmation, and a screen file writes here only a suffix no kind brings (see the rule `kind-parts`). Before version 4 a file may list them here, and a secret `input` alone lists `visibility-button`.",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.derived', 'manifest.screens.anchors.<name>.derived'],
+}
+
 const visibilityButton: ReferenceRule = {
   id: 'visibility-button',
   title: 'The visibility button of a password input',
@@ -53,6 +63,15 @@ const visibilityButton: ReferenceRule = {
     "Its `data-value` names what a click does: `show` while the input hides its value, `hide` while it shows it; the two values are the suffix's own (`VISIBILITY_VALUES`), never rows of the vocabulary's Choice values. Whether the field shows its value is held by the field itself, the one transient state a flow never holds, so the button is never an event of a flow or an activity, it is not one of the controls the machine enables, it is always enabled, and it holds no input, so no binding's `params` and no invoke's `input` takes it (`contract:check` refuses each of these, and a `clear` or a `read` naming it). A test locates it as `<input>.visibility-button` and asserts `show` or `hide` on it; the manifest lists it in `contract.derivedParts` with its kind and its values. A scenario may name the values `show` and `hide` once an input renders it.",
   ].join('\n\n'),
   keys: ['screen.anchors.<name>.secret', 'screen.anchors.<name>.derived'],
+}
+
+const secretField: ReferenceRule = {
+  id: 'secret-field',
+  title: 'A field that holds a secret',
+  text: [
+    "`secret: true` on a field: A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field, so it holds no input any more, as if nothing was typed: a form empties its passwords this way once the action that takes them succeeds. Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.secret', 'manifest.screens.anchors.<name>.secret'],
 }
 
 const attributes: ReferenceRule = {
@@ -67,12 +86,18 @@ const attributes: ReferenceRule = {
       '- `data-code` on a `message`, `error`, `toast` or `dialog`: the stable code of what it says.',
     ].join('\n'),
     "The page speaks the user's language, so tests and agents never assert its words. They assert the anchor with its code, state, id or value. A behaviour that varies is a code or a state of one anchor, never a second anchor: the sign-in form has one `user.sign-in.toggle-button` whose `data-value` says which way it switches, and one `user.sign-in.error` whose code says what went wrong. A dialog's code names what it asks (`unsent-changes`), since every dialog looks alike. A domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`.",
+    "On `anchors.<name>.dataId`: What the `data-id` of the element holds: the id of the entity it shows. Declared on an `item` or a `row`, the one static anchor that marks every entry of its list, table or section, the id of each entry's entity going into `data-id`; an entry that differs from the others or changes in place carries a row state, a normal one none. An `item` or a `row` named as a binding parameter, as an invoke's `input` or as a navigate's `{ item }` search takes the `data-id` of the entry whose control acts, so it declares `dataId`; the selection may then be in the address, and a reload or a copied link reaches the same entry. A `data-id` is data, not contract: no check reads its value.",
+    "On `anchors.<name>.dataValue`: The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, the key the code already uses and never its label, on an `option`, a `badge` or a `button` that switches a mode. Each fixed value is a row of the vocabulary's Choice values table with its meaning. On a `visibility-button` the values are `show` or `hide`, the suffix's own and never rows of the table; on an option of a paged list's `size-select`, the page size it chooses. A behaviour that varies is a value of one anchor, never a second anchor: one `toggle-button` whose `data-value` says which way it switches. A value asserted on an anchor must be one that anchor, or an anchor under it, carries. A select always carries them, so from version 4 the loader derives `dataValue` on it and a file never writes it (see the rule `kind-parts`).",
+    "On `anchors.<name>.states`: The `data-state` values the element takes, each a state of the vocabulary: an app state on the frame's `status`, a container state on a `status`, `list` or `section` (`loading` while its data arrives after the page), a row state on an `item`. An entry that differs from the others or changes in place carries a row state; an entry in its normal state carries none. The state of a field is not written here: an `input`, `textarea` or `select` that holds input carries `unsaved` while it holds input no save has taken, and, when its binding is a model field, `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. The loader derives it from the vocabulary's Field states table, and the manifest lists it under `fieldStates` (see the rule `field-states-carried`).",
   ].join('\n\n'),
   keys: [
     'screen.anchors.<name>.codes',
     'screen.anchors.<name>.states',
     'screen.anchors.<name>.dataId',
     'screen.anchors.<name>.dataValue',
+    'manifest.screens.anchors.<name>.dataId',
+    'manifest.screens.anchors.<name>.dataValue',
+    'manifest.screens.anchors.<name>.states',
   ],
 }
 
@@ -111,8 +136,9 @@ const readiness: ReferenceRule = {
   title: 'Readiness and container states',
   text: [
     'Wait for `app-shell.status` to reach the state `ready` (`[data-testid="app-shell.status"][data-state="ready"]`): the frame and the screen are rendered. Its other states, and what each means, are the vocabulary\'s table "App states". Then wait for the screen\'s container to leave `loading`: a `list`, a `section` or a page `status` carries one of the vocabulary\'s "Container states".',
+    "On a screen's `states`: The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.",
   ].join('\n\n'),
-  keys: ['screen.anchors.<name>.states'],
+  keys: ['screen.anchors.<name>.states', 'screen.states', 'manifest.screens.states'],
 }
 
 const notices: ReferenceRule = {
@@ -123,6 +149,35 @@ const notices: ReferenceRule = {
     'A message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there) says which one it shows in its structure: `ranked: true`, with its `codes` in rank order. Of the codes raised before it shows, it shows the first, and the others go with it. A code raised waits until the message shows or a flow clears it: a `clear` of the message, in any flow, takes away every code raised before it. `contract:check` takes `ranked` on a message of two codes or more, each listed once, and `contract:diff` lists each ranked message with its order.',
   ].join('\n\n'),
   keys: ['screen.anchors.<name>.ranked', 'screen.anchors.<name>.codes'],
+}
+
+const rankedMessage: ReferenceRule = {
+  id: 'ranked-message',
+  title: 'A message whose codes are ranked',
+  text: [
+    '`ranked: true` on a message: A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.ranked', 'manifest.screens.anchors.<name>.ranked'],
+}
+
+const anchorBinding: ReferenceRule = {
+  id: 'anchor-binding',
+  title: 'What an anchor is bound to',
+  text: [
+    'The `binding` of an anchor says what it does or shows.',
+    "`{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section.",
+    "Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter.",
+    '`{ route: /path }`: the path of a binding of some screen.',
+    "`{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL.",
+    'The binding `{ search: <name> }` of a field. The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`.',
+    'A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which.',
+    '`contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.',
+  ].join('\n\n'),
+  keys: [
+    'screen.anchors.<name>.binding',
+    'manifest.screens.anchors.<name>.binding',
+    'manifest.ids.<name>.binding',
+  ],
 }
 
 const entriesOfAList: ReferenceRule = {
@@ -139,10 +194,14 @@ const entriesOfAList: ReferenceRule = {
 /** The rules of an anchor and of the attributes it carries. */
 export const ANCHOR_RULES: readonly ReferenceRule[] = [
   anchorGrammar,
+  derivedParts,
   visibilityButton,
+  secretField,
   attributes,
+  anchorBinding,
   entriesOfAList,
   marking,
   readiness,
   notices,
+  rankedMessage,
 ]

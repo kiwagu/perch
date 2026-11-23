@@ -143,7 +143,7 @@ describe('instructionsOf', () => {
       '`read` makes a list of the screen whose `source` is a platform action read that action again and show its entries once the read is in',
     )
     expect(instructions.screenMap).toContain(
-      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another or a search parameter it reads does, and a navigate that sets a search parameter a paged list reads says `page: 1`; one whose `source` is an entity follows the stored data and is never read',
+      'such a list also reads it each time it starts to render after it did not and, while it renders, each time the organisation or account it reads for becomes another or a search parameter it reads does, and a navigate that sets a search parameter a paged list reads says `page: 1`; one whose `source` is an entity follows the stored data and is never read',
     )
     expect(instructions.screenMap).toContain(
       '`read: false` on an invoke says nothing reads after its action',
@@ -170,7 +170,7 @@ describe('instructionsOf', () => {
   })
   it("says which anchors a flow's state renders, those nested under a listed one with it", () => {
     expect(instructions.screenMap).toContain(
-      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists is rendered in every state, one that a state lists is rendered only in the states that list it, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves. Rendered means visible to the user: an anchor a state does not render is absent from the page or hidden on it.",
+      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists, neither itself nor one it is under, is rendered in every state, one listed, itself or through one it is under, only in the states that list it or that one, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves. Rendered means visible to the user, as far as the state decides: an anchor a state renders shows unless a condition of its own, of an anchor it is under or of its base if it is a derived part (`roles` or `own`, an entry's data, `with` and `without`) keeps it hidden, and one it does not render is absent from the page or hidden on it.",
     )
   })
   it('says a guard is a sentence, the failure codes it holds for, on an onError only, or one of a password pair', () => {

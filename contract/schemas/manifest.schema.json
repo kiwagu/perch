@@ -61,14 +61,14 @@
           "description": "The version of the contract format the contract declares."
         },
         "defaults": {
-          "description": "From version 6, what a value takes where it writes nothing of its own, `platform.defaults`: the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
+          "description": "From version 6, what a value takes where it writes nothing of its own; the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
           "type": "object",
           "properties": {
             "maxLength": {
               "type": "integer",
               "minimum": 1,
               "maximum": 9007199254740991,
-              "description": "The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`."
+              "description": "Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`."
             }
           },
           "required": [
@@ -417,7 +417,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters."
+            "description": "What the screen is for: the task it serves and when it is shown. Not a list of its parts: each anchor has its own description. See the rule `description-purposes`. At most 200 characters."
           },
           "frame": {
             "description": "The frame around every screen: it has no route of its own.",
@@ -741,7 +741,7 @@
                                 }
                               },
                               "key": {
-                                "description": "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.",
+                                "description": "The screen's key: a missing or broken value fails with this code, from an action whose `{ search: <name> }` feeds a param referring to a value. One per route, no `default`. See the rule `address-key`.",
                                 "type": "string",
                                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                               }
@@ -841,7 +841,7 @@
                   "description": "The kind of the anchor; matches the end of its last segment."
                 },
                 "description": {
-                  "description": "What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.",
+                  "description": "What the element is for. Its kind, binding, codes, states, roles and flow say the rest; leave out what the engine says itself. See the rule `description-purposes`. At most 200 characters.",
                   "type": "string"
                 },
                 "binding": {
@@ -956,7 +956,7 @@
                             "search"
                           ],
                           "additionalProperties": false,
-                          "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                          "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                         }
                       ],
                       "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1074,7 +1074,7 @@
                               "search"
                             ],
                             "additionalProperties": false,
-                            "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                            "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                           }
                         ],
                         "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1082,10 +1082,10 @@
                       "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
                     }
                   ],
-                  "description": "What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares."
+                  "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
                 },
                 "roles": {
-                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.",
+                  "description": "Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1094,20 +1094,20 @@
                   }
                 },
                 "own": {
-                  "description": "Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.",
+                  "description": "Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. See the rule `own-entries`.",
                   "type": "boolean"
                 },
                 "holdsInput": {
-                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change applies it at once and nothing else applies it: it runs an action that takes the field, or it moves its screen's search with it.",
+                  "description": "True when what is typed stays in the field until an action takes it or a flow clears it, so a leave with it typed loses it; false when it holds none. See the rule `field-holds-input`.",
                   "type": "boolean"
                 },
                 "marksState": {
-                  "description": "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The kit takes it from the generated field facts, and a view writes no `marksState` (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.",
+                  "description": "`false`: an `input`, `textarea` or `select` that holds input shows no state colour, its `data-state` still kept. Left out, it shows it. See the rules `state-colour` and `check-sources`.",
                   "type": "boolean",
                   "const": false
                 },
                 "secret": {
-                  "description": "A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field, so it holds no input any more, as if nothing was typed: a form empties its passwords this way once the action that takes them succeeds. Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.",
+                  "description": "A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.",
                   "type": "boolean",
                   "const": true
                 },
@@ -1144,7 +1144,7 @@
                     ],
                     "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
                   },
-                  "description": "The element renders only while each of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`."
+                  "description": "The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
                 },
                 "without": {
                   "minItems": 1,
@@ -1179,7 +1179,7 @@
                     ],
                     "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
                   },
-                  "description": "The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`."
+                  "description": "The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
                 },
                 "codes": {
                   "description": "The data-code values the element carries. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code.",
@@ -1191,12 +1191,12 @@
                   }
                 },
                 "ranked": {
-                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.",
+                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first. Only on a message of two codes or more, each listed once. See the rule `ranked-message`.",
                   "type": "boolean",
                   "const": true
                 },
                 "fields": {
-                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form. Every other code shows beside the controls of its part (rule `error-placement`).",
+                  "description": "An error's codes, each with the field it concerns, which it shows under and marks invalid, or `form`; a code left out concerns the form. See the rules `error-placement` and `error-codes-and-fields`.",
                   "type": "object",
                   "propertyNames": {
                     "type": "string",
@@ -1219,15 +1219,15 @@
                   }
                 },
                 "dataId": {
-                  "description": "What the `data-id` of the element holds: the id of the entity it shows. Declared on an `item` or a `row`, the one static anchor that marks every entry of its list, table or section, the id of each entry's entity going into `data-id`; an entry that differs from the others or changes in place carries a row state, a normal one none. An `item` or a `row` named as a binding parameter, as an invoke's `input` or as a navigate's `{ item }` search takes the `data-id` of the entry whose control acts, so it declares `dataId`; the selection may then be in the address, and a reload or a copied link reaches the same entry. A `data-id` is data, not contract: no check reads its value.",
+                  "description": "What the `data-id` of the element holds: the id of the entity it shows, on an `item` or a `row`. A `data-id` is data, not contract: no check reads its value. See the rule `attributes`.",
                   "type": "string"
                 },
                 "dataValue": {
-                  "description": "The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, the key the code already uses and never its label, on an `option`, a `badge` or a `button` that switches a mode. Each fixed value is a row of the vocabulary's Choice values table with its meaning. On a `visibility-button` the values are `show` or `hide`, the suffix's own and never rows of the table; on an option of a paged list's `size-select`, the page size it chooses. A behaviour that varies is a value of one anchor, never a second anchor: one `toggle-button` whose `data-value` says which way it switches. A value asserted on an anchor must be one that anchor, or an anchor under it, carries. A select always carries them, so from version 4 the loader derives `dataValue` on it and a file never writes it (see the rule `kind-parts`).",
+                  "description": "It or its options carry a `data-value`, a choice's stable key, not its label. From version 4 the loader sets it on a select; a screen file omits it there. See the rules `attributes` and `kind-parts`.",
                   "type": "boolean"
                 },
                 "states": {
-                  "description": "The `data-state` values the element takes, each a state of the vocabulary: an app state on the frame's `status`, a container state on a `status`, `list` or `section` (`loading` while its data arrives after the page), a row state on an `item`. An entry that differs from the others or changes in place carries a row state; an entry in its normal state carries none. The state of a field is not written here: an `input`, `textarea` or `select` that holds input carries `unsaved` while it holds input no save has taken, and, when its binding is a model field, `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. The loader derives it from the vocabulary's Field states table, and the manifest lists it under `fieldStates` (see the rule `field-states-carried`).",
+                  "description": "The `data-state` values it takes: an app, container or row state. Not the field states of an `input`, `textarea` or `select`: `ids` lists those. See the rules `attributes` and `field-states-carried`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1236,7 +1236,7 @@
                   }
                 },
                 "derived": {
-                  "description": "The derived suffixes the element renders, each from the vocabulary's closed table of derived suffixes and ending with a kind (the kind of the part it marks). The part is `<anchor>.<suffix>`, which code builds only with `testIdFor(base, suffix)` from `@workspace/ui-contract/anchors`; the loaded base lists every suffix it renders here, and a derived part may have no reference in the screens, scenarios or tests at all, since its declaration is found by the base. No declared anchor equals another plus a derived suffix (`<list>.session-item`, never `<list>.item`). A paged list's four parts, `range`, `previous-link`, `next-link` and `size-select`, are listed by the loader on the list whose source says `paged: true`, and a screen file never writes them (see the rule `paged-list`). From version 4 so are the parts a kind brings by itself, `option` on a select, `visibility-button` on a secret input (the eye of a password input, presentation only: see the rule `visibility-button`), `confirm-button` and `cancel-button` on a dialog and a confirmation, and a screen file writes here only a suffix no kind brings (see the rule `kind-parts`). Before version 4 a file may list them here, and a secret `input` alone lists `visibility-button`.",
+                  "description": "The derived suffixes it renders; a screen file omits a paged list's parts and, from version 4, a kind's own: the loader lists them. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1322,10 +1322,10 @@
                               }
                             ]
                           },
-                          "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route."
+                          "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list rereads when it changes while it renders, or a constant; never a field. See the rule `list-reads`."
                         },
                         "paged": {
-                          "description": "The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, which the field facts carry for the kit. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.",
+                          "description": "The list is a page of the action's entries: its page and size are the route's search parameters, and its parts are derived, never written. See the rule `paged-list`.",
                           "type": "boolean",
                           "const": true
                         }
@@ -1334,10 +1334,10 @@
                         "platform"
                       ],
                       "additionalProperties": false,
-                      "description": "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`."
+                      "description": "The entries come from a platform action, read when the anchor starts to render, while it renders when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`."
                     }
                   ],
-                  "description": "Where the entries of a list, a section or a table come from, and with it when they are read; no other kind has one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not and each time what it reads for becomes another, and where a flow says `read: <anchor>`. `{ entity: <entity>, order, direction }`: the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one."
+                  "description": "Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one."
                 },
                 "asks": {
                   "type": "object",
@@ -1357,7 +1357,7 @@
                     "code"
                   ],
                   "additionalProperties": false,
-                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way."
+                  "description": "Derived: the control asks the frame's confirmation before its destructive action runs. A screen file never writes it. See the rule `destructive-question`."
                 },
                 "leaves": {
                   "type": "object",
@@ -1385,7 +1385,7 @@
                   "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
                 },
                 "composite": {
-                  "description": "The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.",
+                  "description": "The platform composite the field opts into, declared once in `platform.yaml`; the loader derives its list and items. Only a secret `input` opts in. See the rule `composite-of-the-platform`.",
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                 },
@@ -1410,7 +1410,7 @@
                   "description": "Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it."
                 },
                 "confirms": {
-                  "description": "The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.",
+                  "description": "Written on an unbound secret input: names the other secret input of its screen, one that opts into a composite, whose password it repeats. See the rule `password-pair`.",
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$"
                 }
@@ -1424,7 +1424,7 @@
             "description": "The declared anchors by name."
           },
           "states": {
-            "description": "The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.",
+            "description": "The container states of the screen, rows of the vocabulary's Container states table: what is visible in each, never what each means. See the rule `readiness`.",
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -1438,7 +1438,7 @@
             "type": "object",
             "properties": {
               "id": {
-                "description": "The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.",
+                "description": "The id of the machine: one segment, which the app gives its machine and an id target `#<id>.<state>` names; absent, the screen id. See the rule `flow-states`.",
                 "type": "string",
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
               },
@@ -1583,7 +1583,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
+                              "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -1703,7 +1703,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -1897,7 +1897,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -2023,7 +2023,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -2132,7 +2132,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                         },
                                         {
                                           "type": "object",
@@ -2246,7 +2246,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2355,7 +2355,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -2532,7 +2532,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2641,7 +2641,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -2755,7 +2755,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                        "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -2864,7 +2864,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                             },
                                             {
                                               "type": "object",
@@ -2983,7 +2983,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -3092,7 +3092,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -3206,7 +3206,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                        "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -3315,7 +3315,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                             },
                                             {
                                               "type": "object",
@@ -3475,7 +3475,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
+                              "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -3595,7 +3595,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -3789,7 +3789,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -3915,7 +3915,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -4024,7 +4024,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                         },
                                         {
                                           "type": "object",
@@ -4138,7 +4138,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -4247,7 +4247,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4386,7 +4386,7 @@
                                       "type": "object",
                                       "properties": {
                                         "renders": {
-                                          "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
+                                          "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                                           "minItems": 1,
                                           "type": "array",
                                           "items": {
@@ -4506,7 +4506,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4700,7 +4700,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4826,7 +4826,7 @@
                                               "read": {
                                                 "type": "boolean",
                                                 "const": false,
-                                                "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                               },
                                               "actions": {
                                                 "minItems": 1,
@@ -4935,7 +4935,7 @@
                                                         "params"
                                                       ],
                                                       "additionalProperties": false,
-                                                      "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                      "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                     },
                                                     {
                                                       "type": "object",
@@ -5049,7 +5049,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5158,7 +5158,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -5335,7 +5335,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5444,7 +5444,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -5558,7 +5558,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,
@@ -5667,7 +5667,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                         },
                                                         {
                                                           "type": "object",
@@ -5786,7 +5786,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5895,7 +5895,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -6009,7 +6009,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,
@@ -6118,7 +6118,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                         },
                                                         {
                                                           "type": "object",
@@ -6585,7 +6585,7 @@
                       "search"
                     ],
                     "additionalProperties": false,
-                    "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                    "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                   }
                 ],
                 "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -6703,7 +6703,7 @@
                         "search"
                       ],
                       "additionalProperties": false,
-                      "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                      "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                     }
                   ],
                   "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -6711,7 +6711,7 @@
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
             ],
-            "description": "What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares."
+            "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
           },
           "codes": {
             "description": "The data-code values the element carries.",
@@ -6874,7 +6874,7 @@
               "code"
             ],
             "additionalProperties": false,
-            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way."
+            "description": "Derived: the control asks the frame's confirmation before its destructive action runs. A screen file never writes it. See the rule `destructive-question`."
           },
           "leaves": {
             "type": "object",
@@ -6988,7 +6988,7 @@
                 "type": "string"
               },
               "format": {
-                "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
                 "type": "string",
                 "enum": [
                   "email"
@@ -7030,7 +7030,7 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 9007199254740991,
-              "description": "The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`."
+              "description": "Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`."
             }
           },
           "required": [
@@ -7078,7 +7078,7 @@
                 "maximum": 9007199254740991
               },
               "maxLength": {
-                "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.",
+                "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes `defaults.maxLength`, and `null` takes no limit. See the rule `declared-values`.",
                 "anyOf": [
                   {
                     "type": "integer",
@@ -7095,7 +7095,7 @@
                 "type": "string"
               },
               "format": {
-                "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
                 "type": "string",
                 "enum": [
                   "email"
@@ -7156,7 +7156,7 @@
                     "value": {
                       "type": "string",
                       "pattern": "^([a-z][a-z0-9-]*|[a-z_]+\\.[a-z_]+)$",
-                      "description": "The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints a value has it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`."
+                      "description": "The value the parameter takes: a name of `platform.values` or a model field, `<entity>.<field>`, with its constraints; a keyword beside it may narrow them, never widen. See the rule `declared-values`."
                     },
                     "enum": {
                       "description": "The values it takes, each a string or a number.",
@@ -7187,7 +7187,7 @@
                       "type": "string"
                     },
                     "format": {
-                      "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                      "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
                       "type": "string",
                       "enum": [
                         "email"
@@ -7230,17 +7230,86 @@
                 "description": "The parameters by name."
               },
               "result": {
-                "type": "string",
-                "description": "What holds once the action succeeds."
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "One outcome of the action: the plain success first, then each other outcome under its condition. A refusal is said by its code's condition. At most 200 characters."
+                    }
+                  }
+                ],
+                "description": "What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`."
               },
               "codes": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                  "description": "A code of the vocabulary (data-code)."
-                },
-                "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`."
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named under the code with or instead of it. At most 200 characters."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "invariant": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                },
+                                {
+                                  "minItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                  },
+                                  "uniqueItems": true
+                                }
+                              ],
+                              "description": "The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`."
+                            },
+                            "condition": {
+                              "description": "A cause of the code that is no invariant, beside the ones named: when else the action answers with it. At most 200 characters.",
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "invariant"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The code answers when the rule of an invariant named would break; each rule is said once, under `platform.invariants`. See the rule `action-outcomes`."
+                        }
+                      ]
+                    },
+                    "description": "Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`."
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    },
+                    "description": "The older form: the codes by name alone, with no condition."
+                  }
+                ],
+                "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`."
               },
               "roles": {
                 "description": "The roles that may run the action.",
@@ -7252,7 +7321,7 @@
                 }
               },
               "paged": {
-                "description": "The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.",
+                "description": "The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.",
                 "type": "object",
                 "properties": {
                   "sizes": {
@@ -7285,7 +7354,7 @@
                   "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
                   "description": "A platform action: `sign-in`, `organisations.create`."
                 },
-                "description": "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none."
+                "description": "Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`."
               },
               "mail": {
                 "description": "The mail the action sends, when it sends one.",
@@ -7294,12 +7363,12 @@
                   "to": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name."
+                    "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`."
                   },
                   "language": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's."
+                    "description": "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`."
                   },
                   "link": {
                     "type": "object",
@@ -7312,7 +7381,7 @@
                       "search": {
                         "type": "string",
                         "pattern": "^[a-z][a-zA-Z0-9]*$",
-                        "description": "The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`."
+                        "description": "The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`."
                       }
                     },
                     "required": [
@@ -7345,12 +7414,12 @@
                     "to": {
                       "type": "string",
                       "pattern": "^[a-z][a-zA-Z0-9]*$",
-                      "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address)."
+                      "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`."
                     },
                     "language": {
                       "type": "string",
                       "pattern": "^[a-z][a-zA-Z0-9]*$",
-                      "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in."
+                      "description": "Where the mail's language comes from: a language parameter of the action, or `account` (the account the action acts on). See the rule `mail-recipients`."
                     },
                     "link": {
                       "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
@@ -7390,6 +7459,44 @@
           },
           "description": "The platform actions by name: `platform.<name>` in a binding."
         },
+        "invariants": {
+          "description": "The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The rule, said once for every action that names it under the code it refuses with. At most 200 characters."
+              },
+              "refuses": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The code an action refuses with when the rule would break: each action names the invariant under it."
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                  "description": "A platform action: `sign-in`, `organisations.create`."
+                },
+                "description": "Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`."
+              }
+            },
+            "required": [
+              "rule",
+              "refuses",
+              "actions"
+            ],
+            "additionalProperties": false
+          }
+        },
         "events": {
           "description": "The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.",
           "type": "object",
@@ -7403,7 +7510,7 @@
           }
         },
         "leaving": {
-          "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.",
+          "description": "Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.",
           "type": "array",
           "items": {
             "type": "string",
@@ -7412,7 +7519,7 @@
           }
         },
         "toasts": {
-          "description": "The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.",
+          "description": "The platform actions whose success toasts, each with its toast's code (`organisations.create: organisation-created`); an unlisted platform action never toasts. See the rule `success-toast`.",
           "type": "object",
           "propertyNames": {
             "type": "string",
@@ -7821,7 +7928,7 @@
           "id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]*(\\/[a-z][a-z0-9-]*){2,3}$",
-            "description": "`<entity>/<layer>/<slug>` or `<entity>/<layer>/<area>/<slug>`, the layer one of `base` (the entity works on its own), `flows` (several roles or devices meet), `features` (how one function behaves): the path of the file `tests/e2e/scenarios/<id>.md`, and the test `tests/e2e/src/<id>.e2e.spec.ts`."
+            "description": "`<entity>/<layer>/<slug>` or `<entity>/<layer>/<area>/<slug>`, the layer one of `base`, `flows`, `features`: the path of `tests/e2e/scenarios/<id>.md` and of its test. See the rule `scenario-files`."
           },
           "title": {
             "type": "string",
@@ -7945,7 +8052,7 @@
         "additionalProperties": false,
         "description": "One rule of the engine."
       },
-      "description": "The rules of the engine that this manifest and its schema name, each under its id: wherever a description says \"see the rule\" and an id in backticks, its text is here, because the reference that holds it is not part of the manifest. A rule they do not name is not carried, and neither is one that these texts name in turn."
+      "description": "The texts of the rules this manifest and its schema name by id, each id in backticks after \"rule\" or \"rules\"; the reference is not shipped. A rule only these texts name is not carried."
     }
   },
   "required": [

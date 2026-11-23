@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
+  hintBudgetProblems,
   loadActivities,
   loadModel,
   loadScenarios,
@@ -15,6 +16,7 @@ import {
   type Problem,
   parseVocabulary,
   readDescriptions,
+  SCHEMA_OUTPUTS,
   schemaDrift,
   sortProblems,
   VOCABULARY_FILE,
@@ -24,12 +26,14 @@ import { referenceDrift, referenceLinkProblems } from '../reference'
 import { accessProblems } from './access'
 import { activitiesProblems } from './activities'
 import { attributionProblems } from './attribution'
+import { behaviourTextsProblems } from './behaviour-texts'
 import { bindingsProblems } from './bindings'
 import { changesProblems } from './changes'
 import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { descriptionsProblems } from './descriptions'
 import { flowProblems } from './flow'
+import { invariantsProblems } from './invariants'
 import { keyProblems } from './keys'
 import { leavingProblems } from './leaving'
 import { mailsProblems } from './mails'
@@ -119,6 +123,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   unsavedInputProblems,
   valueProblems,
   attributionProblems,
+  invariantsProblems,
   searchProblems,
   keyProblems,
   mailsProblems,
@@ -128,6 +133,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   pagingProblems,
   scenariosProblems,
   descriptionsProblems,
+  behaviourTextsProblems,
   withProblems,
 ]
 
@@ -145,6 +151,7 @@ export function checkContract(root: string): Problem[] {
   return sortProblems([
     ...contractProblems(contract),
     ...schemaDrift(root),
+    ...hintBudgetProblems(SCHEMA_OUTPUTS),
     ...referenceDrift(root),
     ...referenceLinkProblems(root),
   ])

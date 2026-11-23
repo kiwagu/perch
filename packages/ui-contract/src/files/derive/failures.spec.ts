@@ -152,6 +152,38 @@ describe('failuresOf', () => {
   })
 })
 
+/** `things.rename` writing its codes as a map, each with its condition or its invariant. */
+const RENAMING_BY_MAP: Platform = {
+  ...RENAMING,
+  actions: {
+    'things.rename': {
+      ...(RENAMING.actions['things.rename'] as Platform['actions'][string]),
+      codes: {
+        'name-too-long': 'the new name is longer than its value allows',
+        'current-password-rejected': { invariant: 'current-password' },
+        'x-rejected': 'the note is refused',
+        'title-too-long': 'the title is longer than it may be',
+        failed: 'anything else fails',
+      },
+    },
+  },
+}
+
+describe('failuresOf a platform action whose codes are a map', () => {
+  it('gives the codes of the map in its order, attributed as a list of them would be', () => {
+    expect(
+      failuresOf(MODEL, RENAMING_BY_MAP.actions, ATTRIBUTING)('platform.things.rename'),
+    ).toEqual({
+      codes: RENAMED,
+      params: {
+        name: ['name-too-long'],
+        currentPassword: ['current-password-rejected'],
+        note: ['x-rejected'],
+      },
+    })
+  })
+})
+
 describe('failuresOf and the parameters a platform code concerns', () => {
   it('attributes a code named after a parameter, and one its codes list, to that parameter', () => {
     expect(failuresOf(MODEL, RENAMING.actions, ATTRIBUTING)('platform.things.rename')).toEqual({
