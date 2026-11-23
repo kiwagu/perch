@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import {
   accountsNamed,
@@ -26,7 +27,7 @@ const opal: NonNullable<ReturnType<SessionPort['current']>> = {
   email: 'opal@example.test',
 }
 
-const OPERATOR: ReadonlySet<PlatformRole> = new Set(['operator'])
+const OPERATOR: ReadonlySet<PlatformRole> = new Set([CONTRACT_ROLES.operator])
 
 /** Eleven accounts named `User 1` to `User 11`, and four of another name made after them. */
 const users = accountsNamed('User', 11)
@@ -36,7 +37,7 @@ const others = accountsNamed('Other', 4, new Date('2026-10-11T08:00:00.000Z'))
  * The users page on the application's router for Opal, an operator, over `accounts`, opened at
  * `at`: the router strips a default from the address and keeps the size it retains, as in the app.
  */
-async function openPage(accounts: FakeAccounts, at = '/console/users') {
+async function openPage(accounts: FakeAccounts, at: string = CONTRACT_ROUTES['console.users']) {
   const session = {
     ...fakeSession().session,
     current: () => opal,
@@ -114,14 +115,14 @@ describe('UsersContainer on the router', () => {
       ...others.map(({ name }) => name).reverse(),
       ...users.map(({ name }) => name).reverse(),
     ])
-    expect(address(router)).toBe('/console/users')
+    expect(address(router)).toBe(CONTRACT_ROUTES['console.users'])
     expect(lastRead(accounts)).toEqual({ q: '', page: 1, size: 25 })
     expect(screen.getByTestId(LIST).getAttribute('data-state')).toBe('ready')
   })
 
   it('searches anew from the first page, the text in the address', async () => {
     const accounts = withAccounts()
-    const router = await openPage(accounts, '/console/users?page=2&size=10')
+    const router = await openPage(accounts, `${CONTRACT_ROUTES['console.users']}?page=2&size=10`)
 
     await namesShown(5)
     await search('user')
@@ -150,7 +151,7 @@ describe('UsersContainer on the router', () => {
 
     await namesShown(15)
     expect(router.state.location.search).toEqual({})
-    expect(address(router)).toBe('/console/users')
+    expect(address(router)).toBe(CONTRACT_ROUTES['console.users'])
 
     await search('user')
 
@@ -175,7 +176,10 @@ describe('UsersContainer on the router', () => {
 
   it('starts the first page when a size is chosen on a later page, the search kept', async () => {
     const accounts = withAccounts()
-    const router = await openPage(accounts, '/console/users?q=%22user%22&page=2&size=10')
+    const router = await openPage(
+      accounts,
+      `${CONTRACT_ROUTES['console.users']}?q=%22user%22&page=2&size=10`,
+    )
 
     await namesShown(1)
     await chooseSize(50)
@@ -186,7 +190,10 @@ describe('UsersContainer on the router', () => {
 
   it('pages with the links before and after, each link the address it moves to', async () => {
     const accounts = withAccounts()
-    const router = await openPage(accounts, '/console/users?q=%22user%22&size=10')
+    const router = await openPage(
+      accounts,
+      `${CONTRACT_ROUTES['console.users']}?q=%22user%22&size=10`,
+    )
 
     await namesShown(10)
 
@@ -210,7 +217,10 @@ describe('UsersContainer on the router', () => {
 
   it('follows the address with its search box: a reload, a new search and Back', async () => {
     const accounts = withAccounts()
-    const router = await openPage(accounts, '/console/users?q=%22user%22&page=2&size=10')
+    const router = await openPage(
+      accounts,
+      `${CONTRACT_ROUTES['console.users']}?q=%22user%22&page=2&size=10`,
+    )
     const box = () => screen.getByTestId<HTMLInputElement>('console.users.search-input')
 
     await namesShown(1)
@@ -232,7 +242,7 @@ describe('UsersContainer on the router', () => {
 
   it("links each row to its account's card and opens it with the row's own id", async () => {
     const accounts = withAccounts()
-    const router = await openPage(accounts, '/console/users?q=%22user%22')
+    const router = await openPage(accounts, `${CONTRACT_ROUTES['console.users']}?q=%22user%22`)
 
     await namesShown(11)
 
@@ -240,11 +250,13 @@ describe('UsersContainer on the router', () => {
     const id = row?.getAttribute('data-id')
     const open = within(row ?? expect.unreachable('a row')).getByTestId(`${LIST}.open-link`)
 
-    expect(open.getAttribute('href')).toBe(`/console/account?id=${String(id)}`)
+    expect(open.getAttribute('href')).toBe(`${CONTRACT_ROUTES['console.account']}?id=${String(id)}`)
 
     fireEvent.click(open)
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/console/account'))
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['console.account']),
+    )
     expect(router.state.location.search).toEqual({ id })
   })
 
@@ -263,13 +275,15 @@ describe('UsersContainer on the router', () => {
 
   it('shows nothing of the page before while the next one is read, then that one alone', async () => {
     const accounts = withAccounts()
-    const router = await openPage(accounts, '/console/users?size=10')
+    const router = await openPage(accounts, `${CONTRACT_ROUTES['console.users']}?size=10`)
 
     await namesShown(10)
 
     accounts.hold = true
 
-    await act(() => router.navigate({ to: '/console/users', search: { page: 2, size: 10 } }))
+    await act(() =>
+      router.navigate({ to: CONTRACT_ROUTES['console.users'], search: { page: 2, size: 10 } }),
+    )
 
     expect(screen.getByTestId(LIST).getAttribute('data-state')).toBe('loading')
     expect(screen.queryAllByTestId(`${LIST}.account-item`)).toEqual([])

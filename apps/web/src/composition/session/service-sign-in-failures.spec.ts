@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
@@ -32,7 +33,7 @@ const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'A
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /**

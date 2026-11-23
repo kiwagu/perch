@@ -6,7 +6,13 @@ import type { Command } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { identityIdFactory, idSchemas, noteIdFactory } from '@workspace/ids'
-import { type Ability, CONTRACT_VALUES, defineAbilityFor, NO_ABILITY } from '@workspace/kernel'
+import {
+  type Ability,
+  CONTRACT_ROLES,
+  CONTRACT_VALUES,
+  defineAbilityFor,
+  NO_ABILITY,
+} from '@workspace/kernel'
 
 import type { CommandsPort } from '../../../platform/commands.port'
 import {
@@ -54,7 +60,7 @@ let ability: Ability
 beforeEach(() => {
   runner = new FakeShapeRunner()
   commands = new RecordingCommands()
-  ability = defineAbilityFor({ id: ann, role: 'member' }, replicaSchema)
+  ability = defineAbilityFor({ id: ann, role: CONTRACT_ROLES.member }, replicaSchema)
   runner.set(organisationShape, tree)
   notes = new NotesService(
     runner,
@@ -136,7 +142,7 @@ describe('NotesService', () => {
   })
 
   it('lets an admin edit and remove any note, and refuses a note that is not there', async () => {
-    ability = defineAbilityFor({ id: ann, role: 'admin' }, replicaSchema)
+    ability = defineAbilityFor({ id: ann, role: CONTRACT_ROLES.admin }, replicaSchema)
 
     expect((await notes.edit({ id: bobsNote.id, text: 'edited' })).isOk()).toBe(true)
     expect((await notes.remove({ id: bobsNote.id })).isOk()).toBe(true)

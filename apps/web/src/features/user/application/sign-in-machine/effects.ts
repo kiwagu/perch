@@ -1,3 +1,5 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { CODE_DIALOG, SIGN_IN_ERROR } from './context'
 
 /** The effect showing the form's error: its one code, or the code of the failure among `codes`. */
@@ -9,7 +11,7 @@ export const clearError = { type: 'clear', params: { anchor: SIGN_IN_ERROR } } a
 /** The welcome a sign-in that went through says, and the move to the profile. */
 export const welcomed = [
   { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
-  { type: 'navigate', params: { to: '/me' } },
+  { type: 'navigate', params: { to: CONTRACT_ROUTES['user.profile'] } },
 ] as const
 
 /** The dialog asking whether to sign in past the limit of devices. */

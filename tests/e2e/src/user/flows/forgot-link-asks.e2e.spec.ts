@@ -1,8 +1,11 @@
 // scenario: user/flows/forgot-link-asks
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 import { watchShown } from '../../support/shown'
 
 /** The frame's leave dialog, by its anchor and its code together. */
@@ -23,7 +26,7 @@ test.describe('Leave the sign-in form by its forgot-password link', { tag: '@ful
     const resetEmail = page.getByTestId('user.forgot-password.email-input')
 
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
 
@@ -38,7 +41,7 @@ test.describe('Leave the sign-in form by its forgot-password link', { tag: '@ful
 
     // - After step 3 [app-shell.leave-dialog] carries [code:unsaved-input] and the page stays on [/sign-in]
     await expect(dialog(page)).toBeVisible()
-    await expect(page).toHaveURL(/\/sign-in(\?.*)?$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in'], '(\\?.*)?$'))
 
     await test.step('4. Click [app-shell.leave-dialog.cancel-button]', async () => {
       await page.getByTestId('app-shell.leave-dialog.cancel-button').click()
@@ -58,12 +61,12 @@ test.describe('Leave the sign-in form by its forgot-password link', { tag: '@ful
     })
 
     // - After step 6 the page is on [/forgot-password] and [user.forgot-password.email-input] shows the email
-    await expect(page).toHaveURL(/\/forgot-password(\?.*)?$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.forgot-password'], '(\\?.*)?$'))
     await expect(resetEmail).toHaveValue(data.email)
 
     const shown =
       await test.step('7. Open [/sign-in], wait for [app-shell.status] to reach [state:ready], enter the email into [user.sign-in.email-input] and click [user.sign-in.forgot-link]', async () => {
-        await page.goto('/sign-in')
+        await page.goto(CONTRACT_ROUTES['user.sign-in'])
         await appReady(page)
         await email.fill(data.email)
 
@@ -75,7 +78,7 @@ test.describe('Leave the sign-in form by its forgot-password link', { tag: '@ful
       })
 
     // - After step 7 the page is on [/forgot-password] without [app-shell.leave-dialog] having been shown, and [user.forgot-password.email-input] shows the email
-    await expect(page).toHaveURL(/\/forgot-password(\?.*)?$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.forgot-password'], '(\\?.*)?$'))
     expect(await shown()).toBe(false)
     await expect(resetEmail).toHaveValue(data.email)
   })

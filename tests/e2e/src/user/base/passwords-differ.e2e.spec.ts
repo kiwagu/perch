@@ -1,4 +1,7 @@
 // scenario: user/base/passwords-differ
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, checkYourMail, expect, test } from '../../support/fixtures'
 import { expectDeclaredMail } from '../../support/mail-contract'
@@ -24,7 +27,7 @@ test.describe('Sign up with the password typed again differently', { tag: '@smok
     const last = data.password.slice(-1)
 
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
 

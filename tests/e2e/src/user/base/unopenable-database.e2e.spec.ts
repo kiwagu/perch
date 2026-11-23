@@ -1,5 +1,9 @@
 // scenario: user/base/unopenable-database
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 import { databases, identityDatabase, signedInIdentity } from '../../support/storage'
 
 test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }, () => {
@@ -9,7 +13,7 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
   }) => {
     const database =
       await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-        await page.goto('/me')
+        await page.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(page)
         await expect(page.getByTestId('user.profile.heading')).toBeVisible()
 
@@ -47,7 +51,7 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
     })
 
     await test.step('3. Open [/me]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       // Expected: After step 3 [app-shell.status] is in [state:failed]: the page says this device
       //   could not open the data, to reload the page to try again or sign out on this device, and
       //   that changes it has not sent yet are lost; it offers [app-shell.sign-out-here-button]
@@ -64,7 +68,7 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
 
     // Expected:
     // - Within 15 seconds of step 4 the page is on [/sign-in] and shows [user.sign-in.form]
-    await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     await expect(page.getByTestId('user.sign-in.form')).toBeVisible({ timeout: 15_000 })
     // - Within 15 seconds of step 4 the browser keeps no local database of the account and no
     //   longer names the account as signed in

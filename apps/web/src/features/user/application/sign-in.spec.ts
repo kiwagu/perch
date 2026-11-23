@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import { type CodeStep, type DataError, dataError, type SignUpInput } from '@workspace/data'
-import { CONTRACT_VALUES } from '@workspace/kernel'
+import { CONTRACT_ROUTES, CONTRACT_VALUES } from '@workspace/kernel'
 
 import { assertionOf, fakeCeremony } from '../../../composition/__fixtures__/passkey-ceremony'
 import {
@@ -331,7 +331,7 @@ describe('a sign-in whose account asks for a code', () => {
     expect(emitted).toEqual([
       { type: 'show', anchor: 'user.sign-in.code.dialog', codes: ['code-required'] },
       { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
-      { type: 'navigate', to: '/me' },
+      { type: 'navigate', to: CONTRACT_ROUTES['user.profile'] },
     ])
   })
 
@@ -499,7 +499,7 @@ describe('the sign-in form', () => {
     expect(session.current()?.email).toBe(ann.email)
     expect(asked).toEqual([
       { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
-      { type: 'navigate', to: '/me' },
+      { type: 'navigate', to: CONTRACT_ROUTES['user.profile'] },
     ])
   })
 

@@ -1,4 +1,7 @@
 // scenario: console/flows/operator-revoked
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import {
   consoleLink,
   expectAddress,
@@ -83,12 +86,12 @@ test.describe('Take the operator role away while the console is open', { tag: '@
       //   [/me], signed in
       await expect(page.getByTestId('not-found.page.heading')).toBeVisible()
       await expect(page.getByTestId('console.account.section')).toHaveCount(0)
-      await expectAddress(page, '/console/account', { id })
+      await expectAddress(page, CONTRACT_ROUTES['console.account'], { id })
       await expect(page.getByTestId('app-shell.nav')).toBeVisible()
       await expect(consoleLink(page)).toHaveCount(0)
       // The gateway refused the request, so nothing signed device B out: it is still on its
       // profile, with the navigation of a signed-in device.
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
       await expect(deviceB.getByTestId('app-shell.nav')).toBeVisible()
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.name)
     })
@@ -99,7 +102,7 @@ test.describe('Take the operator role away while the console is open', { tag: '@
       // Expected: After step 6 [not-found.page.heading] still shows on device A at the same
       //   address
       await expect(page.getByTestId('not-found.page.heading')).toBeVisible()
-      await expectAddress(page, '/console/account', { id })
+      await expectAddress(page, CONTRACT_ROUTES['console.account'], { id })
       // The roles come with the welcome of the device's hello, before its sync channel is up:
       // with them in, the navigation still shows no console link.
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {

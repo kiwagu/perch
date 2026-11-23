@@ -1,5 +1,9 @@
 // scenario: user/flows/one-account-per-browser
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, signIn, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 import { databases } from '../../support/storage'
 
 /** The names of the databases the browser keeps for accounts (not for their organisations). */
@@ -15,21 +19,21 @@ test.describe('One account per browser', { tag: '@full' }, () => {
     test.slow()
 
     await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toHaveText(signedIn.name)
     })
 
     await test.step('2. Click [user.profile.sign-out-button] and wait for [/sign-in]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     })
 
     const second =
       await test.step('3. On device A, open [/sign-in] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
-        await tab.goto('/sign-in')
+        await tab.goto(CONTRACT_ROUTES['user.sign-in'])
         await appReady(tab)
         await expect(tab.getByTestId('user.sign-in.email-input')).toBeVisible()
 
@@ -43,7 +47,7 @@ test.describe('One account per browser', { tag: '@full' }, () => {
     // Expected:
     // - Within 5 seconds of step 4 the second tab is on [/me] and [user.profile.heading] shows the
     //   account's name
-    await expect(second).toHaveURL(/\/me$/, { timeout: 5_000 })
+    await expect(second).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']), { timeout: 5_000 })
     await expect(second.getByTestId('user.profile.heading')).toHaveText(signedIn.name, {
       timeout: 5_000,
     })

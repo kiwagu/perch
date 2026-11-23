@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { fakeServices, fakeSession } from '../../../../platform/__fixtures__/session'
 import { useConfirmGuard } from '../../../../platform/confirm-guard.port'
@@ -57,8 +58,8 @@ const Pages = defineModule({
   id: 'pages',
   declarations: { One, Two: () => <p>two</p> },
   routes: [
-    { path: '/one', page: 'One', roles: ['guest', 'identity'] },
-    { path: '/two', page: 'Two', roles: ['guest', 'identity'] },
+    { path: '/one', page: 'One', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
+    { path: '/two', page: 'Two', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
   ],
 })
 

@@ -1,4 +1,7 @@
 // scenario: user/base/two-factor
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, signUp, test, toast } from '../../support/fixtures'
 import { backupCodesShown, expectTwoFactorRead } from '../../support/second-factor'
@@ -102,7 +105,7 @@ test.describe('Turn the second factor on and off in the settings', { tag: '@smok
       // Expected: After step 6 the URL is still [/settings], so the device stayed signed in
       //   through turning the second factor on; [user.settings.two-factor.on-badge] is shown and
       //   [user.settings.two-factor.codes-cell] is not: the codes showed once
-      await expectPathname(page, '/settings')
+      await expectPathname(page, CONTRACT_ROUTES['user.settings'])
       await expect(on).toBeVisible()
       await expect(codesCell).toHaveCount(0)
     })
@@ -133,7 +136,7 @@ test.describe('Turn the second factor on and off in the settings', { tag: '@smok
       await expect(toast(page, 'two-factor-disabled')).toBeVisible()
       await expect(on).toHaveCount(0)
       await expect(enable).toBeVisible()
-      await expectPathname(page, '/settings')
+      await expectPathname(page, CONTRACT_ROUTES['user.settings'])
     })
 
     await test.step('9. Reload [/settings] and wait for [user.settings.two-factor.section] to carry [state:ready]', async () => {
@@ -142,7 +145,7 @@ test.describe('Turn the second factor on and off in the settings', { tag: '@smok
       // Expected: After step 9 the URL is still [/settings], [user.settings.two-factor.off-badge]
       //   and [user.settings.two-factor.enable-button] are shown: the device stayed signed in
       //   through turning the second factor off
-      await expectPathname(page, '/settings')
+      await expectPathname(page, CONTRACT_ROUTES['user.settings'])
       await expect(off).toBeVisible()
       await expect(enable).toBeVisible()
     })

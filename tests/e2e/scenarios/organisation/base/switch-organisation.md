@@ -14,7 +14,7 @@ data:
 
 Where: [/org] with one organisation, then [organisation.create.toggle-button] and [organisation.page.current-select]
 
-## Scenario: An administrator of one organisation creates a second one, which becomes current, and chooses the first one again
+## Scenario: An admin of one organisation creates a second one, which becomes current, and chooses the first one again
 
 ### Steps
 1. Sign up, open the link of [mail:sign-up], open [/org], enter the first key and name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]

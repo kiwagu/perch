@@ -4,6 +4,7 @@ import { createActor, waitFor } from 'xstate'
 
 import { type AuthUser, type CodeStep, dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import type { Passwords } from '../../domain/password-confirmation.rule'
 import type { SignInError, SignInForm, SignInOutcome, SignInService } from '../sign-in.service'
@@ -458,7 +459,7 @@ describe('a sign-in past the limit of devices', () => {
     expect(emitted).toEqual([
       ASKED,
       { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
-      { type: 'navigate', to: '/me' },
+      { type: 'navigate', to: CONTRACT_ROUTES['user.profile'] },
     ])
   })
 
@@ -579,7 +580,7 @@ describe('the forgot-link', () => {
     expect(emitted).toEqual([
       {
         type: 'navigate',
-        to: '/forgot-password',
+        to: CONTRACT_ROUTES['user.forgot-password'],
         search: { email: { anchor: 'user.sign-in.email-input' } },
         fields: { 'user.sign-in.email-input': 'ann@example.test' },
       },
@@ -632,7 +633,7 @@ const ASKED_CODE = {
 const CLEARED_CODE = { type: 'clear', anchor: 'user.sign-in.code.code-input' }
 const WELCOMED = [
   { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
-  { type: 'navigate', to: '/me' },
+  { type: 'navigate', to: CONTRACT_ROUTES['user.profile'] },
 ]
 
 /** One answer of a queue for each call, in turn. */

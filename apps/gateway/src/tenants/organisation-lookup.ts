@@ -2,6 +2,7 @@ import { err, errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow
 
 import { type DataError, dataError, type LocalDb, recordId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { type Membership, type TenantRole, tenantRole } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -95,7 +96,7 @@ export class OrganisationLookup {
   /** The organisation, once `actor` proved to be one of its admins. */
   adminOf(actor: IdentityId, tenant: Tenant): ResultAsync<Tenant, OrganisationError> {
     return this.memberOf(actor, tenant).andThen((role) =>
-      role === 'admin' ? okAsync(tenant) : errAsync(refused('not-admin')),
+      role === CONTRACT_ROLES.admin ? okAsync(tenant) : errAsync(refused('not-admin')),
     )
   }
 

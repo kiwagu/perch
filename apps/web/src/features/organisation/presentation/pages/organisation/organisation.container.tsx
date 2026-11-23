@@ -2,7 +2,7 @@ import { errAsync, type ResultAsync } from 'neverthrow'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
 import type { BusError } from '@workspace/cqrs'
-import { ownerKeyOf } from '@workspace/kernel'
+import { CONTRACT_ROLES, ownerKeyOf } from '@workspace/kernel'
 
 import { CLIPBOARD } from '../../../../../platform/clipboard.port'
 import { useFieldClears } from '../../../../../platform/field-clears'
@@ -72,7 +72,7 @@ export function OrganisationContainer() {
     deletable: ability.can('delete', 'note', note),
   }))
   const key = current?.tenant.key
-  const admin = current?.role === 'admin' ? key : undefined
+  const admin = current?.role === CONTRACT_ROLES.admin ? key : undefined
   // The link a copy puts on the clipboard is the one the list shows now.
   const sent = useRef<readonly InvitationView[] | undefined>(undefined)
   // Each write reads the organisation current, and the account signed in, when it runs.

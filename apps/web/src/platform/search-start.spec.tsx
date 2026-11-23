@@ -3,6 +3,7 @@ import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-rou
 import { act, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from './__fixtures__/session'
@@ -22,7 +23,7 @@ const PageModule = defineModule({
     {
       path: '/ask',
       page: 'Page',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ email: z.string().optional() }),
     },
   ],

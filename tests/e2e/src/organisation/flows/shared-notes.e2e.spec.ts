@@ -1,7 +1,11 @@
 // scenario: organisation/flows/shared-notes
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, pageLoads, signUp, test, toast } from '../../support/fixtures'
 import { acceptOnOrg, createOrganisation, inviteEmail } from '../../support/organisation'
+import { atRoute } from '../../support/routes'
 
 test.describe('Share notes inside an organisation and keep private data private', {
   tag: '@full',
@@ -75,7 +79,7 @@ test.describe('Share notes inside an organisation and keep private data private'
       // Expected: After step 6 device B shows the organisation name in [organisation.page.heading],
       //   [organisation.page.role-badge] with [value:member] and the note by A in
       //   [organisation.notes.list], without a reload
-      await expect(deviceB).toHaveURL(/\/org$/)
+      await expect(deviceB).toHaveURL(atRoute(CONTRACT_ROUTES.organisation))
       await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name, {
         timeout: 10_000,
       })

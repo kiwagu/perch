@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { fakeFetch, respond } from './__fixtures__/gateway-fetch'
 import { sharedStorage } from './__fixtures__/shared-storage'
@@ -48,7 +49,7 @@ const caraCard = {
   hasProfile: false,
   lastSeenAt: null,
   banReason: null,
-  organisations: [{ key: 'acme', name: 'Acme', role: 'admin' }],
+  organisations: [{ key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin }],
 }
 
 /** The client over `fetcher`, asking as Ann with her token, the roles dropped into `dropped`. */
@@ -117,7 +118,7 @@ describe('accountsApi', () => {
       ...caraListed,
       createdAt: new Date('2026-10-01T08:00:00.000Z'),
       hasProfile: false,
-      organisations: [{ key: 'acme', name: 'Acme', role: 'admin' }],
+      organisations: [{ key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin }],
     })
     expect(sent.map(({ url, authorization }) => [url, authorization])).toEqual([
       [`/backend/console/accounts/${cara}`, 'Bearer token-ann'],
@@ -210,7 +211,7 @@ describe('accountsApi', () => {
     expect((await refused.client.read(cara))._unsafeUnwrapErr().code).toBe('not-operator')
     expect((await gone.client.read(cara))._unsafeUnwrapErr().code).toBe('account-gone')
 
-    expect(refused.dropped).toEqual([[ann.identity.id, 'operator']])
+    expect(refused.dropped).toEqual([[ann.identity.id, CONTRACT_ROLES.operator]])
     expect(gone.dropped).toEqual([])
   })
 })
@@ -245,7 +246,7 @@ describe('a not-operator answered after the browser changed accounts', () => {
 
     const annSession = signedIn(here, ann)
 
-    saveRoles(here, annSession, ['operator'])
+    saveRoles(here, annSession, [CONTRACT_ROLES.operator])
 
     const roles = new SessionRoles({ storage: here, shown: () => shown })
     const told = vi.fn()
@@ -264,7 +265,7 @@ describe('a not-operator answered after the browser changed accounts', () => {
     // Another tab signs Ann out and Bob in, an operator; this tab follows and shows Bob.
     const bobSession = signedIn(other, bob)
 
-    saveRoles(other, bobSession, ['operator'])
+    saveRoles(other, bobSession, [CONTRACT_ROLES.operator])
     shown = bob.identity.id
 
     held.release()
@@ -272,9 +273,9 @@ describe('a not-operator answered after the browser changed accounts', () => {
     expect((await asked)._unsafeUnwrapErr().code).toBe('not-operator')
     expect(held.sent.map(({ authorization }) => authorization)).toEqual(['Bearer token-ann'])
     expect(savedRoles(here, annSession)).toEqual([])
-    expect(savedRoles(here, bobSession)).toEqual(['operator'])
-    expect(savedRoles(other, bobSession)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
+    expect(savedRoles(here, bobSession)).toEqual([CONTRACT_ROLES.operator])
+    expect(savedRoles(other, bobSession)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
     expect(told).toHaveBeenCalled()
   })
 
@@ -284,7 +285,7 @@ describe('a not-operator answered after the browser changed accounts', () => {
     const other = browser.tab()
     const first = signedIn(here, ann)
 
-    saveRoles(here, first, ['operator'])
+    saveRoles(here, first, [CONTRACT_ROLES.operator])
 
     const roles = new SessionRoles({ storage: here, shown: () => ann.identity.id })
     const held = heldFetch(respond(403, { code: 'not-operator' }))
@@ -301,13 +302,13 @@ describe('a not-operator answered after the browser changed accounts', () => {
 
     const again = signedIn(other, { ...ann, token: 'token-ann-again' })
 
-    saveRoles(other, again, ['operator'])
+    saveRoles(other, again, [CONTRACT_ROLES.operator])
     held.release()
 
     expect((await asked)._unsafeUnwrapErr().code).toBe('not-operator')
-    expect(savedRoles(here, again)).toEqual(['operator'])
-    expect(savedRoles(other, again)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
+    expect(savedRoles(here, again)).toEqual([CONTRACT_ROLES.operator])
+    expect(savedRoles(other, again)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('creates no record for an identity that had none', async () => {

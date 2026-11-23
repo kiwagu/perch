@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, recordId } from '@workspace/data'
 import { membershipIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { manualClock } from '@workspace/replica/testing'
 
 import { closeDepartures, departureHarness } from './__fixtures__/departures'
@@ -55,7 +56,7 @@ describe('AccountDeparture', () => {
     const again = await founded(bob, 't1')
 
     expect(again.tenant.key).toBe('t1')
-    expect(await membersIn('t1')).toEqual([{ identity: bob, role: 'admin' }])
+    expect(await membersIn('t1')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
   })
 
   it('takes the invitations of an organisation that goes whole, and leaves those of every other', async () => {
@@ -70,9 +71,9 @@ describe('AccountDeparture', () => {
 
     await invited(bob, 't3', 'ann@example.test')
     for (const input of [
-      { tenant: solo, email: 'cat@example.test', role: 'member', inviter: ann },
-      { tenant: solo, email: 'dan@example.test', role: 'admin', inviter: ann },
-      { tenant: shared, email: 'cat@example.test', role: 'member', inviter: bob },
+      { tenant: solo, email: 'cat@example.test', role: CONTRACT_ROLES.member, inviter: ann },
+      { tenant: solo, email: 'dan@example.test', role: CONTRACT_ROLES.admin, inviter: ann },
+      { tenant: shared, email: 'cat@example.test', role: CONTRACT_ROLES.member, inviter: bob },
     ] as const) {
       expect((await invitations.replace(input)).isOk()).toBe(true)
     }
@@ -122,9 +123,9 @@ describe('AccountDeparture', () => {
     expect(await departure.blocked(ann)).toEqual(ok(false))
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
-    expect(await rolesIn(bob, 't3')).toEqual(['admin'])
+    expect(await rolesIn(bob, 't3')).toEqual([CONTRACT_ROLES.admin])
     expect(await organisations.membershipsOf(bob)).toEqual(ok([t3]))
-    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
     expect(await notesIn('t3')).toEqual([{ author: ann, text: 'written by ann' }])
     expect(await definitionOf('t3')).toMatch(/^DEFINE DATABASE t_t3 STRICT\b/)
   })
@@ -143,7 +144,7 @@ describe('AccountDeparture', () => {
     expect(left).toEqual({ tenants: ['t3'], memberships: 1 })
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await everything()).toEqual(left)
-    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
   })
 
   it('is not blocked by an organisation that has another admin, which the identity then leaves', async () => {
@@ -167,8 +168,8 @@ describe('AccountDeparture', () => {
 
     expect(await departure.blocked(ann)).toEqual(ok(false))
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
-    expect(await rolesIn(cat, 't4')).toEqual(['admin'])
-    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect(await rolesIn(cat, 't4')).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesIn(bob, 't4')).toEqual([CONTRACT_ROLES.member])
     expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
   })
 
@@ -219,13 +220,13 @@ describe('AccountDeparture', () => {
       code: 'data:WRITE_FAILED',
     })
     // The membership stays until the member row went: the next run still finds the organisation.
-    expect(await rolesIn(ann, 't3')).toEqual(['member'])
+    expect(await rolesIn(ann, 't3')).toEqual([CONTRACT_ROLES.member])
 
     refuse(undefined)
 
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
-    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
   })
 
   it('completes a departure whose removal of a membership failed after the member row went', async () => {
@@ -239,15 +240,15 @@ describe('AccountDeparture', () => {
     expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toMatchObject({
       code: 'data:WRITE_FAILED',
     })
-    expect(await rolesIn(ann, 't3')).toEqual(['member'])
-    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
+    expect(await rolesIn(ann, 't3')).toEqual([CONTRACT_ROLES.member])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
 
     refuse(undefined)
 
     expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
-    expect(await rolesIn(bob, 't3')).toEqual(['admin'])
-    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
+    expect(await rolesIn(bob, 't3')).toEqual([CONTRACT_ROLES.admin])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
   })
 
   it("lets the hub go of the region of an organisation that goes whole before its database goes, and of no other organisation's", async () => {
@@ -292,7 +293,7 @@ describe('AccountDeparture', () => {
       id: membershipIdFactory.create(),
       identity: recordId('identity', ann),
       tenant: recordId('tenant', tenantIdFactory.create()),
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
 
     const unknown = {
@@ -344,8 +345,8 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
     expect(await annLeaves).toEqual(ok(undefined))
     expect((await catLeaves)._unsafeUnwrapErr()).toEqual(lastAdmin)
     expect(await rolesIn(ann, 't4')).toEqual([])
-    expect(await rolesIn(cat, 't4')).toEqual(['admin'])
-    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect(await rolesIn(cat, 't4')).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesIn(bob, 't4')).toEqual([CONTRACT_ROLES.member])
     expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
   })
 
@@ -416,7 +417,7 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
     expect(await annLeaves).toEqual(ok(undefined))
     expect(await catLeaves).toEqual(ok(undefined))
     expect(await everything()).toEqual({ tenants: ['t5'], memberships: 1 })
-    expect(await membersIn('t5')).toEqual([{ identity: bob, role: 'admin' }])
+    expect(await membersIn('t5')).toEqual([{ identity: bob, role: CONTRACT_ROLES.admin }])
   })
 
   it('a removal asked by an admin whose departure settled meanwhile is refused, and the member stays', async () => {
@@ -453,7 +454,7 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
 
     expect(await annLeaves).toEqual(ok(undefined))
     expect((await removal)._unsafeUnwrapErr()).toEqual({ kind: 'refused', code: 'not-a-member' })
-    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect(await rolesIn(bob, 't4')).toEqual([CONTRACT_ROLES.member])
     expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
   })
 
@@ -473,7 +474,7 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
       actor: ann,
       key: 't1',
       email: 'bob@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
 
     // The invite found the organisation and ann its admin before the departure took the
@@ -500,7 +501,7 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
         actor: ann,
         key: 't1',
         email: 'bob@example.test',
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     )._unsafeUnwrap()
     const held = hold(invitationAcceptStatement)
@@ -515,13 +516,16 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
     await vi.waitFor(() => expect(sentCount(departingMembershipsStatement)).toBe(reads + 1))
     held.release()
 
-    expect((await accepting)._unsafeUnwrap()).toEqual({ tenant: t1.tenant, role: 'member' })
+    expect((await accepting)._unsafeUnwrap()).toEqual({
+      tenant: t1.tenant,
+      role: CONTRACT_ROLES.member,
+    })
     expect((await annLeaves)._unsafeUnwrapErr()).toEqual(lastAdmin)
-    expect(await rolesIn(ann, 't1')).toEqual(['admin'])
-    expect(await rolesIn(bob, 't1')).toEqual(['member'])
+    expect(await rolesIn(ann, 't1')).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesIn(bob, 't1')).toEqual([CONTRACT_ROLES.member])
     expect(await membersIn('t1')).toEqual([
-      { identity: ann, role: 'admin' },
-      { identity: bob, role: 'member' },
+      { identity: ann, role: CONTRACT_ROLES.admin },
+      { identity: bob, role: CONTRACT_ROLES.member },
     ])
   })
 })
@@ -558,7 +562,7 @@ describe('Organisations.leaveAll and what runs in its turns', () => {
         actor: ann,
         key: 't1',
         email: 'bob@example.test',
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     )._unsafeUnwrap()
 
@@ -598,7 +602,7 @@ describe('Organisations.leaveAll and what runs in its turns', () => {
     })
     expect(sentCount(invitationAcceptStatement)).toBe(additions)
     expect(await rolesIn(bob, 't1')).toEqual([])
-    expect(await membersIn('t1')).toEqual([{ identity: ann, role: 'admin' }])
+    expect(await membersIn('t1')).toEqual([{ identity: ann, role: CONTRACT_ROLES.admin }])
   })
 
   it('refuses a creation of the identity asked while `after` removes it, once it is gone, provisioning nothing', async () => {

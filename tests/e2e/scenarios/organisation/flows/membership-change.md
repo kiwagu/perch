@@ -12,7 +12,7 @@ data:
 ---
 # Deliver an accepted invitation and a removal to a signed-in device
 
-Where: [/org] on device A (user A, administrator), [/org] on device B (user B, another browser) and [/invitation] from [mail:organisations.invite] on device C (user B again, a third browser)
+Where: [/org] on device A (user A, admin), [/org] on device B (user B, another browser) and [/invitation] from [mail:organisations.invite] on device C (user B again, a third browser)
 
 ## Scenario: Device B gains the organisation when its account accepts the invitation elsewhere and loses it when removed, without a reload
 

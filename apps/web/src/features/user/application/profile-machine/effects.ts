@@ -1,3 +1,5 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 /** The anchor of the form's own error: the machine keeps the code it shows for the view. */
 export const PROFILE_ERROR = 'user.profile.error'
 
@@ -21,4 +23,7 @@ export const ASKED = {
   type: 'show',
   params: { anchor: 'user.profile.sign-out-dialog', codes: ['unsent-changes'] },
 } as const
-export const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
+export const TO_SIGN_IN = {
+  type: 'navigate',
+  params: { to: CONTRACT_ROUTES['user.sign-in'] },
+} as const

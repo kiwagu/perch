@@ -1,4 +1,5 @@
 import { noteIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Mailbox } from '@workspace/mailbox'
 import { RegionDoc } from '@workspace/replica'
 import { type Membership, membership } from '@workspace/replica/protocol'
@@ -58,7 +59,10 @@ export async function organisationSteps(
 
     const { membership: created } = createdOrganisation.parse(answer.body)
 
-    check(created.tenant.key === key && created.role === 'admin', 'not the admin of the key')
+    check(
+      created.tenant.key === key && created.role === CONTRACT_ROLES.admin,
+      'not the admin of the key',
+    )
   })
 
   const guest: SignedIn = await step('signed up a second identity: no memberships', async () => {
@@ -83,7 +87,7 @@ export async function organisationSteps(
     async () => {
       const answer = await callAs(base, 'POST', `/organisations/${key}/invitations`, owner, {
         email: guest.identity.email,
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
 
       check(answer.status === 201, `answered ${reported(answer)}`)
@@ -107,7 +111,10 @@ export async function organisationSteps(
 
     const { membership: joined } = createdOrganisation.parse(accepted.body)
 
-    check(joined.tenant.key === key && joined.role === 'member', 'not a member of the key')
+    check(
+      joined.tenant.key === key && joined.role === CONTRACT_ROLES.member,
+      'not a member of the key',
+    )
   })
 
   const guestDoc = RegionDoc.inMemory('tenant', region)

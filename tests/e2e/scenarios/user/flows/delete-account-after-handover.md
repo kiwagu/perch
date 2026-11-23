@@ -11,9 +11,9 @@ data:
 ---
 # Hand an organisation over, then delete the account
 
-Where: [/org] and [/settings] on device A (user A, administrator) and [/org] on device B (user B, another browser)
+Where: [/org] and [/settings] on device A (user A, admin) and [/org] on device B (user B, another browser)
 
-## Scenario: The only administrator makes a member an administrator, makes itself a member, then deletes its account; the organisation stays with the new administrator and keeps the note the deleted account wrote
+## Scenario: The only admin makes a member an admin, makes itself a member, then deletes its account; the organisation stays with the new admin and keeps the note the deleted account wrote
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]

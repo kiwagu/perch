@@ -13,7 +13,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "emit": "ui-contract emit values --out src/contract-values.gen.ts"
+    "emit": "ui-contract emit values --out src/contract-values.gen.ts && ui-contract emit terms --out src/contract-terms.gen.ts"
   },
   "dependencies": {
     "@workspace/zod": "workspace:*",

@@ -1,3 +1,5 @@
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { defineModule } from '../../platform/module'
 
 import { NotFoundContainer } from './presentation/pages/not-found/not-found.container'
@@ -11,5 +13,16 @@ import { NotFoundContainer } from './presentation/pages/not-found/not-found.cont
 export const NotFoundModule = defineModule({
   id: 'not-found',
   declarations: { NotFoundPage: NotFoundContainer },
-  routes: [{ path: '/$', page: 'NotFoundPage', roles: ['guest', 'identity', 'member', 'admin'] }],
+  routes: [
+    {
+      path: CONTRACT_ROUTES['not-found'],
+      page: 'NotFoundPage',
+      roles: [
+        CONTRACT_ROLES.guest,
+        CONTRACT_ROLES.identity,
+        CONTRACT_ROLES.member,
+        CONTRACT_ROLES.admin,
+      ],
+    },
+  ],
 })

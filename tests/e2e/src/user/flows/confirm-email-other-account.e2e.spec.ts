@@ -1,4 +1,7 @@
 // scenario: user/flows/confirm-email-other-account
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { askToChangeEmail, openChangeEmailMail } from '../../support/email-change'
 import { appReady, expect, expectPathname, signUp, test } from '../../support/fixtures'
@@ -21,7 +24,7 @@ test.describe('Open an email confirmation link in a browser signed in to another
 
     await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up], open [/settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]', async () => {
       await signUp(page, data)
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await askToChangeEmail(page, data.newEmail, data.password)
     })
@@ -52,7 +55,7 @@ test.describe('Open an email confirmation link in a browser signed in to another
     // Expected: [user.profile.email-input] on device A holds the new email. Device A is still on
     // /settings after step 1: its profile is read through its navigation.
     await page.getByTestId('app-shell.nav.profile-link').click()
-    await expectPathname(page, '/me')
+    await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     await expect(page.getByTestId('user.profile.email-input')).toHaveValue(data.newEmail, {
       timeout: 10_000,
     })

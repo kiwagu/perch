@@ -2,6 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -511,7 +512,7 @@ describe('authHandler, the deletion of an account by its link', () => {
         actor: ann.identity,
         key: 'acme',
         email: BOB,
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       }),
     )
     let release = (): void => {}
@@ -599,7 +600,7 @@ describe('authHandler, the deletion of an account by its link', () => {
         actor: bob.identity,
         key: 'shared',
         email: CAT,
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       }),
     )
     let release = (): void => {}

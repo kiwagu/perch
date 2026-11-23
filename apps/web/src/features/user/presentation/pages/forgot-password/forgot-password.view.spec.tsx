@@ -3,6 +3,7 @@ import { fireEvent, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
@@ -47,7 +48,7 @@ describe('ForgotPasswordView', () => {
 
     expect(onSend).toHaveBeenCalledWith('ann@example.test')
     expect(screen.getByTestId('user.forgot-password.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
   })
 

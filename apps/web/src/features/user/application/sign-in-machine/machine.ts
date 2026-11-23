@@ -1,5 +1,7 @@
 import { assertEvent, assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { failureOf, settled } from '../../../../platform/actor-outcome'
 import type { SignInForm, SignInService } from '../sign-in.service'
 
@@ -49,7 +51,7 @@ const toForgotPassword = {
     {
       type: 'navigate',
       params: {
-        to: '/forgot-password',
+        to: CONTRACT_ROUTES['user.forgot-password'],
         search: { email: { anchor: 'user.sign-in.email-input' } },
       },
     },

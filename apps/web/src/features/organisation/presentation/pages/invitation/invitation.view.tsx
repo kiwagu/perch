@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -99,7 +100,7 @@ export function InvitationView(props: InvitationViewProps) {
           ) : null}
           {props.guest && props.renders('organisation.invitation.sign-in-link') ? (
             <Link
-              to="/sign-in"
+              to={CONTRACT_ROUTES['user.sign-in']}
               className="text-sm underline"
               data-testid="organisation.invitation.sign-in-link"
             >

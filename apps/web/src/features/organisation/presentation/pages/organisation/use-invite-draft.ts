@@ -1,8 +1,10 @@
 import { useState } from 'react'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import type { InviteDraft } from '../../components/organisation-invite/organisation-invite.view'
 
-const EMPTY: InviteDraft = { email: '', role: 'member' }
+const EMPTY: InviteDraft = { email: '', role: CONTRACT_ROLES.member }
 
 /** The invitation form's fields as typed in one organisation: another organisation starts them afresh. */
 export function useInviteDraft(key: string | undefined) {
