@@ -21,7 +21,7 @@ export default [
     module: path('./packages/kernel/src/contract-terms.gen.ts'),
     files: ['**/*.{ts,tsx}'],
     routeValues: {
-      files: ['tests/e2e/**/*.ts', 'apps/web/src/**/*.{ts,tsx}'],
+      files: ['tests/e2e/**/*.{ts,tsx}', 'apps/web/src/**/*.{ts,tsx}'],
       ignores: ['apps/web/src/composition/**'],
     },
   }),
