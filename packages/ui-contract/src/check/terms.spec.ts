@@ -98,6 +98,26 @@ describe('termsProblems', () => {
       ),
     ])
   })
+  it('reads a synonym written with a dash as the same words as one written with a space', () => {
+    const terms: Terms = {
+      ...TERMS,
+      terms: {
+        ...TERMS.terms,
+        session: { meaning: 'One sign-in of a device.', synonyms: ['device session'] },
+        'device-link': { meaning: 'A link to a device.', synonyms: ['device-session'] },
+        visit: { meaning: 'A visit.', synonyms: ['device link'] },
+      },
+    }
+
+    expect(termsProblems(withTerms(terms))).toEqual([
+      atTerms(
+        'terms["device-link"].synonyms[0]: "device-session" is a synonym of "session" already; a synonym belongs to one term',
+      ),
+      atTerms(
+        'terms.visit.synonyms[0]: "device link" names the term "device-link", so it is no synonym of "visit"',
+      ),
+    ])
+  })
   it('refuses a name that is a term and a role at once', () => {
     const terms: Terms = {
       ...TERMS,

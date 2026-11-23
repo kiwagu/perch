@@ -55,7 +55,9 @@ export function termsProblems(contract: Contract): Problem[] {
       : { file: TERMS_FILE, line, message: text }
   }
   const entries = entriesOf(terms)
-  const named = new Map<string, Kind>()
+  // One name, one synonym: a dash and a space between words are the same, as the check reads them.
+  const words = (text: string): string => text.replaceAll('-', ' ')
+  const named = new Map<string, { readonly kind: Kind; readonly name: string }>()
   const problems: Problem[] = vocabulary.writesRoles
     ? [
         {
@@ -66,10 +68,10 @@ export function termsProblems(contract: Contract): Problem[] {
     : []
 
   for (const { kind, name } of entries) {
-    const earlier = named.get(name)
+    const earlier = named.get(words(name))?.kind
 
     if (earlier === undefined) {
-      named.set(name, kind)
+      named.set(words(name), { kind, name })
     } else {
       problems.push(
         at([SECTION[kind], name], `"${name}" is a ${earlier} too; a name is a term or a role`),
@@ -84,17 +86,17 @@ export function termsProblems(contract: Contract): Problem[] {
 
     for (const [index, synonym] of (entry.synonyms ?? []).entries()) {
       const path = [SECTION[kind], name, 'synonyms', index]
-      const naming = named.get(synonym)
-      const holder = forbidden.get(synonym)
+      const naming = named.get(words(synonym))
+      const holder = forbidden.get(words(synonym))
 
       if (naming !== undefined) {
         problems.push(
           at(
             path,
-            `"${synonym}" names the ${naming} "${synonym}", so it is no synonym of "${name}"`,
+            `"${synonym}" names the ${naming.kind} "${naming.name}", so it is no synonym of "${name}"`,
           ),
         )
-      } else if (own.has(synonym)) {
+      } else if (own.has(words(synonym))) {
         problems.push(at(path, `"${synonym}" is listed twice`))
       } else if (holder !== undefined) {
         problems.push(
@@ -104,10 +106,10 @@ export function termsProblems(contract: Contract): Problem[] {
           ),
         )
       } else {
-        forbidden.set(synonym, name)
+        forbidden.set(words(synonym), name)
       }
 
-      own.add(synonym)
+      own.add(words(synonym))
     }
   }
 
