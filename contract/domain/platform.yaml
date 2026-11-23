@@ -81,6 +81,15 @@ invariants:
   administrators-only:
     rule: "Only an administrator of the organisation may do it; an account whose role changed meanwhile is refused and nothing changes."
     refuses: not-admin
+  operators-only:
+    rule: "Only an operator of the platform may do it; an account whose role was taken away while the console was open is refused."
+    refuses: not-operator
+  existing-account:
+    rule: "The account an operator acts on exists; an id with no account, one removed meanwhile included, is refused and nothing changes."
+    refuses: account-gone
+  not-own-account:
+    rule: "The console refuses, before anything changes, to ban, sign out everywhere or remove the operator's own account; its devices page signs it out, its settings delete it."
+    refuses: own-account
   address-attempts:
     rule: "A network address takes twenty attempts at each kind of mailed link within ten minutes, refused or not; the next answers rate-limited."
     refuses: rate-limited
@@ -754,11 +763,14 @@ actions:
       size:
         type: number
         description: The accounts a page holds.
-    result: "the accounts the search finds, the newest first (two made at the same moment by their id), that page of them and their number in all: for each its identity id, its name (its profile's, or the one it signed up with while it has no profile), its email, whether the email is verified, whether it is banned, whether it is an operator, and when it was made; a page past the last holds none"
+    result:
+      - "the accounts the search finds, the newest first (two made at the same moment by their id), that page of them and their number in all"
+      - "for each: its identity id, its name (its profile's, or the one it signed up with while it has none), email, whether verified, banned or an operator, and when made"
+      - "a page past the last holds none"
     changes: []
     codes:
-      - not-operator
-      - failed
+      not-operator: { invariant: operators-only }
+      failed: "anything else fails"
     roles:
       - operator
     paged: { sizes: [ 10, 25, 50 ], default: 25 }
@@ -768,12 +780,16 @@ actions:
       id:
         value: id
         description: The identity id of the account.
-    result: "the account: its identity id, name (as accounts.list names it), email, whether the email is verified, when it was made, whether it has a profile (none until its first sign-in, so its name is the one it signed up with), when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given, and its organisations, each with its key, its name and the account's role in it; an id with no account answers account-gone"
+    result:
+      - "the account: its identity id, name (as accounts.list names it), email, whether the email is verified, when it was made"
+      - "whether it has a profile: none until its first sign-in, so its name is the one it signed up with"
+      - "when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given"
+      - "its organisations, each with its key, its name and the account's role in it"
     changes: []
     codes:
-      - not-operator
-      - account-gone
-      - failed
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.rename:
@@ -785,14 +801,16 @@ actions:
       name:
         value: profile.name
         description: The name.
-    result: "the profile's name is the new one, and the account's devices show it as they show any change of the profile; an account with no profile yet (it never signed in) has no name to set, so the card offers no rename then"
+    result:
+      - "the profile's name is the new one, and the account's devices show it as they show any change of the profile"
+      - "an account with no profile yet (it never signed in) has no name to set, so the card offers no rename then"
     changes: [ accounts.list, accounts.read ]
     codes:
-      - name-required
-      - name-too-long
-      - not-operator
-      - account-gone
-      - failed
+      name-required: "the name, trimmed, is empty"
+      name-too-long: "the name, trimmed, is longer than its value allows"
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.change-email:
@@ -804,15 +822,17 @@ actions:
       email:
         value: email
         description: The new email.
-    result: "the mail below is on its way to the new email, its link replacing the link of an earlier request, by the account or by an operator, and the account keeps its email until that link is opened, which also marks the new email verified, so an account that never signed in starts at its first sign-in with the new email; a new email that has an account answers email-taken and sends nothing, and one that is not an email email-invalid; the mails count toward the operator's network address's budget of mails"
+    result:
+      - "the mail below is on its way to the new email, its link replacing an earlier request's, by the account or an operator; the account keeps its email until it is opened"
+      - "opening it also marks the new email verified, so an account that never signed in starts at its first sign-in with the new email"
     changes: []
     codes:
-      - email-invalid
-      - email-taken
-      - rate-limited
-      - not-operator
-      - account-gone
-      - failed
+      email-invalid: "the new email is not an email"
+      email-taken: "the new email has an account; nothing is sent"
+      rate-limited: { invariant: address-mails }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     mail:
@@ -829,13 +849,16 @@ actions:
         value: ban-reason
         optional: true
         description: Why, for operators alone; the account never sees it.
-    result: "the account is banned and every device of it is signed out in the same step, so each lands on /sign-in told account-banned, and a sign-in with the right password answers account-banned until accounts.unban; an account banned already keeps its ban, with the reason given now; the operator's own account answers own-account and nothing changes"
+    result:
+      - "the account is banned and every device of it is signed out in the same step, so each lands on /sign-in told account-banned"
+      - "a sign-in with the right password answers account-banned until accounts.unban"
+      - "an account banned already keeps its ban, with the reason given now"
     changes: [ accounts.list, accounts.read ]
     codes:
-      - own-account
-      - not-operator
-      - account-gone
-      - failed
+      own-account: { invariant: not-own-account }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.unban:
@@ -844,12 +867,14 @@ actions:
       id:
         value: id
         description: The identity id of the account.
-    result: the account is not banned and signs in as before; the devices its ban signed out stay signed out; an account not banned stays as it is
+    result:
+      - "the account is not banned and signs in as before; the devices its ban signed out stay signed out"
+      - "an account not banned stays as it is"
     changes: [ accounts.list, accounts.read ]
     codes:
-      - not-operator
-      - account-gone
-      - failed
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.revoke-sessions:
@@ -858,13 +883,14 @@ actions:
       id:
         value: id
         description: The identity id of the account.
-    result: every device of the account signs out, and /sign-in shows signed-out-elsewhere on each; the operator's own account answers own-account, since its own devices page does that
+    result:
+      - "every device of the account signs out, and /sign-in shows signed-out-elsewhere on each"
     changes: [ accounts.read ]
     codes:
-      - own-account
-      - not-operator
-      - account-gone
-      - failed
+      own-account: { invariant: not-own-account }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.send-reset:
@@ -873,13 +899,17 @@ actions:
       id:
         value: id
         description: The identity id of the account.
-    result: "the mail below is on its way to the account's email, its link replacing the links of earlier requests, under the account's own allowances: one email takes three within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the operator's network address's budget of mails"
+    result:
+      - "the mail below is on its way to the account's email, its link replacing the links of earlier requests"
+      - "a rate-limited refusal sends nothing"
     changes: []
     codes:
-      - rate-limited
-      - not-operator
-      - account-gone
-      - failed
+      rate-limited:
+        invariant: address-mails
+        condition: "a fourth for its email within a quarter of an hour, under the account's own allowances"
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     mail:
@@ -892,14 +922,18 @@ actions:
       id:
         value: id
         description: The identity id of the account.
-    result: "the mail below is on its way to the account's email, under the account's own allowances: one email takes three within a quarter of an hour, and a fourth answers rate-limited and sends nothing; an account whose email is verified answers verified-before and sends nothing; the mails count toward the operator's network address's budget of mails"
+    result:
+      - "the mail below is on its way to the account's email"
+      - "a rate-limited refusal sends nothing"
     changes: []
     codes:
-      - verified-before
-      - rate-limited
-      - not-operator
-      - account-gone
-      - failed
+      verified-before: "the account's email is verified already; nothing is sent"
+      rate-limited:
+        invariant: address-mails
+        condition: "a fourth for its email within a quarter of an hour, under the account's own allowances"
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     mail:
@@ -912,14 +946,17 @@ actions:
       id:
         value: id
         description: The identity id of the account.
-    result: "the account is gone for good, as delete-account leaves it: its profile and its settings, its sessions, so every device of it is signed out, and its memberships; each organisation it was the only member of goes with it, its data too; its email gets the notice below and can sign up again at once; an account that is the only administrator of an organisation with other members answers last-admin and nothing changes, until another member of it is made an administrator or those members are removed; the operator's own account answers own-account"
+    result:
+      - "the account is gone for good, as delete-account leaves it: its profile, settings, sessions and memberships, so every device of it is signed out"
+      - "each organisation it was the only member of goes with it, its data too; its email gets the notice below and can sign up again at once"
+      - "a last-admin refusal changes nothing"
     changes: [ accounts.list, accounts.read, organisations.members ]
     codes:
-      - last-admin
-      - own-account
-      - not-operator
-      - account-gone
-      - failed
+      last-admin: { invariant: last-admin }
+      own-account: { invariant: not-own-account }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     notices:
