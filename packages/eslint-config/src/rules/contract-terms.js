@@ -65,6 +65,16 @@ function closedValues(type, checker) {
   return values.length > 0 ? values : undefined
 }
 
+/** Whether the property comes from a union of keys, with no field declared for it. */
+const fromKeyUnion = (property) =>
+  (property.getDeclarations() ?? []).every(
+    (declaration) =>
+      !ts.isPropertySignature(declaration) &&
+      !ts.isPropertyDeclaration(declaration) &&
+      !ts.isPropertyAssignment(declaration) &&
+      !ts.isShorthandPropertyAssignment(declaration),
+  )
+
 /** Whether every value of `values` is a key of `known`. */
 const within = (values, known) => values?.every((value) => known.has(value)) ?? false
 
@@ -105,6 +115,19 @@ export const contractTerms = {
     const checker = services.program.getTypeChecker()
     const tsNodeOf = (node) => services.esTreeNodeToTSNodeMap.get(node)
 
+    /** The name of the property `a.b` or `a['b']` reads, when it is written out. */
+    function propertyNameOf(node) {
+      if (!node.computed && node.property.type === 'Identifier') {
+        return node.property.name
+      }
+
+      return node.computed &&
+        node.property.type === 'Literal' &&
+        typeof node.property.value === 'string'
+        ? node.property.value
+        : undefined
+    }
+
     /** The type the identifier `node` is declared with, or its type here when it has no symbol. */
     function declaredTypeOfIdentifier(node) {
       const found = checker.getSymbolAtLocation(tsNodeOf(node))
@@ -128,21 +151,17 @@ export const contractTerms = {
         return closedValues(declaredTypeOfIdentifier(node), checker)
       }
 
-      if (
-        node.type === 'MemberExpression' &&
-        !node.computed &&
-        node.property.type === 'Identifier'
-      ) {
+      const property = node.type === 'MemberExpression' ? propertyNameOf(node) : undefined
+
+      if (property !== undefined) {
         const declared =
           node.object.type === 'Identifier'
             ? declaredTypeOfIdentifier(node.object)
             : checker.getTypeAtLocation(tsNodeOf(node.object))
         const values = (declared.isUnion() ? declared.types : [declared]).map((member) => {
-          const property = checker.getPropertyOfType(member, node.property.name)
+          const field = checker.getPropertyOfType(member, property)
 
-          return property === undefined
-            ? []
-            : closedValues(checker.getTypeOfSymbol(property), checker)
+          return field === undefined ? [] : closedValues(checker.getTypeOfSymbol(field), checker)
         })
 
         return values.some((each) => each === undefined) ? undefined : values.flat()
@@ -208,8 +227,9 @@ export const contractTerms = {
 
     /**
      * The names of the keys the object `objectNode` is expected to have, when its expected type is
-     * a map over them (`Record<Role, …>`, `Partial<…>` of one): an object type that declares its
-     * fields (`{ identity: string }`) names fields, not roles.
+     * a map over a union of them (`Record<Role, …>`, `Partial<…>` of one): an object type that
+     * declares its fields (`{ identity: string }`), or a mapping of one (`Partial<Filter>`), names
+     * fields, not roles.
      */
     function expectedKeys(objectNode) {
       const type = declaredAt(objectNode)
@@ -223,9 +243,13 @@ export const contractTerms = {
         return undefined
       }
 
-      const names = checker.getPropertiesOfType(type).map((property) => property.getName())
+      const properties = checker.getPropertiesOfType(type)
 
-      return names.length > 0 ? names : undefined
+      // A key of a map over a union has no declaration of its own; one that a mapped type keeps
+      // from a declared object (`Partial<Filter>`) still points at that field.
+      return properties.length > 0 && properties.every(fromKeyUnion)
+        ? properties.map((property) => property.getName())
+        : undefined
     }
 
     function reportRole(node, value) {
@@ -274,7 +298,7 @@ export const contractTerms = {
         }
       }
 
-      if (parent?.type === 'Property' && parent.key === node && !parent.computed) {
+      if (parent?.type === 'Property' && parent.key === node) {
         checkExpected(node, value, expectedKeys(parent.parent))
 
         return

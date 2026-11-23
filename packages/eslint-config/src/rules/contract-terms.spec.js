@@ -75,6 +75,12 @@ tester.run('contract-terms', contractTerms, {
       "type Target = { kind: 'member'; key: string } | { kind: 'members'; key: string }\ndeclare const key: string\nexport const target = (): Target => ({ kind: 'member', key })",
     ),
     typed(
+      "type Filter = { identity: string }\ndeclare function read(filter: Partial<Filter>): void\nread({ identity: 'idn_1' })\nread({ ['identity']: 'idn_2' })",
+    ),
+    typed(
+      "type Target = { kind: 'member'; key: string } | { kind: 'members'; key: string }\ndeclare const target: Target\nif (target.kind === 'member') {\n  console.log(target['kind'] === 'member')\n  switch (target['kind']) {\n    case 'member':\n      break\n  }\n}",
+    ),
+    typed(
       "declare function read(filter: { identity: string }): void\nread({ identity: 'idn_1' })\nread({ 'identity': 'idn_2' })",
     ),
     typed('const flags: Record<string, boolean> = { operator: true }'),
@@ -128,6 +134,18 @@ tester.run('contract-terms', contractTerms, {
         "const granted: Partial<Record<Role, boolean>> = { operator: true, 'member': false }",
       ),
       errors: [role('operator'), role('member')],
+    },
+    {
+      ...typed(
+        "const keyed: Partial<Record<Role, boolean>> = { ['member']: true, [`admin`]: false }\ndeclare const role: Role\nexport const held = { a: role }['a'] === 'guest'",
+      ),
+      errors: [role('member'), role('admin'), role('guest')],
+    },
+    {
+      ...typed(
+        "declare const holder: { role: Role }\nexport const isAdmin = holder['role'] === 'admin'",
+      ),
+      errors: [role('admin')],
     },
     {
       ...typed(
