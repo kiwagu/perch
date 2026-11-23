@@ -73,7 +73,7 @@ export const contractTerms = {
       throw new Error('workspace/contract-terms needs type information (projectService)')
     }
 
-    const { expectedAt, expectedKeys } = typeReaders(services)
+    const { expectedAt, expectedKeys } = typeReaders(services, { roles, routes })
 
     function reportRole(node, value) {
       context.report({

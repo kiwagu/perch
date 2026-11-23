@@ -8,6 +8,7 @@
 
 import ts from 'typescript'
 
+import { holdsTerms, isConstAssertion, stringOf, termsNamed } from './contract-terms-evidence.js'
 import { closedValues, readings } from './contract-terms-readings.js'
 
 const COMPARISONS = new Set(['===', '!==', '==', '!='])
@@ -28,47 +29,12 @@ const unwrapped = (node) =>
     ? unwrapped(node.expression)
     : node
 
-/** The text of the string `node`: a literal or a template with no expression. */
-const stringOf = (node) => (node.type === 'Literal' ? node.value : node.quasis[0]?.value.cooked)
-
-/** Whether `node` is an `as const` assertion. */
-const isConstAssertion = (node) =>
-  node?.type === 'TSAsExpression' &&
-  node.typeAnnotation.type === 'TSTypeReference' &&
-  node.typeAnnotation.typeName.type === 'Identifier' &&
-  node.typeAnnotation.typeName.name === 'const'
-
-/** The names that say a list holds roles or routes: `PLATFORM_ROLES`, `heldRoles`, `routes`. */
-const TERMS_NAME = /(^|_|[a-z])(roles?|routes?)$/i
-
-/**
- * Whether the `as const` list `array` says it holds roles or routes: a constant of the contract
- * among its items (`CONTRACT_ROLES.admin`), or the name it is declared under.
- */
-function holdsTerms(array) {
-  const constant = array.elements.some(
-    (element) =>
-      element?.type === 'MemberExpression' &&
-      element.object.type === 'Identifier' &&
-      /^CONTRACT_(ROLES|ROUTES)$/.test(element.object.name),
-  )
-  const holder = array.parent?.parent
-  const name =
-    holder?.type === 'VariableDeclarator' && holder.id.type === 'Identifier'
-      ? holder.id.name
-      : holder?.type === 'Property' && holder.key.type === 'Identifier'
-        ? holder.key.name
-        : undefined
-
-  return constant || (name !== undefined && TERMS_NAME.test(name))
-}
-
 /** Whether the member access `node` writes its key as a number: `a[0]`. */
 const isNumericKey = (node) =>
   node.computed && node.property.type === 'Literal' && typeof node.property.value === 'number'
 
 /** The readers of the types of one file, over its parser services' program. */
-export function typeReaders(services) {
+export function typeReaders(services, { roles, routes }) {
   const checker = services.program.getTypeChecker()
   const tsNodeOf = (node) => services.esTreeNodeToTSNodeMap.get(node)
   const { membersOf, readingOf, both, readingValues } = readings(checker)
@@ -251,6 +217,32 @@ export function typeReaders(services) {
    */
   const declaredValuesOf = (node) => readingValues(declaredReadingOf(node))
 
+  /** The contract's roles or routes, by the family a piece of evidence names. */
+  const familyOf = (family) =>
+    family === 'roles' ? roles : family === 'routes' ? routes : undefined
+
+  /**
+   * What an expression declared `unknown` admits where the string `node` is compared with it:
+   * that string, when the expression's own name says it holds a role or a route (`role`,
+   * `output['role']`, `pathname`) and the string is one of them; nothing it knows otherwise.
+   */
+  function unknownAdmits(other, node) {
+    const value = stringOf(node)
+
+    return isUnknown(other) && familyOf(termsNamed(nameOf(unwrapped(other))))?.has(value)
+      ? [value]
+      : undefined
+  }
+
+  /** The name an expression goes by: a variable's, or the last property's it reads. */
+  function nameOf(node) {
+    if (node.type === 'Identifier') {
+      return node.name
+    }
+
+    return node.type === 'MemberExpression' ? propertyNameOf(node) : undefined
+  }
+
   /** Whether the expression `node` is declared `unknown`, as `declaredReadingOf` reads it. */
   function isUnknown(node) {
     const reading = declaredReadingOf(node)
@@ -283,14 +275,13 @@ export function typeReaders(services) {
       const other = parent.left === node ? parent.right : parent.left
       const values = declaredValuesOf(other)
 
-      // A value the code knows nothing of, compared with a string: the code asks whether it is
-      // that string, so the string is all it admits there.
-      return values === undefined && isUnknown(other) ? [stringOf(node)] : values
+      return values === undefined ? unknownAdmits(other, node) : values
     }
 
-    // A list frozen `as const` admits what it lists: two strings or more that are all roles are a
-    // list of roles. One string alone (`['identity'] as const`, a table) says too little, unless
-    // the list says what it holds: a constant of the contract among its items, or its name.
+    // A list frozen `as const` that says what it holds (a constant of the contract among its
+    // items, a name that says roles) admits that family's values; two strings or more that are
+    // all roles are a list of roles. One string alone (`['identity'] as const`, a table) and a
+    // list of paths (the gateway's own) say too little.
     if (parent?.type === 'ArrayExpression' && isConstAssertion(parent.parent)) {
       const listed = parent.elements.map((element) =>
         element?.type === 'Literal' && typeof element.value === 'string'
@@ -298,11 +289,14 @@ export function typeReaders(services) {
           : undefined,
       )
 
-      if (holdsTerms(parent)) {
-        return [stringOf(node)]
+      const value = stringOf(node)
+      const family = familyOf(holdsTerms(parent))
+
+      if (family?.has(value)) {
+        return [value]
       }
 
-      if (listed.length >= 2 && listed.every((each) => each !== undefined)) {
+      if (listed.length >= 2 && listed.every((each) => each !== undefined && roles.has(each))) {
         return listed
       }
     }
@@ -310,9 +304,7 @@ export function typeReaders(services) {
     if (parent?.type === 'SwitchCase' && parent.test === node) {
       const values = declaredValuesOf(parent.parent.discriminant)
 
-      return values === undefined && isUnknown(parent.parent.discriminant)
-        ? [stringOf(node)]
-        : values
+      return values === undefined ? unknownAdmits(parent.parent.discriminant, node) : values
     }
 
     if (

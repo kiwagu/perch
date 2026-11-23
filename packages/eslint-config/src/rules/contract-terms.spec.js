@@ -125,6 +125,12 @@ tester.run('contract-terms', contractTerms, {
       "export const TABLES = ['identity'] as const\nexport const MIXED = ['identity', 'tenant'] as const",
     ),
     typed("declare const kind: unknown\nexport const isTenant = kind === 'tenant'"),
+    typed(
+      "declare const row: Record<string, unknown>\nexport const shown = typeof row['displayName'] === 'string' && row['displayName'] === 'admin'\nswitch (row['displayName']) {\n  case 'admin':\n    break\n}",
+    ),
+    typed(
+      "export const gatewayRoutes = ['/devices', '/organisations', '/me'] as const\nexport const documentRoles = ['author', '/devices'] as const",
+    ),
     byValue("void page.goto('/settings/x')"),
     byValue("void page.goto('/settingsx')"),
     byValue("void page.goto('/')"),
@@ -232,7 +238,7 @@ tester.run('contract-terms', contractTerms, {
     },
     {
       ...typed(
-        "declare const output: Record<string, unknown>\nexport const isAdmin = typeof output['role'] === 'string' && output['role'] === 'admin'\ndeclare const held: unknown\nswitch (held) {\n  case 'operator':\n    break\n}",
+        "declare const output: Record<string, unknown>\nexport const isAdmin = typeof output['role'] === 'string' && output['role'] === 'admin'\ndeclare const heldRole: unknown\nswitch (heldRole) {\n  case 'operator':\n    break\n}",
       ),
       errors: [role('admin'), role('operator')],
     },
