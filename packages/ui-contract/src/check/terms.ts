@@ -16,6 +16,7 @@ import {
 } from '../files'
 
 import type { Contract } from './contract'
+import { sameSynonym } from './synonyms'
 
 type Kind = 'term' | 'role'
 
@@ -55,7 +56,7 @@ export function termsProblems(contract: Contract): Problem[] {
       : { file: TERMS_FILE, line, message: text }
   }
   const entries = entriesOf(terms)
-  // One name, one synonym: a dash and a space between words are the same, as the check reads them.
+  // One name: a dash and a space between words are the same, as the check reads them.
   const words = (text: string): string => text.replaceAll('-', ' ')
   const named = new Map<string, { readonly kind: Kind; readonly name: string }>()
   const problems: Problem[] = vocabulary.writesRoles
@@ -79,15 +80,15 @@ export function termsProblems(contract: Contract): Problem[] {
     }
   }
 
-  const forbidden = new Map<string, string>()
+  const forbidden: Array<{ readonly synonym: string; readonly term: string }> = []
 
   for (const { kind, name, entry } of entries) {
-    const own = new Set<string>()
+    const own: string[] = []
 
     for (const [index, synonym] of (entry.synonyms ?? []).entries()) {
       const path = [SECTION[kind], name, 'synonyms', index]
-      const naming = named.get(words(synonym))
-      const holder = forbidden.get(words(synonym))
+      const naming = entries.find((other) => sameSynonym(other.name, synonym))
+      const holder = forbidden.find((held) => sameSynonym(held.synonym, synonym))?.term
 
       if (naming !== undefined) {
         problems.push(
@@ -96,7 +97,7 @@ export function termsProblems(contract: Contract): Problem[] {
             `"${synonym}" names the ${naming.kind} "${naming.name}", so it is no synonym of "${name}"`,
           ),
         )
-      } else if (own.has(words(synonym))) {
+      } else if (own.some((listed) => sameSynonym(listed, synonym))) {
         problems.push(at(path, `"${synonym}" is listed twice`))
       } else if (holder !== undefined) {
         problems.push(
@@ -106,10 +107,10 @@ export function termsProblems(contract: Contract): Problem[] {
           ),
         )
       } else {
-        forbidden.set(words(synonym), name)
+        forbidden.push({ synonym, term: name })
       }
 
-      own.add(words(synonym))
+      own.push(synonym)
     }
   }
 

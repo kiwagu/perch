@@ -61,7 +61,7 @@ describe('termsModuleOf', () => {
       CONTRACT_ROLES: { guest: 'guest', member: 'member' },
     })
   })
-  it("names a screen's further routes by its id and their place among its bindings", () => {
+  it("names a screen's further routes by its id and their path, so a binding added before them moves none", () => {
     const contract = sampleContract()
     const sample = contract.screens.screens[1]
     const first = sample?.bindings[0]
@@ -75,8 +75,8 @@ describe('termsModuleOf', () => {
     expect(moduleConstants(termsModuleOf(contract))).toMatchObject({
       CONTRACT_ROUTES: {
         sample: '/sample/$key',
-        'sample@2': '/thing/$key',
-        'sample@3': '/item/$key',
+        'sample@/thing/$key': '/thing/$key',
+        'sample@/item/$key': '/item/$key',
       },
     })
   })
@@ -94,7 +94,7 @@ export const CONTRACT_ROLES = {
   "member": "member"
 } as const
 
-/** The route path of every binding of a screen: its first by the screen's id, which names its file; a further one by the id and its place, \`<id>@2\`. */
+/** The route path of every binding of a screen: its first by the screen's id, which names its file; a further one by the id and its path, \`<id>@<path>\`. */
 export const CONTRACT_ROUTES = {
   "not-found": "/$",
   "sample": "/sample/$key"

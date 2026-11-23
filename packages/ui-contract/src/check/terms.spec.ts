@@ -118,6 +118,26 @@ describe('termsProblems', () => {
       ),
     ])
   })
+  it('reads a plural as the same synonym, as the check reads it, against a name too', () => {
+    const terms: Terms = {
+      ...TERMS,
+      terms: {
+        ...TERMS.terms,
+        organisation: { meaning: 'Accounts that work together.', synonyms: ['tenant'] },
+        region: { meaning: 'Where data lives.', synonyms: ['tenants'] },
+        visit: { meaning: 'A visit.', synonyms: ['accounts'] },
+      },
+    }
+
+    expect(termsProblems(withTerms(terms))).toEqual([
+      atTerms(
+        'terms.region.synonyms[0]: "tenants" is a synonym of "organisation" already; a synonym belongs to one term',
+      ),
+      atTerms(
+        'terms.visit.synonyms[0]: "accounts" names the term "account", so it is no synonym of "visit"',
+      ),
+    ])
+  })
   it('refuses a name that is a term and a role at once', () => {
     const terms: Terms = {
       ...TERMS,

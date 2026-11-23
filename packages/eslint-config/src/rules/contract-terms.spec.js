@@ -166,7 +166,7 @@ tester.run('contract-terms', contractTerms, {
     },
     {
       ...byValue("void page.goto('/console/card?id=1')"),
-      errors: [route('/console/card', 'console.account@2')],
+      errors: [route('/console/card', 'console.account@/console/card')],
     },
     {
       ...byValue(

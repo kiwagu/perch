@@ -30,11 +30,20 @@ interface Forbidden {
 }
 
 /** A synonym's words as one whole-word pattern: any separator between them, a plural at the end. */
+/** A synonym's words as a pattern: any separator between them, a plural `s`/`es` on the last. */
+const wordsOf = (synonym: string): string =>
+  `${synonym.split(/[ -]/).join('[^A-Za-z0-9]+')}(?:e?s)?`
+
 const patternOf = (synonym: string): RegExp =>
-  new RegExp(
-    `(?<![A-Za-z0-9])${synonym.split(/[ -]/).join('[^A-Za-z0-9]+')}(?:e?s)?(?![A-Za-z0-9])`,
-    'i',
-  )
+  new RegExp(`(?<![A-Za-z0-9])${wordsOf(synonym)}(?![A-Za-z0-9])`, 'i')
+
+/**
+ * Whether two words (a synonym, a name) read as the same synonym, as this check reads a text:
+ * either one, whole, is what the other's pattern matches (`tenant` and `tenants`, `device
+ * session` and `device-session`).
+ */
+export const sameSynonym = (a: string, b: string): boolean =>
+  new RegExp(`^${wordsOf(a)}$`, 'i').test(b) || new RegExp(`^${wordsOf(b)}$`, 'i').test(a)
 
 /** The synonyms `base` does not say already: what a longer name built on it says beyond it. */
 const beyond = (base: string, forbidden: readonly Forbidden[]): Forbidden[] =>
