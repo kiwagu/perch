@@ -1,4 +1,7 @@
 // scenario: app-shell/base/failed-then-signed-out
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { holdTabEngines } from '../../support/engines'
 import { appReady, expect, expectPathname, signOut, signUp, test } from '../../support/fixtures'
 
@@ -15,7 +18,7 @@ test.describe('Sign out in another tab after the data did not open', { tag: '@fu
       await test.step('2. Open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
-        await tab.goto('/me')
+        await tab.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(tab)
 
         return tab
@@ -38,7 +41,7 @@ test.describe('Sign out in another tab after the data did not open', { tag: '@fu
       await signOut(second)
       // Expected: Within 5 seconds of step 4 the first tab is on [/sign-in] and shows
       //   [user.sign-in.form], and no [app-shell.sign-out-here-button]
-      await expectPathname(page, '/sign-in', 5_000)
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 5_000)
       await expect(page.getByTestId('user.sign-in.form')).toBeVisible()
       await expect(page.getByTestId('app-shell.sign-out-here-button')).toHaveCount(0)
     })

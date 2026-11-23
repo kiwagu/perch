@@ -1,4 +1,7 @@
 // scenario: user/base/forgot-password-same-answer
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test } from '../../support/fixtures'
 import { expectBoundedNonArrival } from '../../support/mailbox'
@@ -13,7 +16,7 @@ test.describe('Ask for a new password for an email that has no account', { tag: 
     }
 
     await test.step('1. Open [/forgot-password] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/forgot-password')
+      await page.goto(CONTRACT_ROUTES['user.forgot-password'])
       await appReady(page)
     })
 

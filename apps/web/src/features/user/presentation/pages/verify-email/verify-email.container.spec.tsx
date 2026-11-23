@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
@@ -56,7 +57,10 @@ function CurrentNotice() {
 }
 
 /** The verify page at `path`, inside StrictMode as in development, with the frame's notice. */
-function renderPage(service: VerifyEmailService, path = '/verify-email?token=the-token') {
+function renderPage(
+  service: VerifyEmailService,
+  path = `${CONTRACT_ROUTES['user.verify-email']}?token=the-token`,
+) {
   const TestModule = defineModule({
     id: 'test',
     providers: [{ provide: VERIFY_EMAIL_SERVICE, useFactory: () => service }],
@@ -67,14 +71,22 @@ function renderPage(service: VerifyEmailService, path = '/verify-email?token=the
     },
     routes: [
       {
-        path: '/verify-email',
+        path: CONTRACT_ROUTES['user.verify-email'],
         page: 'VerifyEmail',
         guard: 'guest',
-        roles: ['guest'],
+        roles: [CONTRACT_ROLES.guest],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
-      { path: '/me', page: 'Me', roles: ['guest', 'identity'] },
-      { path: '/sign-in', page: 'SignIn', roles: ['guest', 'identity'] },
+      {
+        path: CONTRACT_ROUTES['user.profile'],
+        page: 'Me',
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+      },
+      {
+        path: CONTRACT_ROUTES['user.sign-in'],
+        page: 'SignIn',
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+      },
     ],
   })
   const { session } = fakeSession()
@@ -111,7 +123,7 @@ describe('VerifyEmailContainer', () => {
 
     await screen.findByText('profile')
 
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
     expect(noticeCode()).toBe('welcome')
     expect(exchange).toHaveBeenCalledExactlyOnceWith('the-token')
   })
@@ -132,7 +144,7 @@ describe('VerifyEmailContainer', () => {
 
     expect(message.getAttribute('data-code')).toBe('verified-before')
     expect(screen.getByTestId('user.verify-email.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(exchange).toHaveBeenCalledTimes(2)
   })
@@ -163,13 +175,13 @@ describe('VerifyEmailContainer', () => {
       () => okAsync(verifiedBefore),
       () => errAsync({ code: 'data:LINK_INVALID', message: 'the gateway refused the link' }),
     ])
-    const { router } = renderPage(service, '/verify-email?token=first')
+    const { router } = renderPage(service, `${CONTRACT_ROUTES['user.verify-email']}?token=first`)
 
     expect((await screen.findByTestId('user.verify-email.message')).getAttribute('data-code')).toBe(
       'verified-before',
     )
 
-    act(() => router.history.push('/verify-email?token=second'))
+    act(() => router.history.push(`${CONTRACT_ROUTES['user.verify-email']}?token=second`))
 
     expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
       'link-invalid',
@@ -224,7 +236,7 @@ describe('VerifyEmailContainer', () => {
     expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
     expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
     expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
-    expect(router.state.location.pathname).toBe('/verify-email')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.verify-email'])
     expect(noticeCode()).toBeUndefined()
   })
 
@@ -233,7 +245,7 @@ describe('VerifyEmailContainer', () => {
       () => errAsync({ code: 'data:LINK_INVALID', message: 'the link carries no token' }),
     ])
 
-    renderPage(service, '/verify-email')
+    renderPage(service, CONTRACT_ROUTES['user.verify-email'])
 
     expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
       'link-invalid',

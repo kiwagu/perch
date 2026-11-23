@@ -1,4 +1,5 @@
 import { SHAPE_RUNNER } from '@workspace/data'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { COMMANDS } from '../../platform/commands.port'
@@ -75,49 +76,59 @@ export const UserModule = defineModule({
   routes: [
     // A page that moves here may carry the email typed there.
     {
-      path: '/sign-in',
+      path: CONTRACT_ROUTES['user.sign-in'],
       page: 'SignInPage',
       guard: 'guest',
-      roles: ['guest'],
+      roles: [CONTRACT_ROLES.guest],
       search: z.object({ email: z.string().max(254).optional() }),
     },
     {
-      path: '/verify-email',
+      path: CONTRACT_ROUTES['user.verify-email'],
       page: 'VerifyEmailPage',
       guard: 'guest',
-      roles: ['guest'],
+      roles: [CONTRACT_ROLES.guest],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     // A guest's: a signed-in account changes its password in its settings.
     {
-      path: '/forgot-password',
+      path: CONTRACT_ROUTES['user.forgot-password'],
       page: 'ForgotPasswordPage',
       guard: 'guest',
-      roles: ['guest'],
+      roles: [CONTRACT_ROLES.guest],
       search: z.object({ email: z.string().max(254).optional() }),
     },
     // Open to anyone: a reset of the account signed in here signs this device out.
     {
-      path: '/reset-password',
+      path: CONTRACT_ROUTES['user.reset-password'],
       page: 'ResetPasswordPage',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     // Open to anyone: the link changes the email whoever is signed in here.
     {
-      path: '/confirm-email',
+      path: CONTRACT_ROUTES['user.confirm-email'],
       page: 'ConfirmEmailPage',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     // Open to anyone: the link deletes the account its mail was sent to, whoever is signed in here.
     {
-      path: '/delete-account',
+      path: CONTRACT_ROUTES['user.delete-account'],
       page: 'DeleteAccountPage',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
-    { path: '/me', page: 'ProfilePage', guard: 'authenticated', roles: ['identity'] },
-    { path: '/settings', page: 'SettingsPage', guard: 'authenticated', roles: ['identity'] },
+    {
+      path: CONTRACT_ROUTES['user.profile'],
+      page: 'ProfilePage',
+      guard: 'authenticated',
+      roles: [CONTRACT_ROLES.identity],
+    },
+    {
+      path: CONTRACT_ROUTES['user.settings'],
+      page: 'SettingsPage',
+      guard: 'authenticated',
+      roles: [CONTRACT_ROLES.identity],
+    },
   ],
 })

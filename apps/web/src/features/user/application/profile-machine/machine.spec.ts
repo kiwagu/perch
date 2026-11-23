@@ -5,6 +5,7 @@ import { createActor, waitFor } from 'xstate'
 import type { BusError } from '@workspace/cqrs'
 import { type DataError, dataError } from '@workspace/data'
 import type { ProfileId } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { projected } from '@workspace/ui-contract/machines'
 
 import { createProfileMachine, type ProfileFields } from '.'
@@ -256,7 +257,7 @@ describe('profile machine', () => {
     await waitFor(actor, (state) => state.matches('signed-out'))
 
     expect(signOut).toHaveBeenLastCalledWith({ forgetUnsent: true })
-    expect(emitted).toContainEqual({ type: 'navigate', to: '/sign-in' })
+    expect(emitted).toContainEqual({ type: 'navigate', to: CONTRACT_ROUTES['user.sign-in'] })
   })
 
   it('closes the dialog on cancel, and moves to sign-in on a sign-out or its failure', async () => {
@@ -276,7 +277,7 @@ describe('profile machine', () => {
     fails.actor.send({ type: 'user.profile.sign-out-button' })
     await waitFor(fails.actor, (state) => state.matches('signed-out'))
 
-    expect(fails.emitted).toContainEqual({ type: 'navigate', to: '/sign-in' })
+    expect(fails.emitted).toContainEqual({ type: 'navigate', to: CONTRACT_ROUTES['user.sign-in'] })
     expect(fails.signOut).toHaveBeenCalledWith(undefined)
   })
 })

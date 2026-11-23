@@ -11,6 +11,7 @@ import {
   profileIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
+import type { PlatformRole, TenantRole } from '@workspace/kernel'
 
 import profileRowStatement from '../../auth/__fixtures__/profile-row.surql'
 
@@ -31,7 +32,7 @@ export interface AccountRow {
   /** When its ban would lift by itself, as the admin plugin keeps it; none when left out. */
   readonly banExpires?: Date
   /** Its platform role as the directory keeps it; none when left out. */
-  readonly role?: 'user' | 'operator'
+  readonly role?: PlatformRole | 'user'
 }
 
 /** The instant an account is made at unless a test names another. */
@@ -106,7 +107,7 @@ export async function writeSession(
 export interface OrganisationRow {
   readonly key: string
   readonly name: string
-  readonly role: 'admin' | 'member'
+  readonly role: TenantRole
   /** `ready` when left out. */
   readonly status?: 'provisioning' | 'ready'
 }

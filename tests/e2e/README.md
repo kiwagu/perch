@@ -266,6 +266,10 @@ same way, and the step check reads `browsers`.
 front (`CLIENT_ADDRESS_HEADER`, `clientAddressOf`), one per worker slot, from 198.18.0.0/15, a
 range set aside for benchmarks: the front names it to the gateway as the request's address, so
 each worker spends per-address limits of its own.
+`src/support/routes.ts`: `atRoute`, the address a test expects a page at by a route of the
+contract: the URL ends with the route's path, then with what a pattern allows after it (nothing by
+default). Tests name a route through `CONTRACT_ROUTES` and a role through `CONTRACT_ROLES`, both
+from `@workspace/kernel`, never by hand: the ESLint rule `workspace/contract-terms` refuses one.
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and

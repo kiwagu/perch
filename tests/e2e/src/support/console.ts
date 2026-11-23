@@ -7,6 +7,7 @@
 
 import { expect, type Locator, type Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { appReady, expectPathname, signUp } from './fixtures'
@@ -33,7 +34,7 @@ export async function signUpOperator(page: Page, account: SeedAccount): Promise<
 /** Opens `/console/users` through the navigation's link and waits for the page's search box. */
 export async function openUsers(page: Page): Promise<void> {
   await consoleLink(page).click()
-  await expectPathname(page, '/console/users')
+  await expectPathname(page, CONTRACT_ROUTES['console.users'])
   await expect(page.getByTestId('console.users.search-input')).toBeVisible()
 }
 

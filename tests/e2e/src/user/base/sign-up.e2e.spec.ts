@@ -1,4 +1,7 @@
 // scenario: user/base/sign-up
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   appReady,
@@ -9,6 +12,7 @@ import {
   test,
 } from '../../support/fixtures'
 import { openDeclaredMail } from '../../support/mail-contract'
+import { atRoute } from '../../support/routes'
 
 test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }, () => {
   test('A new user signs up, opens the link of the verification mail and lands on the profile page', async ({
@@ -22,7 +26,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     const onPhone = testInfo.project.name === 'mobile'
 
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
 
       if (onPhone) {
@@ -55,7 +59,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
       await expect(page.getByTestId('user.sign-in.resend-button')).toBeVisible()
       await expect(page.getByTestId('user.sign-in.password-confirmation-input')).toHaveCount(0)
       await expect(page.getByTestId('user.sign-in.name-input')).toHaveCount(0)
-      await expect(page).toHaveURL(/\/sign-in$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']))
     })
 
     await test.step('5. Open the link of [mail:sign-up]', async () => {
@@ -68,7 +72,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     // - After step 5 the link opens [/verify-email], then [app-shell.notice-message] carries
     //   [code:welcome], the URL is [/me] and [user.profile.heading] shows the entered name
     await expect(notice(page, 'welcome')).toBeVisible()
-    await expectPathname(page, '/me')
+    await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
     // - [user.profile.email-input] shows the entered email
     await expect(page.getByTestId('user.profile.email-input')).toHaveValue(data.email)
@@ -94,7 +98,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     // - Reloading the page keeps the user signed in and shows the same name
     await page.reload()
     await appReady(page)
-    await expect(page).toHaveURL(/\/me$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
     await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
   })
 })

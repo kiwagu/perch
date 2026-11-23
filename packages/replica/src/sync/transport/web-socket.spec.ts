@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import {
   type ClientMessage,
   clientMessage,
@@ -60,7 +62,10 @@ const welcome: ServerMessage = {
   time: 0,
 }
 
-const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, role: 'member' }
+const acme: Membership = {
+  tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' },
+  role: CONTRACT_ROLES.member,
+}
 
 const probe: ClientMessage = { type: 'probe', regions: ['identity:idn_a'] }
 
@@ -586,7 +591,7 @@ describe('WebSocket transport', () => {
     const socket = sockets[0] ?? expect.unreachable('a socket')
 
     socket.open()
-    socket.receive({ ...welcome, memberships: [acme], roles: ['operator'] })
+    socket.receive({ ...welcome, memberships: [acme], roles: [CONTRACT_ROLES.operator] })
     // A memberships message changes no roles: only a welcome carries them.
     socket.receive({ type: 'memberships', memberships: [] })
 

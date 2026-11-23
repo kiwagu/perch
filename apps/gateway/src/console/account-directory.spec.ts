@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import {
   MADE_AT,
@@ -50,7 +51,7 @@ describe('AccountDirectory.list', () => {
       emailVerified: true,
       banned: true,
       banReason: 'spam',
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
     })
     const page = (
       await new AccountDirectory(local).list({ q: '', page: 1, size: 25 })
@@ -105,7 +106,7 @@ describe('AccountDirectory.list', () => {
   it("marks an operator by its role alone: the plugin's user and no role are none", async () => {
     const local = await directoryDb()
 
-    await writeAccount(local, { email: 'ann@example.test', role: 'operator' })
+    await writeAccount(local, { email: 'ann@example.test', role: CONTRACT_ROLES.operator })
     await writeAccount(local, { email: 'bob@example.test', role: 'user', createdAt: day(1) })
     await writeAccount(local, { email: 'cat@example.test', createdAt: day(2) })
 
@@ -261,12 +262,12 @@ describe('AccountDirectory.read', () => {
       emailVerified: true,
       banned: true,
       banReason: 'spam',
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
     })
 
     await writeProfile(local, ann, 'Annie Hall')
-    await writeOrganisation(local, ann, { key: 'beta', name: 'Beta', role: 'member' })
-    await writeOrganisation(local, ann, { key: 'acme', name: 'Acme', role: 'admin' })
+    await writeOrganisation(local, ann, { key: 'beta', name: 'Beta', role: CONTRACT_ROLES.member })
+    await writeOrganisation(local, ann, { key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin })
     await writeSession(local, ann, { lastSeenAt: day(3) })
 
     expect((await new AccountDirectory(local).read(ann))._unsafeUnwrap()).toEqual({
@@ -281,8 +282,8 @@ describe('AccountDirectory.read', () => {
       banned: true,
       banReason: 'spam',
       organisations: [
-        { key: 'acme', name: 'Acme', role: 'admin' },
-        { key: 'beta', name: 'Beta', role: 'member' },
+        { key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin },
+        { key: 'beta', name: 'Beta', role: CONTRACT_ROLES.member },
       ],
     })
   })
@@ -322,16 +323,16 @@ describe('AccountDirectory.read', () => {
     const local = await directoryDb()
     const ann = await writeAccount(local, { email: 'ann@example.test' })
 
-    await writeOrganisation(local, ann, { key: 'acme', name: 'Acme', role: 'admin' })
+    await writeOrganisation(local, ann, { key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin })
     await writeOrganisation(local, ann, {
       key: 'beta',
       name: 'Beta',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
       status: 'provisioning',
     })
 
     expect((await new AccountDirectory(local).read(ann))._unsafeUnwrap()).toMatchObject({
-      organisations: [{ key: 'acme', name: 'Acme', role: 'admin' }],
+      organisations: [{ key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin }],
     })
   })
 

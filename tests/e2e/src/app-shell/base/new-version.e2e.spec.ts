@@ -1,6 +1,7 @@
 // scenario: app-shell/base/new-version
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { manifestSchema } from '@workspace/ui-contract'
 
 import { appReady, expect, test } from '../../support/fixtures'
@@ -52,7 +53,7 @@ test.describe('Load the newer version of the app the server serves', { tag: '@fu
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       const read = page.waitForResponse(MANIFEST)
 
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       await read
       // Expected: After step 1 no [app-shell.update-message] shows

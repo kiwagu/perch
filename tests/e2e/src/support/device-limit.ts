@@ -7,6 +7,7 @@
 
 import type { Locator, Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { appReady, expect, type FreshDevices, signIn, syncSays } from './fixtures'
@@ -48,7 +49,7 @@ export async function signInDevicesCToK(
 
 /** Opens the sign-in page and submits `account`, without waiting for what it answers. */
 export async function submitSignIn(page: Page, account: SeedAccount): Promise<void> {
-  await page.goto('/sign-in')
+  await page.goto(CONTRACT_ROUTES['user.sign-in'])
   await appReady(page)
   await page.getByTestId('user.sign-in.email-input').fill(account.email)
   await page.getByTestId('user.sign-in.password-input').fill(account.password)

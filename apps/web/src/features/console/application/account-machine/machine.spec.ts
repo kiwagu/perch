@@ -3,6 +3,7 @@ import { createActor, waitFor } from 'xstate'
 
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { projected } from '@workspace/ui-contract/machines'
 
 import { fakeFetch, respond } from '../../../../composition/__fixtures__/gateway-fetch'
@@ -268,7 +269,10 @@ describe('the account card as its flow says', () => {
     expect(actor.getSnapshot().value).toBe('removed')
     expect(accounts.calls).toEqual([['remove', una.id]])
     expect(accounts.rows.some((row) => row.id === una.id)).toBe(false)
-    expect(emitted).toEqual([{ type: 'navigate', to: '/console/users' }, toast('account-removed')])
+    expect(emitted).toEqual([
+      { type: 'navigate', to: CONTRACT_ROUTES['console.users'] },
+      toast('account-removed'),
+    ])
     expect(actor.getSnapshot().context.sectionReads).toBe(0)
   })
 
@@ -316,7 +320,7 @@ describe('the account card over the gateway', () => {
     await settled(actor)
 
     expect(actor.getSnapshot().context.errors).toEqual({ sessions: 'not-operator' })
-    expect(dropped).toEqual([[asker, 'operator']])
+    expect(dropped).toEqual([[asker, CONTRACT_ROLES.operator]])
     expect(emitted).toEqual([])
   })
 })

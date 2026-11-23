@@ -1,7 +1,9 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import type { Mail } from './mail.schema'
 
 /** The front's screen a verification link opens, which reads the link's `token`. */
-const VERIFICATION_PATH = '/verify-email'
+const VERIFICATION_PATH = CONTRACT_ROUTES['user.verify-email']
 
 // The failures below say what went wrong in fixed words: a mail's subject and its link may
 // carry the address, so neither appears in them.

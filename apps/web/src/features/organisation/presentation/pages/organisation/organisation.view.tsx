@@ -2,6 +2,7 @@ import { Fragment } from 'react'
 
 import { useT } from '@workspace/i18n'
 import type { IdentityId, InvitationId, NoteId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -51,7 +52,7 @@ export type {
 export interface OrganisationChoice {
   readonly key: string
   readonly name: string
-  readonly role: 'member' | 'admin'
+  readonly role: TenantRole
 }
 
 export interface OrganisationViewProps {
@@ -176,7 +177,7 @@ export function OrganisationView(props: OrganisationViewProps) {
               onEdit={props.onEditNote}
               onDelete={props.onDeleteNote}
             />
-            {current.role === 'admin' ? (
+            {current.role === CONTRACT_ROLES.admin ? (
               <>
                 <OrganisationMembers
                   members={props.members}

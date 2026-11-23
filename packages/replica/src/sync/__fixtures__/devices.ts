@@ -3,6 +3,7 @@ import { LoroMap } from 'loro-crdt'
 import { type DataError, type LocalDb, tenantRegionId } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 import { tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { replicaSchema } from '../../__fixtures__/note'
 import { profileSchema } from '../../__fixtures__/profile'
@@ -30,7 +31,7 @@ export const bob = 'idn_bob'
 /** Ann's and Bob's membership of Acme: both are members, neither an admin. */
 export const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 export const acmeRegion: RegionRef = { kind: 'tenant', id: tenantRegionId(acme.tenant.key) }

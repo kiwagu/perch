@@ -3,6 +3,7 @@ import { assertEvent, assign, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
 import type { IdentityId, InvitationId, NoteId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { TenantRole } from '@workspace/replica/protocol'
 
 import { failureOf } from '../../../../platform/actor-outcome'
@@ -134,7 +135,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
     guards: {
       // The account changed its own role to member: the members list stops showing.
       ownDemotion: ({ context: { changingRole } }) =>
-        changingRole?.role === 'member' && changingRole.identity === deps.account(),
+        changingRole?.role === CONTRACT_ROLES.member && changingRole.identity === deps.account(),
     },
     actions: {
       show: enqueueActions(({ enqueue, event, context }, params: ShowParams) => {

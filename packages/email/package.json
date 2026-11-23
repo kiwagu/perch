@@ -29,6 +29,7 @@
     "@react-email/section": "catalog:",
     "@react-email/text": "catalog:",
     "@workspace/i18n": "workspace:*",
+    "@workspace/kernel": "workspace:*",
     "neverthrow": "catalog:",
     "parse5": "catalog:",
     "react": "catalog:",

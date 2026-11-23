@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
-import { CONTRACT_VALUES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_VALUES } from '@workspace/kernel'
 
 import { KeyedTurns } from '../../keyed-turns'
 import {
@@ -98,7 +98,10 @@ async function served(
     turns: new KeyedTurns<string>(),
     onFailure: (error) => failures.push(error),
   })
-  const ann = await signedUp(auth, 'ann@example.test', { role: 'operator', name: 'Ann' })
+  const ann = await signedUp(auth, 'ann@example.test', {
+    role: CONTRACT_ROLES.operator,
+    name: 'Ann',
+  })
   const bob = await signedUp(auth, 'bob@example.test', { name: 'Bob' })
   const ask = async (method: string, path: string, by: Ask = { as: ann }) =>
     answered(await routes(consoleRequest(method, path, by), ADDRESS))
@@ -116,7 +119,7 @@ describe('consoleRoutes: GET /console/accounts', () => {
       emailVerified: true,
       banned: true,
       banReason: 'spam',
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
     })
     const dan = await writeAccount(auth.local, { email: 'dan@listed.test', name: 'Dan' })
 
@@ -252,12 +255,16 @@ describe('consoleRoutes: GET /console/accounts/:id', () => {
       emailVerified: true,
       banned: true,
       banReason: 'spam',
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
     })
 
     await writeProfile(auth.local, cat, 'Cat Stevens')
     await writeSession(auth.local, cat, { lastSeenAt: day(4), endedAt: day(4) })
-    await writeOrganisation(auth.local, cat, { key: 'acme', name: 'Acme', role: 'admin' })
+    await writeOrganisation(auth.local, cat, {
+      key: 'acme',
+      name: 'Acme',
+      role: CONTRACT_ROLES.admin,
+    })
 
     const { status, body } = await ask('GET', `/console/accounts/${cat}`)
 
@@ -275,7 +282,7 @@ describe('consoleRoutes: GET /console/accounts/:id', () => {
           operator: true,
           banned: true,
           banReason: 'spam',
-          organisations: [{ key: 'acme', name: 'Acme', role: 'admin' }],
+          organisations: [{ key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin }],
         },
       },
     })

@@ -2,6 +2,7 @@ import type { LocalDb } from '@workspace/data'
 import { renderVerificationMail } from '@workspace/email'
 import { SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { idSchemas } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import type { MailPort } from '../mail'
@@ -11,7 +12,7 @@ import { accountLocale } from './account-locale'
 import type { AuthLog } from './auth-log'
 
 /** The front's screen a verification link opens: it exchanges the link's token. */
-export const VERIFY_EMAIL_PATH = '/verify-email'
+export const VERIFY_EMAIL_PATH = CONTRACT_ROUTES['user.verify-email']
 
 /** The account a verification mail goes to, as Better Auth hands it over. */
 const mailedAccount = z.object({

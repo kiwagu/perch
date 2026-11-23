@@ -1,4 +1,7 @@
 // scenario: user/base/reset-link-after-email-change
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { askToChangeEmail, openChangeEmailMail } from '../../support/email-change'
 import { appReady, expect, signUp, test } from '../../support/fixtures'
@@ -36,7 +39,7 @@ test.describe('Open a reset link after the email changed', { tag: '@full' }, () 
       })
 
     await test.step('3. On device A, open [/settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]', async () => {
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await askToChangeEmail(page, data.newEmail, data.password)
     })

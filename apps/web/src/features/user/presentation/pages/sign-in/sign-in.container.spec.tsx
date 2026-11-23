@@ -6,6 +6,7 @@ import { err, errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 import { z } from '@workspace/zod'
 
@@ -100,7 +101,7 @@ function UnsavedProbe() {
   return null
 }
 
-function renderSignIn(session: SessionPort, at = '/sign-in') {
+function renderSignIn(session: SessionPort, at: string = CONTRACT_ROUTES['user.sign-in']) {
   const TestModule = defineModule({
     id: 'test',
     providers: [
@@ -116,14 +117,23 @@ function renderSignIn(session: SessionPort, at = '/sign-in') {
     },
     routes: [
       {
-        path: '/sign-in',
+        path: CONTRACT_ROUTES['user.sign-in'],
         page: 'SignIn',
         guard: 'guest',
-        roles: ['guest'],
+        roles: [CONTRACT_ROLES.guest],
         search: z.object({ email: z.string().max(254).optional() }),
       },
-      { path: '/me', page: 'Me', guard: 'authenticated', roles: ['identity'] },
-      { path: '/forgot-password', page: 'Forgot', roles: ['guest', 'identity'] },
+      {
+        path: CONTRACT_ROUTES['user.profile'],
+        page: 'Me',
+        guard: 'authenticated',
+        roles: [CONTRACT_ROLES.identity],
+      },
+      {
+        path: CONTRACT_ROUTES['user.forgot-password'],
+        page: 'Forgot',
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+      },
     ],
   })
   const router = createAppRouter({
@@ -176,7 +186,7 @@ describe('SignInContainer', () => {
       clearNotice,
     }
 
-    renderSignIn(session, '/sign-in?email=ann%40example.test')
+    renderSignIn(session, `${CONTRACT_ROUTES['user.sign-in']}?email=ann%40example.test`)
 
     expect(
       ((await screen.findByTestId('user.sign-in.email-input')) as HTMLInputElement).value,
@@ -204,7 +214,7 @@ describe('SignInContainer', () => {
     fireEvent.click(screen.getByTestId('user.sign-in.forgot-link'))
 
     await screen.findByText('forgot')
-    expect(router.state.location.pathname).toBe('/forgot-password')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.forgot-password'])
     expect(router.state.location.search).toEqual({ email: 'ann@example.test' })
     expect(router.state.location.href).not.toContain('Secret')
   })
@@ -226,7 +236,7 @@ describe('SignInContainer', () => {
     act(() => signedIn(ann))
 
     await screen.findByText('profile')
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
   })
 
   it('stays while its own sign-in runs, though the session already tells of the user', async () => {
@@ -244,7 +254,7 @@ describe('SignInContainer', () => {
     act(() => signedIn(ann))
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
 
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
 
     act(() => answer(ann))
 
@@ -281,7 +291,7 @@ describe('SignInContainer', () => {
 
     expect(message.getAttribute('data-code')).toBe('check-your-mail')
     expect(message.textContent).toContain(ann.email)
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     // The form is back in the mode sign-in, with the email kept.
     expect(screen.queryByTestId('user.sign-in.password-rule-list')).toBeNull()
     expect(screen.queryByTestId('user.sign-in.password-confirmation-input')).toBeNull()
@@ -370,12 +380,12 @@ describe('SignInContainer', () => {
     const dialog = await screen.findByTestId('user.sign-in.device-limit-dialog')
 
     expect(dialog.getAttribute('data-code')).toBe('device-limit')
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
 
     fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
 
     await screen.findByText('profile')
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
     expect(confirmations).toEqual([undefined, true])
   })
 
@@ -427,14 +437,14 @@ describe('SignInContainer', () => {
     const dialog = await passwordSent()
 
     expect(dialog.getAttribute('data-code')).toBe('code-required')
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(confirmed).toEqual([])
 
     typeInto('user.sign-in.code.code-input', CODE)
     fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
 
     await screen.findByText('profile')
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
     expect(confirmed).toEqual([
       { step: { challenge: 'challenge-1', email: ann.email }, code: CODE, out: false },
     ])
@@ -458,7 +468,7 @@ describe('SignInContainer', () => {
     fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
 
     await screen.findByText('profile')
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
   })
 
   it('confirms the code on Enter in the field', async () => {
@@ -503,7 +513,7 @@ describe('SignInContainer', () => {
     fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.cancel-button'))
 
     await waitFor(() => expect(screen.queryByTestId('user.sign-in.code.dialog')).toBeNull())
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(confirmed).toEqual([])
     expect(screen.queryByTestId('user.sign-in.error')).toBeNull()
 
@@ -732,7 +742,7 @@ describe('SignInContainer', () => {
     fireEvent.click(await screen.findByTestId('user.sign-in.passkey-button'))
 
     await screen.findByText('profile')
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
     expect(asked).toEqual([undefined])
   })
 
@@ -749,7 +759,7 @@ describe('SignInContainer', () => {
     const error = await screen.findByTestId('user.sign-in.error')
 
     expect(error.getAttribute('data-code')).toBe('passkey-cancelled')
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect((screen.getByTestId('user.sign-in.passkey-button') as HTMLButtonElement).disabled).toBe(
       false,
     )
@@ -836,7 +846,7 @@ describe('SignInContainer', () => {
 
     expect(error.getAttribute('data-code')).toBe('email-not-verified')
     expect(screen.getByTestId('user.sign-in.resend-button')).toBeTruthy()
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
   })
 
   it('tells a banned account it cannot sign in, offering no resend, keeping the email typed', async () => {
@@ -859,7 +869,7 @@ describe('SignInContainer', () => {
     expect(error.getAttribute('data-code')).toBe('account-banned')
     expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
     expect(screen.getByTestId('user.sign-in.email-input').getAttribute('value')).toBe(ann.email)
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
   })
 
   it('keeps the mode sign-up while the sign-up runs and once it is refused, and goes back to sign-in on the toggle', async () => {

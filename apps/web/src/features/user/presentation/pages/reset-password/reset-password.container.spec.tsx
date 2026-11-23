@@ -21,6 +21,8 @@ type AuthUser = NonNullable<ReturnType<SessionPort['current']>>
 /** What a reset answers. */
 type ResetAnswer = ReturnType<SessionPort['resetPassword']>
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { ResetPasswordContainer } from './reset-password.container'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
@@ -56,9 +58,9 @@ function open(at: string, answer: () => ResetAnswer = () => okAsync(undefined)) 
     declarations: { Reset: ResetPasswordContainer },
     routes: [
       {
-        path: '/reset-password',
+        path: CONTRACT_ROUTES['user.reset-password'],
         page: 'Reset',
-        roles: ['guest', 'identity'],
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
     ],
@@ -94,7 +96,9 @@ async function setTwice(password: string): Promise<void> {
 
 describe('ResetPasswordContainer', () => {
   it("sets the password with the address's token, and keeps its message once its own reset signed this device out", async () => {
-    const { resetPassword, session } = open('/reset-password?token=the-token')
+    const { resetPassword, session } = open(
+      `${CONTRACT_ROUTES['user.reset-password']}?token=the-token`,
+    )
 
     await setTwice('Secret-new1')
 
@@ -109,7 +113,7 @@ describe('ResetPasswordContainer', () => {
   })
 
   it('takes the form away for a link that does not work, and offers a new one', async () => {
-    open('/reset-password?token=used', () =>
+    open(`${CONTRACT_ROUTES['user.reset-password']}?token=used`, () =>
       errAsync({ code: 'data:LINK_INVALID' as const, message: 'used' }),
     )
 

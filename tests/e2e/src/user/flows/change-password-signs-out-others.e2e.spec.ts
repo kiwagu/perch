@@ -1,4 +1,7 @@
 // scenario: user/flows/change-password-signs-out-others
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   appReady,
@@ -43,7 +46,7 @@ test.describe('Change the password while another device is signed in', { tag: '@
       })
 
     await test.step('3. On device A, open [/settings], enter the password into [user.settings.password.current-password-input], the new password into [user.settings.password.new-password-input] and [user.settings.password.password-confirmation-input], and click [user.settings.password.save-button]', async () => {
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await page.getByTestId('user.settings.password.current-password-input').fill(data.password)
       await page.getByTestId('user.settings.password.new-password-input').fill(data.newPassword)
@@ -54,12 +57,12 @@ test.describe('Change the password while another device is signed in', { tag: '@
       // Expected: After step 3 [app-shell.toast] carries [code:password-changed] on device A,
       //   which stays on [/settings]
       await expect(toast(page, 'password-changed')).toBeVisible()
-      await expectPathname(page, '/settings')
+      await expectPathname(page, CONTRACT_ROUTES['user.settings'])
     })
 
     // Expected: Device B is signed out: its URL is [/sign-in] and [user.sign-in.notice-message]
     //   carries [code:password-changed-elsewhere]
-    await expectPathname(deviceB, '/sign-in', 10_000)
+    await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], 10_000)
     await expect(signInNotice(deviceB, 'password-changed-elsewhere')).toBeVisible()
     await expect(deviceB.getByTestId('app-shell.nav')).toHaveCount(0)
     // Device A is still signed in.

@@ -1,3 +1,5 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import {
   BAN_CODES,
   CHANGE_EMAIL_CODES,
@@ -79,4 +81,7 @@ export const CLEAR_REMOVAL_ERROR = errorCleared('console.account.removal.error')
 export const READ_SECTION = { type: 'read', params: { anchor: SECTION } } as const
 export const CLEAR_EMAIL = { type: 'clear', params: { anchor: EMAIL_INPUT } } as const
 export const CLEAR_REASON = { type: 'clear', params: { anchor: REASON_INPUT } } as const
-export const TO_ACCOUNTS = { type: 'navigate', params: { to: '/console/users' } } as const
+export const TO_ACCOUNTS = {
+  type: 'navigate',
+  params: { to: CONTRACT_ROUTES['console.users'] },
+} as const

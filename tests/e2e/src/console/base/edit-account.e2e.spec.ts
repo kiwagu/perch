@@ -1,6 +1,8 @@
 // scenario: console/base/edit-account
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { expectAddress, openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
 import {
@@ -90,7 +92,7 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
         //   the name, [console.account.email-cell] shows the email,
         //   [console.account.verified-badge] shows, and neither [console.account.banned-badge] nor
         //   [console.account.operator-badge] does
-        await expectAddress(page, '/console/account', { id: opened })
+        await expectAddress(page, CONTRACT_ROUTES['console.account'], { id: opened })
         await expectCard(page, data)
 
         return opened
@@ -100,7 +102,7 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
       await page.reload()
       await appReady(page)
       // Expected: After step 4 the card is the same: the address alone names the account
-      await expectAddress(page, '/console/account', { id })
+      await expectAddress(page, CONTRACT_ROUTES['console.account'], { id })
       await expectCard(page, data)
     })
 
@@ -150,7 +152,7 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
       await openMailLink(deviceB, mail, 'accounts.change-email')
       // Expected: After step 7 [user.confirm-email.message] carries [code:email-changed] on device
       //   B, and [notice:confirm-email.email-changed] reaches the email
-      await expectPathname(deviceB, '/confirm-email')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.confirm-email'])
       await expect(deviceB.getByTestId('user.confirm-email.message')).toHaveAttribute(
         'data-code',
         'email-changed',
@@ -167,7 +169,7 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
       await deviceB.getByTestId('user.confirm-email.profile-link').click()
       // Expected: After step 8 device B is on [/me] and [user.profile.email-input] holds the new
       //   email
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
       await expect(deviceB.getByTestId('user.profile.email-input')).toHaveValue(data.newEmail, {
         timeout: 10_000,
       })

@@ -1,4 +1,7 @@
 // scenario: user/flows/sign-in-with-code
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, notice, signOut, signUp, test } from '../../support/fixtures'
 import {
@@ -37,7 +40,7 @@ test.describe('Sign in with a code of the second factor', { tag: '@smoke' }, () 
 
     await test.step('3. Click [app-shell.nav.profile-link] and click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await signOut(page)
     })
 
@@ -46,7 +49,7 @@ test.describe('Sign in with a code of the second factor', { tag: '@smoke' }, () 
       // Expected: After step 4 [user.sign-in.code.dialog] carries [code:code-required] and the
       //   URL is still [/sign-in]: nothing is signed in yet
       await expect(dialog).toHaveAttribute('data-code', 'code-required')
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
       await expect(page.getByTestId('app-shell.nav')).toHaveCount(0)
     })
 
@@ -55,7 +58,7 @@ test.describe('Sign in with a code of the second factor', { tag: '@smoke' }, () 
       // Expected: After step 5 [user.sign-in.code.dialog] is gone and the URL is still
       //   [/sign-in]
       await expect(dialog).toHaveCount(0)
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('6. Click [user.sign-in.submit-button] again', async () => {
@@ -76,7 +79,7 @@ test.describe('Sign in with a code of the second factor', { tag: '@smoke' }, () 
         field !== null && message !== null && message.y >= field.y + field.height,
         'the error shows under the code',
       ).toBe(true)
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('8. Enter the code the authenticator app shows now for the key into [user.sign-in.code.code-input] and click [user.sign-in.code.dialog.confirm-button]', async () => {
@@ -84,7 +87,7 @@ test.describe('Sign in with a code of the second factor', { tag: '@smoke' }, () 
       // Expected: After step 8 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

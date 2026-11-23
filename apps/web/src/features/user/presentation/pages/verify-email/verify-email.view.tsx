@@ -1,6 +1,7 @@
 import { type ComponentType, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -86,7 +87,11 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
             </Alert>
           ) : null}
           {props.renders('user.verify-email.sign-in-link') ? (
-            <Link to="/sign-in" className="underline" data-testid="user.verify-email.sign-in-link">
+            <Link
+              to={CONTRACT_ROUTES['user.sign-in']}
+              className="underline"
+              data-testid="user.verify-email.sign-in-link"
+            >
               {t('user.verify-email.sign-in')}
             </Link>
           ) : null}

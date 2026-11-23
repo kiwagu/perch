@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { createUsersMachine, type UsersEmitted } from './users.machine'
 
 const SEARCH_INPUT = 'console.users.search-input'
@@ -27,7 +29,7 @@ describe('the users page as its flow says', () => {
     expect(emitted).toEqual([
       {
         type: 'navigate',
-        to: '/console/users',
+        to: CONTRACT_ROUTES['console.users'],
         search: { q: { anchor: SEARCH_INPUT }, page: 1 },
         fields: { [SEARCH_INPUT]: 'ann' },
       },
@@ -56,7 +58,7 @@ describe('the users page as its flow says', () => {
     expect(emitted).toEqual([
       {
         type: 'navigate',
-        to: '/console/account',
+        to: CONTRACT_ROUTES['console.account'],
         search: { id: { item: ACCOUNT_ITEM } },
         items: { [ACCOUNT_ITEM]: 'idn_ann' },
       },

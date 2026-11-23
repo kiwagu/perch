@@ -1,6 +1,8 @@
 import { admin, createAccessControl } from 'better-auth/plugins'
 import { defaultStatements } from 'better-auth/plugins/admin/access'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 /** The plugin's permissions, over the statements of its own endpoints. */
 const control = createAccessControl(defaultStatements)
 
@@ -22,9 +24,9 @@ export function adminPlugin() {
   return admin({
     roles: {
       user: control.newRole({ user: [], session: [] }),
-      operator: control.newRole({ user: [], session: [] }),
+      [CONTRACT_ROLES.operator]: control.newRole({ user: [], session: [] }),
     },
-    adminRoles: ['operator'],
+    adminRoles: [CONTRACT_ROLES.operator],
     defaultRole: 'user',
     schema: {
       user: { fields: { banReason: 'ban_reason', banExpires: 'ban_expires' } },

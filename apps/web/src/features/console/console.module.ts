@@ -1,3 +1,5 @@
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { ACCOUNTS } from '../../platform/accounts.port'
 import { defineModule } from '../../platform/module'
 
@@ -37,17 +39,17 @@ export const ConsoleModule = defineModule({
   },
   routes: [
     {
-      path: '/console/users',
+      path: CONTRACT_ROUTES['console.users'],
       page: 'UsersPage',
-      roles: ['operator'],
+      roles: [CONTRACT_ROLES.operator],
       history: 'push',
       retain: ['size'],
       search: AccountSearchSchema,
     },
     {
-      path: '/console/account',
+      path: CONTRACT_ROUTES['console.account'],
       page: 'AccountPage',
-      roles: ['operator'],
+      roles: [CONTRACT_ROLES.operator],
       history: 'push',
       search: AccountCardSearchSchema,
     },

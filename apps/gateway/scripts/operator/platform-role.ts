@@ -1,6 +1,7 @@
 import { err, ok, type ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
+import type { PlatformRole } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { writing } from '../../src/auth/device-session-rows'
@@ -8,7 +9,7 @@ import { writing } from '../../src/auth/device-session-rows'
 import identityRoleSetStatement from './surql/identity-role-set.surql'
 
 /** The platform role an account is given: `operator`, or `user`, the plugin's default one. */
-export type PlatformRoleSetting = 'operator' | 'user'
+export type PlatformRoleSetting = PlatformRole | 'user'
 
 /** What the directory answers to the write: the key of every identity it changed. */
 const changedKeys = z.array(z.string())
