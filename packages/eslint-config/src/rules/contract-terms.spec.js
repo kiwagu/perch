@@ -155,6 +155,18 @@ tester.run('contract-terms', contractTerms, {
     },
     {
       ...typed(
+        "declare const current: { role: 'member' | 'admin' } | undefined\nif (current !== undefined) {\n  console.log(current.role === 'admin')\n}\nexport const viaChain = current?.role === 'member'",
+      ),
+      errors: [role('admin'), role('member')],
+    },
+    {
+      ...typed(
+        "declare function save(row: { role: Role } | Record<string, never> | undefined): void\nsave({ role: 'operator' })",
+      ),
+      errors: [role('operator')],
+    },
+    {
+      ...typed(
         "const keyed: Partial<Record<Role, boolean>> = { ['member']: true, [`admin`]: false }\ndeclare const role: Role\nexport const held = { a: role }['a'] === 'guest'",
       ),
       errors: [role('member'), role('admin'), role('guest')],

@@ -116,6 +116,36 @@ export const contractTerms = {
     const checker = services.program.getTypeChecker()
     const tsNodeOf = (node) => services.esTreeNodeToTSNodeMap.get(node)
 
+    /**
+     * The string values the property `name` admits across the members of `type`: a member that is
+     * `undefined` or `null`, or that has no such property and no string index, adds none; one whose
+     * index holds the values says them; a member that admits any string makes the whole open.
+     */
+    function propertyValues(type, name) {
+      const values = (type.isUnion() ? type.types : [type]).map((member) => {
+        if (member.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) {
+          return []
+        }
+
+        const field = checker.getPropertyOfType(member, name)
+
+        if (field !== undefined) {
+          return closedValues(checker.getTypeOfSymbol(field), checker)
+        }
+
+        const index = checker
+          .getIndexInfosOfType(member)
+          .find(({ keyType }) => keyType.flags & ts.TypeFlags.String)
+
+        // An index that holds nothing (`Record<string, never>`) admits no value under the name.
+        return index === undefined || index.type.flags & ts.TypeFlags.Never
+          ? []
+          : closedValues(index.type, checker)
+      })
+
+      return values.some((each) => each === undefined) ? undefined : values.flat()
+    }
+
     /** The name of the property `a.b`, `a['b']` or ``a[`b`]`` reads, when it is written out. */
     function propertyNameOf(node) {
       if (!node.computed && node.property.type === 'Identifier') {
@@ -165,22 +195,8 @@ export const contractTerms = {
           node.object.type === 'Identifier'
             ? declaredTypeOfIdentifier(node.object)
             : checker.getTypeAtLocation(tsNodeOf(node.object))
-        const values = (declared.isUnion() ? declared.types : [declared]).map((member) => {
-          const field = checker.getPropertyOfType(member, property)
 
-          if (field !== undefined) {
-            return closedValues(checker.getTypeOfSymbol(field), checker)
-          }
-
-          // No property of that name: the member's string index says what it holds, if it has one.
-          const index = checker
-            .getIndexInfosOfType(member)
-            .find(({ keyType }) => keyType.flags & ts.TypeFlags.String)
-
-          return index === undefined ? undefined : closedValues(index.type, checker)
-        })
-
-        return values.some((each) => each === undefined) ? undefined : values.flat()
+        return propertyValues(declared, property)
       }
 
       return closedValues(checker.getTypeAtLocation(tsNodeOf(node)), checker)
@@ -224,15 +240,7 @@ export const contractTerms = {
               : undefined
 
         if (object?.isUnion() && name !== undefined) {
-          const values = object.types.map((member) => {
-            const property = checker.getPropertyOfType(member, name)
-
-            return property === undefined
-              ? []
-              : closedValues(checker.getTypeOfSymbol(property), checker)
-          })
-
-          return values.some((each) => each === undefined) ? undefined : values.flat()
+          return propertyValues(object, name)
         }
       }
 
