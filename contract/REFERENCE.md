@@ -1525,6 +1525,60 @@ A guard: a camelCase name of the flow `meta.guards`.
 <a id="activity-states-name-on-name-description"></a>
 What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. At most 200 characters.
 
+## Terms file
+
+The project's language: its contexts, its terms and its roles.
+
+### `contexts`
+
+<a id="terms-contexts"></a>
+The bounded contexts, by name: one while the product is one.
+
+### `contexts.<name>.meaning`
+
+<a id="terms-contexts-name-meaning"></a>
+What the bounded context is: the part of the product whose terms mean one thing in it. At most 200 characters.
+
+### `terms`
+
+<a id="terms-terms"></a>
+The platform's terms, by the one word the contract uses for each.
+
+### `terms.<name>.meaning`
+
+<a id="terms-terms-name-meaning"></a>
+What the term means in the contract: the one word its texts use for it. Its synonyms are the words they never use for it, and `storage` names it where storage does otherwise. At most 200 characters.
+
+### `terms.<name>.synonyms`
+
+<a id="terms-terms-name-synonyms"></a>
+The words the contract's texts and the emitted constants never use for it.
+
+### `terms.<name>.storage`
+
+<a id="terms-terms-name-storage"></a>
+Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`.
+
+### `roles`
+
+<a id="terms-roles"></a>
+The roles a device holds, by name: what `roles` of a binding, an anchor or an action list.
+
+### `roles.<name>.meaning`
+
+<a id="terms-roles-name-meaning"></a>
+What holding the role means on a device: whose account is signed in and what applies to it. At most 200 characters.
+
+### `roles.<name>.synonyms`
+
+<a id="terms-roles-name-synonyms"></a>
+The words the contract's texts and the emitted constants never use for it.
+
+### `roles.<name>.storage`
+
+<a id="terms-roles-name-storage"></a>
+Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`.
+
 ## Model (x-perch)
 
 One entity of the data model.
@@ -1962,6 +2016,61 @@ How to read `scenarios` and their bracket references.
 
 <a id="manifest-contract-instructions-gaps"></a>
 What to do when the contract cannot say what a build needs.
+
+### `terms`
+
+<a id="manifest-terms"></a>
+`contract/domain/terms.yaml`, verbatim, when the contract writes it: the contexts, the platform's terms and the roles. See the rule `terms`.
+
+### `terms.contexts`
+
+<a id="manifest-terms-contexts"></a>
+The bounded contexts, by name: one while the product is one.
+
+### `terms.contexts.<name>.meaning`
+
+<a id="manifest-terms-contexts-name-meaning"></a>
+What the bounded context is: the part of the product whose terms mean one thing in it. At most 200 characters.
+
+### `terms.terms`
+
+<a id="manifest-terms-terms"></a>
+The platform's terms, by the one word the contract uses for each.
+
+### `terms.terms.<name>.meaning`
+
+<a id="manifest-terms-terms-name-meaning"></a>
+What the term means in the contract: the one word its texts use for it. Its synonyms are the words they never use for it, and `storage` names it where storage does otherwise. At most 200 characters.
+
+### `terms.terms.<name>.synonyms`
+
+<a id="manifest-terms-terms-name-synonyms"></a>
+The words the contract's texts and the emitted constants never use for it.
+
+### `terms.terms.<name>.storage`
+
+<a id="manifest-terms-terms-name-storage"></a>
+Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`.
+
+### `terms.roles`
+
+<a id="manifest-terms-roles"></a>
+The roles a device holds, by name: what `roles` of a binding, an anchor or an action list.
+
+### `terms.roles.<name>.meaning`
+
+<a id="manifest-terms-roles-name-meaning"></a>
+What holding the role means on a device: whose account is signed in and what applies to it. At most 200 characters.
+
+### `terms.roles.<name>.synonyms`
+
+<a id="manifest-terms-roles-name-synonyms"></a>
+The words the contract's texts and the emitted constants never use for it.
+
+### `terms.roles.<name>.storage`
+
+<a id="manifest-terms-roles-name-storage"></a>
+Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`.
 
 ### `screens`
 
@@ -4361,7 +4470,7 @@ A letter per browser, each with the role it acts as.
 ### `scenarios.devices.<name>`
 
 <a id="manifest-scenarios-devices-name"></a>
-A role of the vocabulary.
+A role of the contract: of its terms file, or of the vocabulary's Roles.
 
 ### `scenarios.where`
 
@@ -4600,7 +4709,7 @@ Keys it concerns: [`screen.bindings`](#screen-bindings), [`screen.bindings.path`
 ### Roles and who a route serves
 
 <a id="rule-roles"></a>
-A role is a row of the vocabulary's Roles table. A device holds a set of roles: `guest` when nobody is signed in on it, else `identity` and, beside it, every other role that applies to the signed-in account (its role in the current organisation, a role of the platform, any role a later row adds: the rows of the table other than the two). `guest` and `identity` are the two roles of which a device holds exactly one; every other role is held beside `identity`, never alone. The contract names the roles; how a device learns the ones beside `identity` is the app's. `GUEST`, `IDENTITY`, `heldRoles` and `admits` of `@workspace/ui-contract/anchors` read them for the app and the checks alike: `heldRoles(signedIn, others)` is the set a device holds (`guest` alone, else `identity` and each of `others` but `guest`), and `admits(roles, held)` says whether a binding's or an anchor's `roles` admit a device that holds one of them.
+A role is one of the terms file's `roles`, or a row of the vocabulary's Roles table in a contract without the file (see the rule `terms`). A device holds a set of roles: `guest` when nobody is signed in on it, else `identity` and, beside it, every other role that applies to the signed-in account (its role in the current organisation, a role of the platform, any role a later entry adds: the roles other than the two). `guest` and `identity` are the two roles of which a device holds exactly one; every other role is held beside `identity`, never alone. The contract names the roles; how a device learns the ones beside `identity` is the app's. `GUEST`, `IDENTITY`, `heldRoles` and `admits` of `@workspace/ui-contract/anchors` read them for the app and the checks alike: `heldRoles(signedIn, others)` is the set a device holds (`guest` alone, else `identity` and each of `others` but `guest`), and `admits(roles, held)` says whether a binding's or an anchor's `roles` admit a device that holds one of them.
 
 A binding's `roles` are the roles it serves: the router serves it only to an account that holds at least one of them. An account that holds none gets the screen of the binding at `/$` (the not-found screen) at the same address, as an address no route takes does: the URL and the history entry stay as they are, and nothing on the page, the tab's title included, says there is a route there. The router decides in this order: the binding's `guard` (`authenticated` sends a guest to `/sign-in`, `guest` sends a signed-in account to `/me`), then its `roles`, and only then reads the search, so a search the screen would refuse shows an account its roles miss the not-found screen, never the screen's refusal. A route that must not show itself to a guest leaves its `guard` out and names no `guest`: a guest gets not-found, as any account the roles miss does. The binding at `/$` serves every account: its `roles` name `guest` and `identity`.
 
@@ -4632,6 +4741,19 @@ A screen's `entry` lists the anchors a test starts from on the screen. Some of t
 A screen's `states` say what is visible in each container state, each state a row of the vocabulary's Container states table; the `wireframe` is the default state in Playwright's aria snapshot grammar.
 
 Keys it concerns: [`screen.entry`](#screen-entry), [`screen.states`](#screen-states), [`screen.wireframe`](#screen-wireframe).
+
+### The project's terms, its roles, and the roles and routes in code
+
+<a id="rule-terms"></a>
+`contract/domain/terms.yaml` holds the project's language: the bounded contexts the contract speaks in (`contexts`, one while the product is one), the platform's terms (`terms`: account, organisation, membership, ...) and the roles a device holds (`roles`). Each term and each role has its `meaning`, a written description that keeps 200 characters; its `synonyms`, the words the contract's texts and the emitted constants never use for it; and its `storage`, the name storage gives it where storage names it otherwise (organisation is the table `tenant`), so no applied migration is renamed to match. The file is the business layer's, like every file of `contract/domain`. A contract may leave it out: its roles are then the rows of the vocabulary's Roles table.
+
+A contract with the terms file keeps its roles there alone: the loader makes them the contract's roles, which every check reads (`vocabulary.roles`), and a vocabulary that still lists a Roles section beside the file is a problem; one without either lists no role, which is a problem too (`termsProblems`). In the file a name is a term or a role, never both; a synonym is a word no term or role is named, forbidden for one of them only and listed once; and the terms belong to at least one context.
+
+No forbidden synonym stands in the contract's texts or in what the engine emits from them (`synonymsProblems`): every written description (`readDescriptions`, the terms' own meanings included), every behaviour text of the platform (an outcome line, a code's condition, an invariant's rule), every platform action's name, every screen's id, every binding's route path and a further binding's key (`<id>@<path>`), every role's name, the name and the enum of every platform value and of every field of the model, and every entity's name, which every key of its fields carries (what `CONTRACT_VALUES` holds), and every declared anchor's name and every part it derives (what `FIELD_FACTS` and the code carry); a longer name built on a shorter one is named only for what it says beyond it. A synonym is read as whole words in any case, its words apart by anything that is not a letter or a digit, its last word also with a plural `s` or `es`, never as a part of a word; each is named once per text, at its first place, with the term or the role to write instead. Code and storage keep their names: the check reads the contract alone.
+
+Code and tests name a role through `CONTRACT_ROLES` and a route through `CONTRACT_ROUTES`, which `ui-contract emit terms` writes (see the rule `emitted-modules`), never by hand. The ESLint rule `workspace/contract-terms` of `@workspace/eslint-config` (its factory `contractTerms`) holds them to it: a string is a role or a route written by hand where the code expects one, which TypeScript says (the type the code declares at the string, the other side of a comparison, the discriminant of a `switch`, the keys an object is expected to have) is made of string literals that are all roles, or all routes. Where no other kind of path is written (the e2e tests, the web app's screens) a string, a part of a template or a regular expression that names a route by its value is refused too; the gateway's own API paths can be the same strings, so the gateway and the web app's adapters to it are held by type alone.
+
+Keys it concerns: [`terms.contexts`](#terms-contexts), [`terms.terms`](#terms-terms), [`terms.roles`](#terms-roles).
 
 ### A flow: its states and regions
 
@@ -4816,7 +4938,7 @@ Keys it concerns: [`screen.anchors.<name>.with`](#screen-anchors-name-with), [`s
 <a id="rule-anchor-roles"></a>
 `roles`: The roles that see the element, among those its screen's bindings serve; absent: every role of the screen, as far as the anchors above it and a link's derived roles admit (below).
 
-A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`).
+A role is one of the contract's roles (see the rule `terms`), and a device holds a set of them (see the rule `roles`).
 
 Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses.
 
@@ -5340,7 +5462,7 @@ In one text (the `Where` line, the scenario sentence, a step or an expected resu
 
 A route is read past: in `wait for [app-shell.status] to reach [state:ready] on [/me]` the state is the status's. A `[mail:…]` or a `[notice:…]` ends the pairing until the text names an anchor again, since what follows speaks of the mail or the notice (its language, its link). With no anchor before it in its text, a code, a state or a value need only be one of the contract. Write the anchor first, then its code, its state or its value: a value written before its anchor pairs with an anchor the text named earlier, if any. `Choose [value:dark] in [user.settings.theme-select]` holds the value to the contract alone, and `[user.settings.theme-select] shows [value:dark]` holds it to the select. `referencesIn(text)` reads the bracket references of a text in the order it writes them, `anchorCarries(contract)` says whether an anchor carries a code, a state or a value (one it declares or one an anchor under it declares: codes are the loaded `codes`, derived ones included; states the anchor's `states`; values the rows of its choice values and its options', a pattern row matching, or `show` and `hide` on a `visibility-button`), and `pairingResolver(contract)` says why a value does not pair with its anchor, for the scenarios and the consumers check alike.
 
-The check also holds each device to a role of the vocabulary, the activity a scenario names to exist, a mail to the platform action that declares it and a notice to its action and its name (`unknownNotice`).
+The check also holds each device to a role of the contract, the activity a scenario names to exist, a mail to the platform action that declares it and a notice to its action and its name (`unknownNotice`).
 
 Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.states`](#screen-anchors-name-states), [`screen.anchors.<name>.dataValue`](#screen-anchors-name-datavalue).
 
@@ -5363,13 +5485,13 @@ Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for
 ### The check of the files and the vocabulary
 
 <a id="rule-check-files"></a>
-Each file parses and holds its shape, and each screen file is named by its first binding. Every anchor follows the grammar, starts with its screen's id and is declared once, and is never named like another anchor plus a derived suffix. Every kind, suffix, state, code, role and choice value is in the vocabulary, every derived suffix ends with a kind of it (the kind of the part it marks), and every code of the vocabulary is used; there are no choice values for a `visibility-button`, whose values its suffix defines. The platform's composites and the rows of the vocabulary's "Composites" table name each other, each item state a row state. The version is one the tooling reads (`versionProblems`): at most `CONTRACT_VERSION`, and from version 2 declared in `platform.yaml` alone, the vocabulary repeating it at version 1 only (its `Contract version` line is there and equal at version 1, refused from version 2). The generated schemas equal their Zod sources, and so does the reference (`schemaDrift`, `referenceDrift`); every field hint of those schemas, each `description` keyword the engine writes, keeps the 200 characters of a description (`hintBudgetProblems`): one past it is a problem of its schema file, `<key> ("<its opening>…" at <its JSON pointer>): the field hint is <n> characters, past its budget of 200`, since a hint says what its key is for and what does not go in it and names the rule of the reference that holds the rest; and each link of a guide into the reference, `REFERENCE.md#<slug>` in the files of `GUIDE_FILES` (the folder's guide, the rule, the skill, the manifest's instructions, the package's guide and the vocabulary), names an anchor of it (`referenceLinkProblems`).
+Each file parses and holds its shape, and each screen file is named by its first binding. Every anchor follows the grammar, starts with its screen's id and is declared once, and is never named like another anchor plus a derived suffix. Every kind, suffix, state, code and choice value is in the vocabulary and every role is the contract's (see the rule `terms`), every derived suffix ends with a kind of it (the kind of the part it marks), and every code of the vocabulary is used; there are no choice values for a `visibility-button`, whose values its suffix defines. The platform's composites and the rows of the vocabulary's "Composites" table name each other, each item state a row state. The version is one the tooling reads (`versionProblems`): at most `CONTRACT_VERSION`, and from version 2 declared in `platform.yaml` alone, the vocabulary repeating it at version 1 only (its `Contract version` line is there and equal at version 1, refused from version 2). The generated schemas equal their Zod sources, and so does the reference (`schemaDrift`, `referenceDrift`); every field hint of those schemas, each `description` keyword the engine writes, keeps the 200 characters of a description (`hintBudgetProblems`): one past it is a problem of its schema file, `<key> ("<its opening>…" at <its JSON pointer>): the field hint is <n> characters, past its budget of 200`, since a hint says what its key is for and what does not go in it and names the rule of the reference that holds the rest; and each link of a guide into the reference, `REFERENCE.md#<slug>` in the files of `GUIDE_FILES` (the folder's guide, the rule, the skill, the manifest's instructions, the package's guide and the vocabulary), names an anchor of it (`referenceLinkProblems`).
 
 `secret` is on a field alone, and a `visibility-button` on a secret input alone; `marksState` (`false`) is on an `input`, a `textarea` or a `select` that holds input alone; `ranked` is on a message of two codes or more alone, each code listed once; a `composite` is on a secret input alone, names a composite of the platform, is opted into once per screen and derives no anchor the file writes or another composite derives, and no file writes `derivedFrom`.
 
 Every description the domain files write, the maps of meanings included (a screen's `states`, the platform's `events`, the sentence guards of a `meta.guards`), says what its element is for and leaves to the structure, another element, the platform, the model, the vocabulary and the flow what they say, as the schema text of its field puts it; each keeps 200 characters at most, whatever it describes (`descriptionsProblems`): one past it is a problem at its line, `<path>: the description of <place> is <n> characters, past its budget of 200; its purpose: "<the purpose of its field>"`, naming the purpose of its field. `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each description field in one text (what it is for, what it leaves to others and its budget), which is that field's `.describe()` in the schemas, so it reaches the generated JSON Schemas as an editor's hint, the model's own description taking its text in the shape `loadModel` reads the document with; `DESCRIPTION_BUDGET` is the 200 characters, for every one; `descriptionLength(text)` counts a description in characters. `readDescriptions(root)` reads every description the domain files write, as they write them, never one the engine derives or the loader fills in as it expands a shorter form.
 
-Every activity agrees with the screens it visits (`activitiesProblems`): every state's screen exists and its address is a binding of that screen; every event is a declared anchor (a derived one through its base's `derived`, never a `visibility-button`) of that screen or of the frame; every transition from a state on an anchor to a target is backed by the screens, the flow of the anchor's screen (the frame's, for an anchor of the frame) reaching a `navigate` to the target's path, in the transition's actions, on leaving its state or entering its target (the `exit` and `entry` effects XState runs on a move) or after an invoke's `onDone` or `onError`, or the anchor being a link to that path (`binding: { route: ... }`); the roles are of the vocabulary and every `data` model is a field of the model; `initial` and every target are states; every state is reachable from `initial` and every state that is not final leaves; every guard is declared in `meta.guards` and every declared one is used. `contract:check` builds each activity in XState as written, with the walk of the flows, reaches every state and takes every transition and every guarded branch to its target (`runsProblems`: a machine XState will not build is a problem, never a crash). Every bracket reference of a scenario resolves, each code, state or value one the anchor named last before it in its text carries (see the rule `scenario-brackets`), the activity it names exists, and every device acts as a role of the vocabulary. A problem of an activity or a scenario is at the line of the deepest part of its path the file holds.
+Every activity agrees with the screens it visits (`activitiesProblems`): every state's screen exists and its address is a binding of that screen; every event is a declared anchor (a derived one through its base's `derived`, never a `visibility-button`) of that screen or of the frame; every transition from a state on an anchor to a target is backed by the screens, the flow of the anchor's screen (the frame's, for an anchor of the frame) reaching a `navigate` to the target's path, in the transition's actions, on leaving its state or entering its target (the `exit` and `entry` effects XState runs on a move) or after an invoke's `onDone` or `onError`, or the anchor being a link to that path (`binding: { route: ... }`); the roles are the contract's and every `data` model is a field of the model; `initial` and every target are states; every state is reachable from `initial` and every state that is not final leaves; every guard is declared in `meta.guards` and every declared one is used. `contract:check` builds each activity in XState as written, with the walk of the flows, reaches every state and takes every transition and every guarded branch to its target (`runsProblems`: a machine XState will not build is a problem, never a crash). Every bracket reference of a scenario resolves, each code, state or value one the anchor named last before it in its text carries (see the rule `scenario-brackets`), the activity it names exists, and every device acts as a role of the contract. A problem of an activity or a scenario is at the line of the deepest part of its path the file holds.
 
 Keys it concerns: [`screen.anchors.<name>.secret`](#screen-anchors-name-secret), [`screen.anchors.<name>.ranked`](#screen-anchors-name-ranked), [`screen.anchors.<name>.marksState`](#screen-anchors-name-marksstate).
 
@@ -5498,7 +5620,7 @@ The check has limits. It sees a commit only where git runs the commit-msg hook f
 ### The manifest: what it holds, how it is built and where it is served
 
 <a id="rule-manifest"></a>
-`bun run contract:manifest` (`ui-contract manifest --out <folder>/ui-manifest`) builds `ui-manifest/manifest.json` from the contract files and the scenarios of `tests/e2e/scenarios/` alone, only after the contract check passes: `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its problems when it finds any, else loads the contract and builds, validates and writes the manifest. `buildManifest` takes only the vocabulary, the screens, the model, the activities, the scenarios and the product. `writeManifest(root, outDir, manifest)` validates it against `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing anything, or empties `outDir` (its last segment must be `ui-manifest`, `MANIFEST_DIR`, else a problem) and writes `manifest.json` (two spaces deep, each entry of `ids` on one line, so a search for an anchor shows its facts), `manifest.schema.json` and `model.schema.json` beside it. `productInfo(root)` names the product: the root package's version and the commit checked out, or null.
+`bun run contract:manifest` (`ui-contract manifest --out <folder>/ui-manifest`) builds `ui-manifest/manifest.json` from the contract files and the scenarios of `tests/e2e/scenarios/` alone, only after the contract check passes: `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its problems when it finds any, else loads the contract and builds, validates and writes the manifest. `buildManifest` takes only the vocabulary, the screens, the model, the activities, the scenarios, the terms file when the contract writes one, and the product. `writeManifest(root, outDir, manifest)` validates it against `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing anything, or empties `outDir` (its last segment must be `ui-manifest`, `MANIFEST_DIR`, else a problem) and writes `manifest.json` (two spaces deep, each entry of `ids` on one line, so a search for an anchor shows its facts), `manifest.schema.json` and `model.schema.json` beside it. `productInfo(root)` names the product: the root package's version and the commit checked out, or null.
 
 The web build writes it into `apps/web/dist/ui-manifest/` (`bun run build` runs `ui-contract manifest --out dist/ui-manifest` once Vite is done; the development watcher writes it into `apps/web/dist-dev/ui-manifest/` after every build, and a change of a contract file or of a scenario rebuilds), and both stands serve it at `/ui-manifest/manifest.json`, with `manifest.schema.json` and `model.schema.json` beside it and `Cache-Control: no-store`. `PERCH_UI_MANIFEST=0` on a stand answers 404 there; the default, `1`, serves it.
 
@@ -5537,9 +5659,9 @@ Keys it concerns: [`screen.flow.states.<name>.meta.renders`](#screen-flow-states
 ### The modules the engine emits for the layers below the contract
 
 <a id="rule-emitted-modules"></a>
-The engine emits modules of plain data for the layers below the contract (a server, a database schema, an app's kit) to read what the contract says of a value or a field instead of restating it. `ui-contract emit values --out <file>` and `ui-contract emit fields --out <file>` write one from the contract of the working tree, run from the root or any folder under it, into the file the caller names, relative to the folder it runs from: the engine knows no package and writes nowhere by default. A module is `export const <NAME> = { ... } as const` under a `GENERATED` header, with no import and no function, its entries sorted by their key, one key per line and the same text on every run, so a changed limit is a one-line diff (`valuesModuleOf(contract)`, `fieldFactsModuleOf(contract)`). As with the manifest, a contract that fails the contract check is not emitted: its problems are printed and nothing is written. `bun run contract:emit` (`turbo run emit`) runs the `emit` script of every package that keeps one.
+The engine emits modules of plain data for the layers below the contract (a server, a database schema, an app's kit) to read what the contract says of a value or a field instead of restating it. `ui-contract emit values --out <file>`, `ui-contract emit fields --out <file>` and `ui-contract emit terms --out <file>` write one from the contract of the working tree, run from the root or any folder under it, into the file the caller names, relative to the folder it runs from: the engine knows no package and writes nowhere by default. A module is one `export const <NAME> = { ... } as const` per constant under a `GENERATED` header, with no import and no function, its entries sorted by their key, one key per line and the same text on every run, so a changed limit is a one-line diff (`valuesModuleOf(contract)`, `fieldFactsModuleOf(contract)`, `termsModuleOf(contract)`). As with the manifest, a contract that fails the contract check is not emitted: its problems are printed and nothing is written. `bun run contract:emit` (`turbo run emit`) runs the `emit` script of every package that keeps one.
 
-`CONTRACT_VALUES` holds every value of `platform.values` by its name and every field of the model as `<entity>.<field>`, each as `resolveValue` gives it: its keywords (`type`, `enum`, `minLength`, `maxLength`, `pattern`, `format`, `minimum`, `maximum`, `readOnly`), each length resolved, so a value that takes the default length carries it and one that writes `maxLength: null` carries none (see the rule `declared-values`). `FIELD_FACTS` holds, by anchor, what the element of a field carries that the contract decides: `maxLength`, the limit of a text field's value (`fieldValueOf`) unless the value is read-only; `type: "email"`, on an input that holds no secret and whose value has `format: email`, a read-only one included (see the rule `email-format`); `marksState: false`, where the field writes it; and `holdsInput: false`, on a field that holds no input (see the rule `field-holds-input`) and on the size select a paged list derives. A field none of these concerns has no entry. The kit finds an element's entry by its anchor and gives it what the entry says, so a view writes none of it: the sources check refuses a `maxLength`, a `type` on a text field, a `holdsInput` and a `marksState`, in ahead mode too (see the rule `check-sources`).
+`CONTRACT_VALUES` holds every value of `platform.values` by its name and every field of the model as `<entity>.<field>`, each as `resolveValue` gives it: its keywords (`type`, `enum`, `minLength`, `maxLength`, `pattern`, `format`, `minimum`, `maximum`, `readOnly`), each length resolved, so a value that takes the default length carries it and one that writes `maxLength: null` carries none (see the rule `declared-values`). `FIELD_FACTS` holds, by anchor, what the element of a field carries that the contract decides: `maxLength`, the limit of a text field's value (`fieldValueOf`) unless the value is read-only; `type: "email"`, on an input that holds no secret and whose value has `format: email`, a read-only one included (see the rule `email-format`); `marksState: false`, where the field writes it; and `holdsInput: false`, on a field that holds no input (see the rule `field-holds-input`) and on the size select a paged list derives. A field none of these concerns has no entry. `CONTRACT_ROLES` holds every role of the contract by its name, to its name; `CONTRACT_ROUTES` the route path of every binding of a screen: its first by the screen's id, the binding its file is named by, a further one by the id and its path (`<id>@<path>`, `routeKeyOf`). A binding added as a further one moves no key; one added as the first, or a further one made the first, takes the id, and every reader of the id with it. The first binding's path renamed keeps its key, the screen's id, so it reaches every reader; a further binding's path renamed renames its key, a type error at each reader (see the rule `terms`). The kit finds an element's entry by its anchor and gives it what the entry says, so a view writes none of it: the sources check refuses a `maxLength`, a `type` on a text field, a `holdsInput` and a `marksState`, in ahead mode too (see the rule `check-sources`).
 
 An emitted module is implementation: it is committed in the package that reads it and never in a business commit, which stages the business layer alone (see the rules `trunk-commits` and `take-form`), so the implementation that follows a change of the contract emits it again on its area branch. A package that commits one holds it with a spec that asserts the committed text equals `heldModule({ committed, emit, root, env })` of `@workspace/ui-contract/testing`, the one place that says how: the text the engine emits for the contract of the working tree, or, while the contract runs ahead of the app (`CONTRACT_AHEAD`), the committed text itself when it is what the engine emitted for the contract at `CONTRACT_AHEAD_BASE` or `CONTRACT_AHEAD_HEAD` (`contractAt`), as the app's machines may lag their flows (see the rule `ahead-mode`); the entry holds no code a package runs outside its specs. `turbo.json` passes those variables to the unit tests of `@workspace/kernel`, `@workspace/gateway` and `@workspace/database`, as it does to the web app's.
 
@@ -5677,7 +5799,7 @@ Keys it concerns: [`manifest.contract.instructions.bindings`](#manifest-contract
 ### Reading the model
 
 <a id="rule-model"></a>
-`model` is the data model: a JSON Schema 2020-12 document with one `$defs` entry per entity. An entity's `x-perch` says its `table`, its `region` (`private`: the account's own data; `tenant`: the current organisation's), its `id` prefix, its `owner` field, `can` (per role, the actions allowed on any entry or only on its own), its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it), and `unique` and `index`. A field's `x-perch` says whether it is `readonly`, the entity a `record` points at, and its `crdt`: how concurrent edits merge (`text`, `list`, `counter`, or `none` for the last writer).
+`model` is the data model: a JSON Schema 2020-12 document with one `$defs` entry per entity. An entity's `x-perch` says its `table`, its `region` (`private`: the account's own data; `tenant`: the current organisation's), its `id` prefix, its `owner` field, `can` (per role, the actions allowed on any entry or only on its own), its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it), and `unique` and `index`. A field's `x-perch` says whether it is `readonly`, the entity a `record` points at, and its `crdt`: how concurrent edits merge (`text`, `list`, `counter`, or `none` for the last writer). `terms`, when present, says what each of the platform's nouns and each role means, the words the contract never uses for it, and its name in storage where that differs (`storage`).
 
 Keys it concerns: [`manifest.contract.instructions.model`](#manifest-contract-instructions-model).
 

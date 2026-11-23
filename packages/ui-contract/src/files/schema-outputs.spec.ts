@@ -54,6 +54,7 @@ describe('writeSchemas', () => {
       'contract/schemas/screen.schema.json',
       'contract/schemas/platform.schema.json',
       'contract/schemas/activity.schema.json',
+      'contract/schemas/terms.schema.json',
       'contract/schemas/x-perch.schema.json',
       'contract/schemas/manifest.schema.json',
       'contract/REFERENCE.md',
@@ -101,6 +102,7 @@ describe('schemaDrift', () => {
       'contract/schemas/screen.schema.json',
       'contract/schemas/platform.schema.json',
       'contract/schemas/activity.schema.json',
+      'contract/schemas/terms.schema.json',
       'contract/schemas/x-perch.schema.json',
       'contract/schemas/manifest.schema.json',
     ])

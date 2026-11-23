@@ -86,7 +86,7 @@ export {
   RUNTIME_TEST_ANCHOR,
   scanConsumers,
 } from './consumers'
-export { fieldFactsModuleOf, valuesModuleOf } from './emit'
+export { fieldFactsModuleOf, termsModuleOf, valuesModuleOf } from './emit'
 export {
   ACCOUNT,
   ACTIVITIES_DIR,
@@ -126,6 +126,7 @@ export {
   loadResolvedModel,
   loadScenarios,
   loadScreens,
+  loadTerms,
   MANIFEST_SCHEMA_FILE,
   MIGRATIONS,
   type Migration,
@@ -154,6 +155,7 @@ export {
   type ResolvedValue,
   readDescriptions,
   resolveValue,
+  routeKeyOf,
   SCENARIOS_DIR,
   SCHEMA_OUTPUTS,
   SCREEN_SCHEMA_FILE,
@@ -163,6 +165,10 @@ export {
   scenarioFile,
   schemaDrift,
   sortProblems,
+  TERMS_FILE,
+  TERMS_SCHEMA_FILE,
+  type TermEntry,
+  type Terms,
   VOCABULARY_FILE,
   VOCABULARY_SECTIONS,
   type Vocabulary,
@@ -272,6 +278,7 @@ export {
   screenFileSchema,
   screenSchema,
   sourceSchema,
+  termsFileSchema,
   transitionSchema,
 } from './schemas'
 export {

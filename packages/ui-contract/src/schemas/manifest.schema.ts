@@ -41,6 +41,7 @@ import {
   screenSchema,
   withEntrySchema,
 } from './screens-schema'
+import { termsFileSchema } from './terms.schema'
 
 /** A table of the vocabulary: its key, then what the key means. */
 const tableOf = (key: z.ZodString, meaning: string, what: string) =>
@@ -276,6 +277,11 @@ export const manifestSchema = z
       })
       .describe('The product the manifest describes.'),
     contract: contractSchema,
+    terms: termsFileSchema
+      .optional()
+      .describe(
+        "`contract/domain/terms.yaml`, verbatim, when the contract writes it: the contexts, the platform's terms and the roles. See the rule `terms`.",
+      ),
     screens: z
       .array(manifestScreenSchema)
       .describe(

@@ -131,13 +131,13 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[4]: [notice:password-changed] is not <action>.<name>',
     ])
   })
-  it('wants every device to act as a role of the vocabulary', () => {
+  it('wants every device to act as a role of the contract', () => {
     const contract = sampleContract()
 
     firstScenario(contract).devices = { A: 'member', B: 'visitor' }
 
     expect(printed(contract)).toEqual([
-      'tests/e2e/scenarios/sample/base/thing.md:1: devices.B: "visitor" is not a role of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:1: devices.B: "visitor" is not a role of the contract',
     ])
   })
   it('wants the activity a scenario names to be one of contract/domain/activities', () => {
@@ -159,7 +159,7 @@ describe('scenariosProblems', () => {
 
     expect(printed(contract)).toEqual([
       'tests/e2e/scenarios/sample/base/thing.md:4: activity: "gone" is not an activity of contract/domain/activities',
-      'tests/e2e/scenarios/sample/base/thing.md:5: devices.B: "visitor" is not a role of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:5: devices.B: "visitor" is not a role of the contract',
       'tests/e2e/scenarios/sample/base/thing.md:12: where: [/sample] is the path of no binding',
       'tests/e2e/scenarios/sample/base/thing.md:17: steps[0]: [/sample] is the path of no binding',
       'tests/e2e/scenarios/sample/base/thing.md:20: expected[1]: [code:lost] is not a code of the vocabulary',

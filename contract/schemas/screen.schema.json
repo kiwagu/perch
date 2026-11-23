@@ -45,7 +45,7 @@
             "items": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
+              "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
             },
             "description": "The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other."
           },
@@ -683,7 +683,7 @@
             "items": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
+              "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
             }
           },
           "own": {

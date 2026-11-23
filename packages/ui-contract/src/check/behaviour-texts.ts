@@ -18,7 +18,8 @@ import { BEHAVIOUR_EDITION } from './action-forms'
 import { type Contract, locate } from './contract'
 import { since } from './editions'
 
-const NOUNS: Readonly<Record<BehaviourKind, string>> = {
+/** What each kind of behaviour text is called in a problem. */
+export const BEHAVIOUR_NOUNS: Readonly<Record<BehaviourKind, string>> = {
   outcome: 'the outcome line',
   condition: 'the condition',
   rule: 'the rule',
@@ -27,7 +28,7 @@ const NOUNS: Readonly<Record<BehaviourKind, string>> = {
 type Action = Contract['screens']['platform']['actions'][string]
 
 /** A text of the platform at `at` in it, with the kind of its field. */
-interface BehaviourText {
+export interface BehaviourText {
   readonly at: readonly PropertyKey[]
   readonly kind: BehaviourKind
   readonly text: string
@@ -52,7 +53,7 @@ function outcomeTexts(name: string, result: Action['result'], held: boolean): Be
  * Every behaviour text of the platform the budget holds, in the order the file writes them; a
  * `result` of one string only where `strings` holds it.
  */
-function behaviourTexts(
+export function behaviourTexts(
   { actions, invariants }: Contract['screens']['platform'],
   strings: boolean,
 ): BehaviourText[] {
@@ -98,7 +99,7 @@ export function behaviourTextsProblems(contract: Contract): Problem[] {
         ? [
             inScreens(
               at,
-              `${NOUNS[kind]} is ${length} characters, past its budget of ${DESCRIPTION_BUDGET}; its purpose: "${BEHAVIOUR_PURPOSES[kind]}"`,
+              `${BEHAVIOUR_NOUNS[kind]} is ${length} characters, past its budget of ${DESCRIPTION_BUDGET}; its purpose: "${BEHAVIOUR_PURPOSES[kind]}"`,
             ),
           ]
         : []

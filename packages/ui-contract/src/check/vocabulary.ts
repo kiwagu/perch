@@ -41,6 +41,9 @@ import {
 const FRAME_SCREEN = 'app-shell'
 
 /** Each value of `values` that `listed` lacks, as a problem at `at[index]` (`inScreens`). */
+/** A role is the contract's: of its terms file, or of the vocabulary's Roles without one. */
+const ROLE = 'a role'
+
 const unlistedIn =
   (inScreens: InScreens) =>
   (
@@ -52,7 +55,12 @@ const unlistedIn =
     (values ?? []).flatMap((value, index) =>
       (listed instanceof Set ? listed.has(value) : has(listed, value))
         ? []
-        : [inScreens([...at, index], `"${value}" is not ${noun} of the vocabulary`)],
+        : [
+            inScreens(
+              [...at, index],
+              `"${value}" is not ${noun} of the ${noun === ROLE ? 'contract' : 'vocabulary'}`,
+            ),
+          ],
     )
 
 function screenProblems(contract: Contract): Problem[] {
@@ -117,15 +125,10 @@ function screenProblems(contract: Contract): Problem[] {
         ...unlisted(def.codes, [...at, 'codes'], codesFor(anchor), 'a code'),
         ...unlisted(def.states, [...at, 'states'], states, 'a state'),
         ...writtenFieldStates(def.states, [...at, 'states']),
-        ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, 'a role'),
+        ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, ROLE),
       ]),
     ...screen.bindings.flatMap((binding, at) =>
-      unlisted(
-        binding.roles,
-        ['screens', index, 'bindings', at, 'roles'],
-        vocabulary.roles,
-        'a role',
-      ),
+      unlisted(binding.roles, ['screens', index, 'bindings', at, 'roles'], vocabulary.roles, ROLE),
     ),
   ])
 }
@@ -137,7 +140,7 @@ const modelRoleProblems = ({ vocabulary, model }: Contract): Problem[] =>
       .filter((role) => !has(vocabulary.roles, role))
       .map((role) => ({
         file: MODEL_FILE,
-        message: `${jsonPath(['$defs', entity.name, 'x-perch', 'can', role])}: "${role}" is not a role of the vocabulary`,
+        message: `${jsonPath(['$defs', entity.name, 'x-perch', 'can', role])}: "${role}" is not a role of the contract`,
       })),
   )
 
@@ -152,7 +155,7 @@ function platformProblems({ vocabulary, screens }: Contract): Problem[] {
 
   return [
     ...Object.entries(actions).flatMap(([name, action]) => [
-      ...unlisted(action.roles, ['platform', 'actions', name, 'roles'], vocabulary.roles, 'a role'),
+      ...unlisted(action.roles, ['platform', 'actions', name, 'roles'], vocabulary.roles, ROLE),
       ...codeEntriesOf(action.codes).flatMap(({ code, at }) =>
         has(vocabulary.codes, code)
           ? []

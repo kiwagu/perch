@@ -163,7 +163,7 @@ const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: str
     'anchor-roles',
     'Every restriction above an anchor admits a device by the roles it holds together',
   ],
-  ['screen-anchors-name-roles', 'roles', "A role is a row of the vocabulary's Roles table."],
+  ['screen-anchors-name-roles', 'roles', "A role is one of the terms file's `roles`"],
   [
     'screen-anchors-name-roles',
     'link-roles',
@@ -307,6 +307,7 @@ describe('renderReference', () => {
       'Screen file',
       'Platform file',
       'Activity file',
+      'Terms file',
       'Model (x-perch)',
       'Manifest (derived)',
       'Rules',
