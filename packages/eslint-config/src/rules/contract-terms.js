@@ -5,12 +5,14 @@
  * once, in the contract. The option `module` is the absolute path of that module; the rule reads
  * its two constants (a missing or malformed module fails the lint, never passes it).
  *
- * The code expects a role where TypeScript does: the literal's contextual type (a parameter, an
- * element of a typed list, a typed property or return), the other side of `===`, `!==`, `==` or
- * `!=`, or the discriminant of the `switch` a `case` tests, is made of string literal types that
- * are all roles of the contract (`undefined` and `null` aside, a type parameter read by its
- * constraint). A property key of an object whose contextual type has only roles as its keys is
- * one too. Routes are found the same way. Role names are common words (`identity` and `member`
+ * The code expects a role where TypeScript does: the type the code declares at the literal (a
+ * parameter, an element of a typed list, a typed property or return; never a type inferred from
+ * the literal itself, and a type parameter by its constraint), the declared type of the other side
+ * of `===`, `!==`, `==` or `!=`, or of the discriminant of the `switch` a `case` tests (never as
+ * the flow narrowed it), is made of string literal types that are all roles of the contract
+ * (`undefined` and `null` aside). A property's value is read across every member of the union its
+ * object is expected to be, so a discriminant shared with other kinds is no role. A property key,
+ * quoted or written as a name, of an object whose expected keys are all roles is one too. Routes are found the same way. Role names are common words (`identity` and `member`
  * are tables too) and `/devices` is also a gateway API path, so a string elsewhere is left alone.
  * Type annotations are not read: a type is held by the compiler once it derives from the
  * constants.
@@ -23,83 +25,16 @@
  * (typescript-eslint `projectService`); without it the rule fails rather than pass in silence.
  */
 
-import { readFileSync } from 'node:fs'
-
 import ts from 'typescript'
+
+import { readContractTerms } from './contract-terms-module.js'
+import { routeInPattern, routeNamedBy, routeStartingQuasi } from './route-values.js'
+
+export { readContractTerms } from './contract-terms-module.js'
 
 const COMPARISONS = new Set(['===', '!==', '==', '!='])
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
-
-/** The string entries of the object literal `name` exports in `source`. */
-function constantOf(source, name, path) {
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue
-    }
-
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name) {
-        continue
-      }
-
-      const value =
-        declaration.initializer !== undefined && ts.isAsExpression(declaration.initializer)
-          ? declaration.initializer.expression
-          : declaration.initializer
-
-      if (value === undefined || !ts.isObjectLiteralExpression(value)) {
-        throw new Error(`${path}: ${name} is not an object literal`)
-      }
-
-      return value.properties.map((property) => {
-        if (
-          !ts.isPropertyAssignment(property) ||
-          !ts.isStringLiteral(property.name) ||
-          !ts.isStringLiteral(property.initializer)
-        ) {
-          throw new Error(`${path}: an entry of ${name} is not a string written as a string`)
-        }
-
-        return [property.name.text, property.initializer.text]
-      })
-    }
-  }
-
-  throw new Error(`${path}: no ${name}; write it with \`ui-contract emit terms\``)
-}
-
-const cache = new Map()
-
-/**
- * The roles and the routes the module at `path` holds: each role by its name, each route by its
- * path with the screen's id that names it. Read once per path and version of the file.
- */
-export function readContractTerms(path) {
-  let text
-
-  try {
-    text = readFileSync(path, 'utf8')
-  } catch {
-    throw new Error(`${path}: no such module; write it with \`ui-contract emit terms\``)
-  }
-
-  const cached = cache.get(path)
-
-  if (cached?.text === text) {
-    return cached.terms
-  }
-
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)
-  const terms = {
-    roles: new Map(constantOf(source, 'CONTRACT_ROLES', path).map(([, role]) => [role, role])),
-    routes: new Map(constantOf(source, 'CONTRACT_ROUTES', path).map(([id, route]) => [route, id])),
-  }
-
-  cache.set(path, { text, terms })
-
-  return terms
-}
 
 /**
  * The string values a type admits, when it admits nothing but string literals; none otherwise. A
@@ -137,57 +72,6 @@ const within = (values, known) => values?.every((value) => known.has(value)) ?? 
 const access = (name, key) =>
   IDENTIFIER.test(key) ? `${name}.${key}` : `${name}[${JSON.stringify(key)}]`
 
-/** The route `text` names by its value: the route itself, or a route followed by `?` or `#`. */
-function routeNamedBy(text, routes) {
-  for (const route of routes.keys()) {
-    if (
-      text === route ||
-      (!route.includes('$') && (text.startsWith(`${route}?`) || text.startsWith(`${route}#`)))
-    ) {
-      return route
-    }
-  }
-
-  return undefined
-}
-
-/** The route a part of a template literal starts with, an expression or the end right after it. */
-function routeStartingQuasi(text, routes) {
-  for (const route of routes.keys()) {
-    if (!route.includes('$') && text.startsWith(route)) {
-      const next = text.charAt(route.length)
-
-      if (next === '' || next === '?' || next === '#') {
-        return route
-      }
-    }
-  }
-
-  return undefined
-}
-
-/** The route a regular expression names where it ends: `/\/me$/`, `/^\/settings(\?|$)/`. */
-function routeInPattern(pattern, routes) {
-  const text = pattern.replaceAll('\\/', '/')
-
-  for (const route of routes.keys()) {
-    if (route.includes('$')) {
-      continue
-    }
-
-    for (let at = text.indexOf(route); at !== -1; at = text.indexOf(route, at + 1)) {
-      const before = at === 0 ? '' : text.charAt(at - 1)
-      const after = text.slice(at + route.length)
-
-      if (!/[\w-]/.test(before) && /^($|\$|\\\?|#|\(|\)|\|)/.test(after)) {
-        return route
-      }
-    }
-  }
-
-  return undefined
-}
-
 /** @type {import('eslint').Rule.RuleModule} */
 export const contractTerms = {
   meta: {
@@ -219,17 +103,60 @@ export const contractTerms = {
     }
 
     const checker = services.program.getTypeChecker()
-    const typeOf = (node) => checker.getTypeAtLocation(services.esTreeNodeToTSNodeMap.get(node))
+    const tsNodeOf = (node) => services.esTreeNodeToTSNodeMap.get(node)
+
+    /** The type the identifier `node` is declared with, or its type here when it has no symbol. */
+    function declaredTypeOfIdentifier(node) {
+      const found = checker.getSymbolAtLocation(tsNodeOf(node))
+      const symbol =
+        found !== undefined && found.flags & ts.SymbolFlags.Alias
+          ? checker.getAliasedSymbol(found)
+          : found
+
+      return symbol === undefined
+        ? checker.getTypeAtLocation(tsNodeOf(node))
+        : checker.getTypeOfSymbol(symbol)
+    }
+
+    /**
+     * The string values the expression `node` admits as declared, never as the flow narrowed it
+     * where it stands: a variable by the type of its declaration, a property by its type across
+     * every member of its object's declared union; any other expression by its type.
+     */
+    function declaredValuesOf(node) {
+      if (node.type === 'Identifier') {
+        return closedValues(declaredTypeOfIdentifier(node), checker)
+      }
+
+      if (
+        node.type === 'MemberExpression' &&
+        !node.computed &&
+        node.property.type === 'Identifier'
+      ) {
+        const declared =
+          node.object.type === 'Identifier'
+            ? declaredTypeOfIdentifier(node.object)
+            : checker.getTypeAtLocation(tsNodeOf(node.object))
+        const values = (declared.isUnion() ? declared.types : [declared]).map((member) => {
+          const property = checker.getPropertyOfType(member, node.property.name)
+
+          return property === undefined
+            ? []
+            : closedValues(checker.getTypeOfSymbol(property), checker)
+        })
+
+        return values.some((each) => each === undefined) ? undefined : values.flat()
+      }
+
+      return closedValues(checker.getTypeAtLocation(tsNodeOf(node)), checker)
+    }
 
     /**
      * The type the code declares for the expression `node`, never one inferred from `node` itself
      * (a type parameter it would instantiate is read by its constraint).
      */
     const declaredAt = (node) =>
-      checker.getContextualType(
-        services.esTreeNodeToTSNodeMap.get(node),
-        ts.ContextFlags.IgnoreNodeInferences,
-      )
+      checker.getContextualType(tsNodeOf(node), ts.ContextFlags.IgnoreNodeInferences)
 
     /**
      * The string values the code admits at the string `node`, if it admits only some: the type it
@@ -241,11 +168,11 @@ export const contractTerms = {
       const { parent } = node
 
       if (parent?.type === 'BinaryExpression' && COMPARISONS.has(parent.operator)) {
-        return closedValues(typeOf(parent.left === node ? parent.right : parent.left), checker)
+        return declaredValuesOf(parent.left === node ? parent.right : parent.left)
       }
 
       if (parent?.type === 'SwitchCase' && parent.test === node) {
-        return closedValues(typeOf(parent.parent.discriminant), checker)
+        return declaredValuesOf(parent.parent.discriminant)
       }
 
       if (
@@ -279,11 +206,20 @@ export const contractTerms = {
       return declared === undefined ? undefined : closedValues(declared, checker)
     }
 
-    /** The names of the keys the object `objectNode` is expected to have, if it is expected. */
+    /**
+     * The names of the keys the object `objectNode` is expected to have, when its expected type is
+     * a map over them (`Record<Role, …>`, `Partial<…>` of one): an object type that declares its
+     * fields (`{ identity: string }`) names fields, not roles.
+     */
     function expectedKeys(objectNode) {
       const type = declaredAt(objectNode)
 
-      if (type === undefined || type.isUnion()) {
+      if (
+        type === undefined ||
+        type.isUnion() ||
+        !(type.flags & ts.TypeFlags.Object) ||
+        !(type.objectFlags & ts.ObjectFlags.Mapped)
+      ) {
         return undefined
       }
 
@@ -348,6 +284,18 @@ export const contractTerms = {
     }
 
     return {
+      Property(node) {
+        // A key written as a name (`{ operator: … }`) is a role as much as a quoted one.
+        if (
+          node.key.type === 'Identifier' &&
+          !node.computed &&
+          !node.shorthand &&
+          node.kind === 'init' &&
+          node.parent?.type === 'ObjectExpression'
+        ) {
+          checkExpected(node.key, node.key.name, expectedKeys(node.parent))
+        }
+      },
       Literal(node) {
         if (typeof node.value === 'string') {
           checkString(node, node.value)
