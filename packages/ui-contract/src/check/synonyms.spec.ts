@@ -5,6 +5,7 @@ import {
   PLATFORM_FILE,
   TERMS_FILE,
   type Terms,
+  VOCABULARY_FILE,
   type WrittenDescription,
 } from '../files'
 
@@ -127,6 +128,157 @@ describe('synonymsProblems', () => {
       {
         file: PLATFORM_FILE,
         message: `invariants.kept.rule: the rule says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one in an invariant's name, which the codes' conditions name", () => {
+    const contract = withTerms(TERMS)
+
+    contract.screens.platform.invariants = {
+      'tenants-only': { rule: 'Only a member of the organisation.', refuses: 'gone' },
+    }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: PLATFORM_FILE,
+        message: `invariants["tenants-only"]: the invariant's name says "tenants", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one in the vocabulary's tables: a row's key or its meaning, a choice value's too", () => {
+    const sample = withTerms(TERMS)
+    const contract: Contract = {
+      ...sample,
+      vocabulary: {
+        ...sample.vocabulary,
+        attributes: { 'data-id': { on: 'a row', meaning: 'the id of a device session' } },
+        codes: {
+          'tenant-gone': { meaning: 'the organisation is gone', where: 'sample.save-button' },
+        },
+        choiceValues: { 'sample.mode-select.option': { a: 'a participant', b: 'a guest' } },
+      },
+    }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: VOCABULARY_FILE,
+        message: `section "Attributes", data-id: the meaning says "device session", a synonym of the term "session"; write "session"`,
+      },
+      {
+        file: VOCABULARY_FILE,
+        message: `section "Codes", tenant-gone: the key says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+      {
+        file: VOCABULARY_FILE,
+        message: `section "Choice values", sample.mode-select.option a: the meaning says "participant", a synonym of the role "member"; write "member"`,
+      },
+    ])
+  })
+  it("refuses one in a scenario's prose, read past its bracket references but in its title", () => {
+    const sample = withTerms(TERMS)
+    const [scenario] = sample.scenarios
+    const contract: Contract =
+      scenario === undefined
+        ? sample
+        : {
+            ...sample,
+            scenarios: [
+              {
+                ...scenario,
+                title: 'A participant edits [the tenant] thing',
+                where: "[/sample/$key] on device A (user A, the tenant's member)",
+                steps: ['Wait for [app-shell.status] to reach [state:ready]', 'Pick [value:org]'],
+              },
+            ],
+          }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: 'tests/e2e/scenarios/sample/base/thing.md',
+        message: `title: the scenario's title says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+      {
+        file: 'tests/e2e/scenarios/sample/base/thing.md',
+        message: `title: the scenario's title says "participant", a synonym of the role "member"; write "member"`,
+      },
+      {
+        file: 'tests/e2e/scenarios/sample/base/thing.md',
+        message: `where: the scenario's text says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one in an activity's id, title or state names, and in a model action's name", () => {
+    const sample = withTerms(TERMS)
+    const [activity] = sample.activities
+    const state = activity === undefined ? undefined : Object.values(activity.states)[0]
+    const thing = sample.model.entities['thing']
+    const contract: Contract =
+      activity === undefined || state === undefined || thing === undefined
+        ? sample
+        : {
+            ...sample,
+            activities: [
+              {
+                ...activity,
+                title: 'Edit the thing of the tenant',
+                states: { ...activity.states, 'org-saved': state },
+              },
+            ],
+            model: {
+              ...sample.model,
+              entities: {
+                ...sample.model.entities,
+                thing: {
+                  ...thing,
+                  actions: { ...thing.actions, deleteTenant: { params: {}, changes: [] } },
+                },
+              },
+            },
+          }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: MODEL_FILE,
+        message: `$defs.thing["x-perch"].actions.deleteTenant: the model action's name says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+      {
+        file: 'contract/domain/activities/thing.yaml',
+        message: `title: the activity's title says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+      {
+        file: 'contract/domain/activities/thing.yaml',
+        message: `states["org-saved"]: the state's name says "org", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one a model action's confirmation code says beyond its entity and its name", () => {
+    const terms: Terms = {
+      ...TERMS,
+      terms: { ...TERMS.terms, removal: { meaning: 'A removal.', synonyms: ['thing delete'] } },
+    }
+    const sample = withTerms(terms)
+    const thing = sample.model.entities['thing']
+    const contract: Contract =
+      thing === undefined
+        ? sample
+        : {
+            ...sample,
+            model: {
+              ...sample.model,
+              entities: {
+                ...sample.model.entities,
+                thing: {
+                  ...thing,
+                  actions: { ...thing.actions, delete: { params: {}, changes: [] } },
+                },
+              },
+            },
+          }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: MODEL_FILE,
+        message: `$defs.thing["x-perch"].actions.delete: the confirmation's code thing-delete says "thing-delete", a synonym of the term "removal"; write "removal"`,
       },
     ])
   })

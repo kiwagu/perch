@@ -1,11 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CONTRACT_VERSION } from '../anchors'
 import { writeContractRepository } from '../contract-repository.fixture'
-import { MODEL_FILE, PLATFORM_FILE } from '../files'
+import { MODEL_FILE, PLATFORM_FILE, TERMS_FILE, VOCABULARY_FILE } from '../files'
 import { git as read } from '../handoff'
 import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
@@ -88,6 +88,17 @@ function replace(root: string, file: string, from: string, to: string): void {
 
 const breakRule = (root: string): void => replace(root, SCREEN, BOUND, BROKEN)
 
+/** The contract in its form before the terms file: no terms file, the roles in the vocabulary. */
+const toOldForm = (root: string): void => {
+  rmSync(join(root, TERMS_FILE))
+  replace(
+    root,
+    VOCABULARY_FILE,
+    '\n## Reserved anchors',
+    '\n## Roles\n\n| Role | Meaning |\n|---|---|\n| `guest` | nobody signed in |\n| `identity` | an account signed in |\n| `member` | a member of the organisation |\n\n## Reserved anchors',
+  )
+}
+
 /** A change that adds a file and touches nothing of the contract. */
 const addNote = (root: string): void => writeFiles(root, { 'NOTES.md': 'work\n' })
 
@@ -134,6 +145,32 @@ describe('inflight', () => {
     expect(lines.at(-1)).toBe('inflight: 3 branches, 1 broken')
   })
 
+  it('passes a branch cut before the terms file, its roles in the vocabulary, until it merges main', () => {
+    const root = repository({ 'README.md': '# sample\n' }, ['README.md'])
+
+    git(root, 'commit', '--quiet', '-m', 'first')
+    git(root, 'branch', '--move', 'main')
+    writeContractRepository(root)
+    toOldForm(root)
+    commitAll(root, 'main before the terms file')
+    branchFrom(root, 'main', 'feat/older', () => addNote(root))
+    git(root, 'switch', '--quiet', 'main')
+    writeContractRepository(root)
+    commitAll(root, 'main takes the terms file')
+    // A branch cut after the file that takes it out again is no older branch.
+    branchFrom(root, 'main', 'fix/rollback', () => toOldForm(root))
+    git(root, 'switch', '--quiet', 'main')
+    // A tag of the branch's name, at `main`, stands for no branch: the branch is read by its ref.
+    git(root, 'tag', 'fix/rollback', 'main')
+
+    const result = run(root)
+    const lines = result.out.split('\n')
+
+    expect(lines).toContain('feat/older: OK (version 1, before the terms file)')
+    expect(lines).toContain('fix/rollback: 1 problem')
+    expect(result.out).toContain(`  ${TERMS_FILE}`)
+    expect(result.code).toBe(1)
+  })
   it('exits 0 when every branch passes, an older version alone being no problem', () => {
     const result = run(fixtureRepository({ 'feat/passes': () => {} }))
 

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -41,16 +41,13 @@ describe('termsProblems', () => {
       atTerms('contexts: the terms belong to a context: name one'),
     )
   })
-  it('passes a contract with no terms file whose vocabulary lists the roles', () => {
-    expect(termsProblems(withTerms(undefined, true))).toEqual([])
-  })
-  it('wants the roles somewhere: the vocabulary without a terms file', () => {
-    expect(termsProblems(withTerms(undefined, false))).toEqual([
-      {
-        file: VOCABULARY_FILE,
-        message: `no section "Roles" and no ${TERMS_FILE}: the roles are listed in one of them`,
-      },
-    ])
+  it('wants the terms file, the vocabulary listing the roles or not', () => {
+    const missing = atTerms(
+      'missing: the contract writes its terms and its roles here, and the vocabulary lists no roles',
+    )
+
+    expect(termsProblems(withTerms(undefined, true))).toEqual([missing])
+    expect(termsProblems(withTerms(undefined, false))).toEqual([missing])
   })
   it('passes terms whose synonyms are words no term or role is named', () => {
     expect(termsProblems(withTerms(TERMS))).toEqual([])
@@ -184,18 +181,12 @@ describe('termsProblems', () => {
 })
 
 describe('the roles of a contract with a terms file', () => {
-  const ROLES = /\n## Roles\n[\s\S]*?(?=\n## Reserved anchors)/
-
-  /** The fixture repository with `terms` written, and its vocabulary's Roles section dropped. */
+  /** The fixture repository with `terms` written in place of its own. */
   function moved(terms: string): string {
     const root = repository({})
 
     writeContractRepository(root)
     writeFileSync(join(root, TERMS_FILE), terms)
-
-    const vocabulary = join(root, VOCABULARY_FILE)
-
-    writeFileSync(vocabulary, readFileSync(vocabulary, 'utf8').replace(ROLES, ''))
 
     return root
   }
@@ -215,13 +206,25 @@ describe('the roles of a contract with a terms file', () => {
     expect(contract?.vocabulary.writesRoles).toBe(false)
     expect(contract?.terms?.contexts).toEqual({ sample: { meaning: 'The sample.' } })
   })
-  it("are the vocabulary's while the contract writes no terms file", () => {
+  it("are the vocabulary's in a contract of an older ref, which writes no terms file", () => {
     const root = repository({})
 
     writeContractRepository(root)
+    rmSync(join(root, TERMS_FILE))
 
-    const { contract } = loadContract(root)
+    const vocabulary = join(root, VOCABULARY_FILE)
 
+    writeFileSync(
+      vocabulary,
+      readFileSync(vocabulary, 'utf8').replace(
+        '\n## Reserved anchors',
+        '\n## Roles\n\n| Role | Meaning |\n|---|---|\n| `guest` | nobody signed in |\n| `identity` | an account signed in |\n| `member` | a member of the organisation |\n\n## Reserved anchors',
+      ),
+    )
+
+    const { contract, problems } = loadContract(root)
+
+    expect(problems).toEqual([])
     expect(contract?.terms).toBeUndefined()
     expect(contract?.vocabulary.writesRoles).toBe(true)
     expect(Object.keys(contract?.vocabulary.roles ?? {})).toEqual(['guest', 'identity', 'member'])

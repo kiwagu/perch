@@ -27,11 +27,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     (`file:line: message` through `formatProblem`):
     - `parseVocabulary(markdown)`: the closed lists of `contract/vocabulary.md`, one `## `
       section each (`VOCABULARY_SECTIONS`); a vocabulary without its "Composites" section reads
-      as an empty table, and one without its "Roles" section too (a terms file holds them;
-      `writesRoles` says whether the section is there).
+      as an empty table, and one without its "Roles" section too (the terms file holds them;
+      `writesRoles` says whether the section is there, as in a contract of an older ref).
     - `loadTerms(root)`: `contract/domain/terms.yaml` (`TERMS_FILE`) through `termsFileSchema`,
-      none when the contract leaves it out; `loadContract` then takes the contract's roles from
-      it (`contract/REFERENCE.md#rule-terms`).
+      none when a contract of an older ref has none (the check refuses that); `loadContract`
+      takes the contract's roles from it (`contract/REFERENCE.md#rule-terms`).
     - `loadScreens(root)` and `loadScreensWith(root, model)` (with a model already loaded, as
       the contract check does, which takes back the model with its lengths resolved): every
       `.yaml` file under `contract/domain/screens`, sorted by path, the platform's values, the
