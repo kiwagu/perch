@@ -47,6 +47,7 @@ import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
 import { screensProblems } from './screens'
 import { searchProblems } from './search'
+import { synonymsProblems } from './synonyms'
 import { termsProblems } from './terms'
 import { toastsProblems } from './toasts'
 import { unsavedInputProblems } from './unsaved-input'
@@ -148,6 +149,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   pagingProblems,
   scenariosProblems,
   termsProblems,
+  synonymsProblems,
   descriptionsProblems,
   behaviourTextsProblems,
   withProblems,

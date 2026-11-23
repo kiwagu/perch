@@ -9,7 +9,7 @@ import { repository, useRepositories } from '../repository.fixture'
 
 import type { Contract } from './contract'
 import { sampleContract } from './contract.fixture'
-import { loadContract } from './run'
+import { contractProblems, loadContract } from './run'
 import { termsProblems } from './terms'
 
 useRepositories()
@@ -36,6 +36,11 @@ function withTerms(terms: Terms | undefined, writesRoles = false): Contract {
 const atTerms = (message: string) => ({ file: TERMS_FILE, message })
 
 describe('termsProblems', () => {
+  it('runs in the contract check', () => {
+    expect(contractProblems(withTerms({ ...TERMS, contexts: {} }))).toContainEqual(
+      atTerms('contexts: the terms belong to a context: name one'),
+    )
+  })
   it('passes a contract with no terms file whose vocabulary lists the roles', () => {
     expect(termsProblems(withTerms(undefined, true))).toEqual([])
   })
