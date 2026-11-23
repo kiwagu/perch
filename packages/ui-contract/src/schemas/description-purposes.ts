@@ -40,6 +40,9 @@ export const DESCRIPTION_PURPOSES = {
   activityData: `What the activity carries from screen to screen; \`model\` names the field of the model it is. ${AT_MOST}`,
   visit: `What the visit is for in the task. Its \`meta\` names the screen and the address, and the screen has a description of its own. ${AT_MOST}`,
   activityTransition: `What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. ${AT_MOST}`,
+  context: `What the bounded context is: the part of the product whose terms mean one thing in it. ${AT_MOST}`,
+  term: `What the term means in the contract: the one word its texts use for it. Its synonyms are the words they never use for it, and \`storage\` names it where storage does otherwise. ${AT_MOST}`,
+  role: `What holding the role means on a device: whose account is signed in and what applies to it. ${AT_MOST}`,
 } as const
 
 /**

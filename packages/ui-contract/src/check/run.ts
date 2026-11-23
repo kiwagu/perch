@@ -13,12 +13,14 @@ import {
   loadModel,
   loadScenarios,
   loadScreensWith,
+  loadTerms,
   type Problem,
   parseVocabulary,
   readDescriptions,
   SCHEMA_OUTPUTS,
   schemaDrift,
   sortProblems,
+  type TermEntry,
   VOCABULARY_FILE,
 } from '../files'
 import { referenceDrift, referenceLinkProblems } from '../reference'
@@ -45,6 +47,7 @@ import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
 import { screensProblems } from './screens'
 import { searchProblems } from './search'
+import { termsProblems } from './terms'
 import { toastsProblems } from './toasts'
 import { unsavedInputProblems } from './unsaved-input'
 import { valueProblems } from './values'
@@ -71,6 +74,10 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
  * The contract files, the activities and the scenarios, with the descriptions they write, or what
  * keeps them from loading.
  */
+/** The meaning of each term or role of the terms file, by its name. */
+const meaningsOf = (entries: Readonly<Record<string, TermEntry>>): Record<string, string> =>
+  Object.fromEntries(Object.entries(entries).map(([name, { meaning }]) => [name, meaning]))
+
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
   const { model: written, problems: modelLoad } = loadModel(root)
@@ -78,12 +85,14 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
   const { screens, model, problems: screensLoad } = loadScreensWith(root, written)
   const { activities, lines: activityLines, problems: activitiesLoad } = loadActivities(root)
   const { scenarios, lines: scenarioLines, problems: scenariosLoad } = loadScenarios(root)
+  const { terms, lines: termsLines, problems: termsLoad } = loadTerms(root)
   const problems = [
     ...vocabularyLoad,
     ...screensLoad,
     ...modelLoad,
     ...activitiesLoad,
     ...scenariosLoad,
+    ...termsLoad,
   ]
 
   if (problems.length > 0 || screens === undefined || model === undefined) {
@@ -96,7 +105,9 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
     ? { problems: sortProblems(descriptionsRead) }
     : {
         contract: {
-          vocabulary,
+          // A contract with a terms file keeps its roles there, each with its meaning.
+          vocabulary:
+            terms === undefined ? vocabulary : { ...vocabulary, roles: meaningsOf(terms.roles) },
           screens,
           model,
           activities,
@@ -104,6 +115,8 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
           scenarios,
           scenarioLines,
           descriptions,
+          terms,
+          termsLines,
         },
         problems: [],
       }
@@ -134,6 +147,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   accessProblems,
   pagingProblems,
   scenariosProblems,
+  termsProblems,
   descriptionsProblems,
   behaviourTextsProblems,
   withProblems,

@@ -17,6 +17,7 @@ import {
   entityDefinitionSchema,
   manifestSchema,
   platformFileSchema,
+  termsFileSchema,
 } from '../schemas'
 
 import {
@@ -26,6 +27,7 @@ import {
   PLATFORM_SCHEMA_FILE,
   REFERENCE_FILE,
   SCREEN_SCHEMA_FILE,
+  TERMS_SCHEMA_FILE,
 } from './paths'
 import type { Problem } from './problems'
 
@@ -37,6 +39,7 @@ export const SCHEMA_OUTPUTS: ReadonlyArray<{ file: string; schema: () => object 
   { file: SCREEN_SCHEMA_FILE, schema: () => jsonSchemaOf(authoredScreenFileSchema) },
   { file: PLATFORM_SCHEMA_FILE, schema: () => jsonSchemaOf(platformFileSchema) },
   { file: ACTIVITY_SCHEMA_FILE, schema: () => jsonSchemaOf(activitySchema) },
+  { file: TERMS_SCHEMA_FILE, schema: () => jsonSchemaOf(termsFileSchema) },
   { file: ENTITY_SCHEMA_FILE, schema: () => jsonSchemaOf(entityDefinitionSchema) },
   { file: MANIFEST_SCHEMA_FILE, schema: () => jsonSchemaOf(manifestSchema) },
 ]
