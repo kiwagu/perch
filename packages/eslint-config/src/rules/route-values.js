@@ -5,12 +5,15 @@
  * the whole string names it.
  */
 
+/** `text` without a Playwright URL glob's leading `**`. */
+const withoutGlob = (text) => (text.startsWith('**/') ? text.slice(2) : text)
+
 /**
  * The route `text` names by its value: the route itself, or a route followed by `?` or `#`; after
  * a Playwright URL glob's `**` too (`**` then `/me`, or `/settings?*`).
  */
 export function routeNamedBy(text, routes) {
-  const plain = text.startsWith('**/') ? text.slice(2) : text
+  const plain = withoutGlob(text)
 
   for (const route of routes.keys()) {
     if (
@@ -24,11 +27,16 @@ export function routeNamedBy(text, routes) {
   return undefined
 }
 
-/** The route a part of a template literal starts with, an expression or the end right after it. */
+/**
+ * The route a part of a template literal starts with (behind a glob's `**` too), an expression or
+ * the end right after it.
+ */
 export function routeStartingQuasi(text, routes) {
+  const plain = withoutGlob(text)
+
   for (const route of routes.keys()) {
-    if (!route.includes('$') && text.startsWith(route)) {
-      const next = text.charAt(route.length)
+    if (!route.includes('$') && plain.startsWith(route)) {
+      const next = plain.charAt(route.length)
 
       if (next === '' || next === '?' || next === '#') {
         return route

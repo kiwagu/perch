@@ -225,6 +225,22 @@ tester.run('contract-terms', contractTerms, {
       errors: [role('member'), role('admin'), role('operator'), role('guest')],
     },
     {
+      ...typed(
+        "export const PLATFORM_ROLES = ['operator'] as const\ndeclare const CONTRACT_ROLES: { readonly admin: 'admin' }\nexport const list = ['member', CONTRACT_ROLES.admin] as const",
+      ),
+      errors: [role('operator'), role('member')],
+    },
+    {
+      ...typed(
+        "declare const output: Record<string, unknown>\nexport const isAdmin = typeof output['role'] === 'string' && output['role'] === 'admin'\ndeclare const held: unknown\nswitch (held) {\n  case 'operator':\n    break\n}",
+      ),
+      errors: [role('admin'), role('operator')],
+    },
+    {
+      ...byValue('declare const query: string\nvoid page.waitForURL(`**/settings?${query}`)'),
+      errors: [route('/settings', 'user.settings')],
+    },
+    {
       ...byValue("void page.waitForURL('**/me')\nvoid page.waitForURL('**/settings?*')"),
       errors: [route('/me', 'user.profile'), route('/settings', 'user.settings')],
     },
