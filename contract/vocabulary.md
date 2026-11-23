@@ -122,7 +122,7 @@ state of one anchor, never a second anchor.
 | Attribute | On | Meaning |
 |---|---|---|
 | `data-testid` | the element | the anchor of the element |
-| `data-id` | an `item` or `row` | the id of the entity the entry shows (a note, a member's identity, a device session) |
+| `data-id` | an `item` or `row` | the id of the entity the entry shows (a note, a member's account; a device by its latest session) |
 | `data-value` | an `option`, a `badge`, a `button` that switches a mode, a `visibility-button` | the stable key of a choice that is not an entity, one of the rows of "Choice values"; on a `visibility-button`, `show` or `hide`, the values of its suffix; on an option of a paged list's `size-select`, the page size it chooses |
 | `data-state` | a `status`, a `list`, a `section`, an `item`, an `input`, a `textarea`, a `select` | an app, container, row or field state from the tables below |
 | `data-code` | a `message`, `error`, `toast` or `dialog` | the stable code of what the element says, which tests assert instead of the wording |
@@ -236,13 +236,13 @@ code tells the user; when an action answers with it is the action's condition in
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
-| `not-admin` | `organisation.invite.error` | the account is not, or no longer, an administrator of the organisation |
+| `not-admin` | `organisation.invite.error` | the account is not, or no longer, an admin of the organisation |
 | `not-operator` | `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the account is not, or no longer, an operator; one without the role gets not-found at the console, so the code shows only when the role went while the console was open |
 | `own-account` | `console.account.ban.error`, `console.account.sessions.error`, `console.account.removal.error` | the account is the operator's own: its own devices page signs it out everywhere and its own settings delete it |
 | `account-gone` | `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the account was removed meanwhile, or never existed, so there is nothing to show or to act on |
 | `email-taken` | `console.account.email.error` | the new email has an account already |
-| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error`, `console.account.removal.error` | the account is an organisation's only administrator: another member must be made one first, or, to delete or remove it, the others must leave or be removed; the organisation page shows them |
-| `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
+| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error`, `console.account.removal.error` | the account is an organisation's only admin: another member must be made one first, or, to delete or remove it, the others must leave or be removed; the organisation page shows them |
+| `forbidden` | `organisation.notes.error` | only the author of a note or an admin may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
 | `text-too-long` | `organisation.notes.error` | the note is longer than its value allows |
 | `no-notes` | `organisation.notes.empty-message` | the organisation has no notes yet |
@@ -282,16 +282,16 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
 | `organisation.page.role-badge` | `member` | the signed-in member is a plain member of the organisation |
-| `organisation.invitation.role-badge` | `admin` | the invitation makes the account an administrator of the organisation |
+| `organisation.invitation.role-badge` | `admin` | the invitation makes the account an admin of the organisation |
 | `organisation.invitation.role-badge` | `member` | the invitation makes the account a plain member of the organisation |
 | `organisation.invite.role-select.option` | `member` | the option invites the account as a plain member |
-| `organisation.invite.role-select.option` | `admin` | the option invites the account as an administrator |
+| `organisation.invite.role-select.option` | `admin` | the option invites the account as an admin |
 | `organisation.members.role-select.option` | `member` | the option makes the member a plain member |
-| `organisation.members.role-select.option` | `admin` | the option makes the member an administrator |
+| `organisation.members.role-select.option` | `admin` | the option makes the member an admin |
 | `organisation.sent.role-badge` | `member` | the invitation makes the account a plain member |
-| `organisation.sent.role-badge` | `admin` | the invitation makes the account an administrator |
+| `organisation.sent.role-badge` | `admin` | the invitation makes the account an admin |
 | `organisation.received.role-badge` | `member` | the invitation makes the account a plain member |
-| `organisation.received.role-badge` | `admin` | the invitation makes the account an administrator |
+| `organisation.received.role-badge` | `admin` | the invitation makes the account an admin |
 | `console.account.organisations.role-badge` | `admin` | the account administers the organisation |
 | `console.account.organisations.role-badge` | `member` | the account is a plain member of the organisation |
 | `organisation.page.current-select.option` | `^[a-z][a-z0-9_]{1,31}$` | the option selects the organisation with this key (a pattern that every organisation key matches) |
@@ -310,7 +310,7 @@ screen name of its own.
 | `user.reset-password` | the page the link of a password reset mail opens, which sets a new password (`/reset-password`) |
 | `user.confirm-email` | the page the link of an email confirmation mail opens, which changes the account's email (`/confirm-email`) |
 | `user.profile` | the signed-in account's own profile (`/me`) |
-| `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an administrator (`/org`) |
+| `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an admin (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
 | `user.settings` | where the signed-in account sets how it looks and speaks, guards and changes how it signs in, and asks to be deleted (`/settings`) |

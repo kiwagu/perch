@@ -135,7 +135,7 @@ flow:
       type: final
       meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge ] }
     link-dead:
-      description: The error says the link does not work; a new invitation is asked of the organisation's administrator.
+      description: The error says the link does not work; a new invitation is asked of an admin of the organisation.
       type: final
     unread:
       description: The error says why the link could not be read; loading the page again tries it again.
