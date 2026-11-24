@@ -103,7 +103,7 @@ invariants:
     rule: "An account's email takes three changes a quarter of an hour, by the account or an operator, each counted once the new email is valid and its mail allowed, done or not; the next answers rate-limited."
     refuses: rate-limited
   invitation-attempts:
-    rule: "An account makes thirty invitations within ten minutes, and its network address sixty, each counted once its body is valid and its mail allowed, whatever it answers; the next answers rate-limited."
+    rule: "An account makes thirty invitations in ten minutes, its network address sixty of those the account allows, each counted once valid and a mail allowed, refused or not; the next answers rate-limited."
     refuses: rate-limited
 actions:
   sign-up:
