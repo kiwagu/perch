@@ -62,6 +62,9 @@ function page(
     copy: vi.fn(() => okAsync(undefined)),
     accept: vi.fn(() => okAsync(undefined)),
     decline: vi.fn(() => okAsync(undefined)),
+    setDefaultLanguage: vi.fn(() => okAsync(undefined)),
+    clearDefaultLanguage: vi.fn(() => okAsync(undefined)),
+    defaultsHeld: () => true,
     account: () => ann,
     current: () => current,
     ...(typeof writes === 'function' ? writes(becomes) : writes),
@@ -267,6 +270,57 @@ describe('organisation machine', () => {
     await region('notes-add', 'idle')
 
     expect(emitted).toEqual([toast('note-created')])
+  })
+
+  describe('the default language of the organisation', () => {
+    it('takes no choice before the organisation settings are on this device', () => {
+      const { actor } = page({ defaultsHeld: () => false })
+
+      expect(
+        actor.getSnapshot().can({ type: 'organisation.settings.locale-select', locale: 'es' }),
+      ).toBe(false)
+    })
+
+    it('stores the chosen language with no toast, and clears the error once stored', async () => {
+      const { actor, deps, emitted, region } = page()
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+      await region('default-language', 'idle')
+
+      expect(deps.setDefaultLanguage).toHaveBeenCalledWith('es')
+      expect(emitted).toEqual([])
+    })
+
+    it('keeps the code of a refused change for the error, and takes no other change meanwhile', async () => {
+      const pending = later()
+      const { actor, snapshot, region } = page({ setDefaultLanguage: () => pending.result })
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+
+      expect(snapshot().can({ type: 'organisation.settings.clear-button' })).toBe(false)
+      expect(snapshot().can({ type: 'organisation.settings.locale-select', locale: 'en' })).toBe(
+        false,
+      )
+
+      pending.refuse('organisation_settings:FORBIDDEN')
+      await region('default-language', 'idle')
+
+      expect(snapshot().context.errors.codes.settings).toBe('organisation_settings:FORBIDDEN')
+    })
+
+    it('removes the language by the clear button, and forgets the earlier error', async () => {
+      const { actor, deps, snapshot, region } = page({
+        setDefaultLanguage: () => refused('organisation_settings:FAILED'),
+      })
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+      await region('default-language', 'idle')
+      actor.send({ type: 'organisation.settings.clear-button' })
+      await region('default-language', 'idle')
+
+      expect(deps.clearDefaultLanguage).toHaveBeenCalledOnce()
+      expect(snapshot().context.errors.codes.settings).toBeUndefined()
+    })
   })
 
   describe("clears an area's error through its flow", () => {

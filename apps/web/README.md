@@ -340,7 +340,10 @@ modeling stage.
   container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
+  and correlation ids). `TENANT_COMMANDS` (`forTenant(key, admitted)`) gives a command bus over
+  one organisation's region, named by its key (`SessionService.tenantWritePath`), whichever is
+  current, refused once its database is not open or `admitted` no longer holds when the write is
+  admitted. The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes

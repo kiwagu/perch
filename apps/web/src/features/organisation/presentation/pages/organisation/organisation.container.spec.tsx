@@ -2,9 +2,10 @@
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { okAsync } from 'neverthrow'
+import { okAsync, type ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { BusError } from '@workspace/cqrs'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory, invitationIdFactory } from '@workspace/ids'
@@ -31,11 +32,21 @@ import type {
 } from '../../../../../platform/organisations.port'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
+import type { TenantCommandsPort } from '../../../../../platform/tenant-commands.port'
 import { NOTES_SERVICE, NotesService } from '../../../application/notes.service'
 import {
   ORGANISATION_SERVICE,
   OrganisationService,
 } from '../../../application/organisation.service'
+import {
+  organisationSettingsCommands,
+  organisationSettingsShape,
+} from '../../../application/organisation-settings/organisation-settings.model.gen'
+import {
+  ORGANISATION_SETTINGS_SERVICE,
+  OrganisationSettingsService,
+} from '../../../application/organisation-settings/organisation-settings.service'
+import { organisationSettingsIdOf } from '../../../application/organisation-settings/organisation-settings-id'
 import en from '../../i18n/organisation.en.json'
 
 import { OrganisationContainer } from './organisation.container'
@@ -65,21 +76,42 @@ const fromInitech: ReceivedInvitation = {
   role: CONTRACT_ROLES.member,
 }
 
+/** The commands asked of each organisation by key, each answered as `answer` says. */
+function tenantsAnswering(answer: () => ResultAsync<void, BusError>) {
+  const asked: string[] = []
+  const tenants: TenantCommandsPort = {
+    forTenant: (key) => ({
+      execute: (command) => {
+        asked.push(`${key} ${command.id}`)
+
+        return answer()
+      },
+    }),
+  }
+
+  return { tenants, asked }
+}
+
 /**
  * The organisation page of `ann`, a member of `memberships` (the first is current), over
- * `gateway`, the invitations to her (`invitations`) and the commands that write her notes
- * (`commands`, none that works by default). `select` makes another organisation current
- * without the page choosing it.
+ * `gateway`, the invitations to her (`invitations`), the commands that write her notes
+ * (`commands`, none that works by default) and those that write an organisation's settings
+ * (`tenants`, none that works by default), with the settings row `settings` on the device (none by
+ * default). `select` makes another organisation current without the page choosing it.
  */
 async function openPage(
   memberships: Parameters<typeof sessionIn>[1],
   gateway: OrganisationsPort,
   invitations: InvitationsPort = noInvitations,
   commands: CommandsPort = { execute: unavailable },
+  tenants: TenantCommandsPort = tenantsAnswering(unavailable).tenants,
+  settings: readonly { readonly id: ReturnType<typeof organisationSettingsIdOf> }[] = [],
 ) {
   const { session, select } = sessionIn(ann, memberships)
   const organisations = new OrganisationService(session, gateway, invitations, replicaSchema)
   const services = fakeServices(session)
+
+  services.runner.set(organisationSettingsShape, settings)
 
   services.container
     .singleton(ORGANISATION_SERVICE, () => organisations)
@@ -91,6 +123,16 @@ async function openPage(
           commands,
           { shape: organisationShape, commands: organisationCommands },
           () => organisations.ability(),
+        ),
+    )
+    .singleton(
+      ORGANISATION_SETTINGS_SERVICE,
+      () =>
+        new OrganisationSettingsService(
+          tenants,
+          { commands: organisationSettingsCommands },
+          () => organisations.ability(),
+          () => true,
         ),
     )
     .singleton(CLIPBOARD, () => ({ write: () => okAsync(undefined) }))
@@ -157,6 +199,51 @@ async function makeAdmin(member: MemberView): Promise<void> {
 }
 
 describe('OrganisationContainer', () => {
+  describe("the organisation's default language", () => {
+    const members = () => okAsync([annAdmin])
+
+    it("takes no choice before the organisation's settings are on this device", async () => {
+      await openPage([acme], gatewayWith({ members }))
+
+      expect(
+        screen.getByTestId('organisation.settings.locale-select').hasAttribute('data-disabled'),
+      ).toBe(true)
+    })
+
+    it('stores the language chosen in the organisation acted on, even once another is current', async () => {
+      const change = later<void>()
+      const { tenants, asked } = tenantsAnswering(() => change.result)
+      const user = userEvent.setup()
+      const { select } = await openPage(
+        [acme, globex],
+        gatewayWith({ members }),
+        noInvitations,
+        { execute: unavailable },
+        tenants,
+        [{ id: organisationSettingsIdOf('acme') }],
+      )
+
+      await waitFor(() =>
+        expect(
+          screen.getByTestId('organisation.settings.locale-select').hasAttribute('data-disabled'),
+        ).toBe(false),
+      )
+      await user.click(screen.getByTestId('organisation.settings.locale-select'))
+      await user.click(await screen.findByRole('option', { name: 'Español' }))
+      await waitFor(() =>
+        expect(asked).toEqual([`acme ${organisationSettingsCommands.updateLocale.id}`]),
+      )
+
+      act(() => select('globex'))
+
+      await act(async () => {
+        change.done(undefined)
+      })
+
+      expect(asked).toEqual([`acme ${organisationSettingsCommands.updateLocale.id}`])
+    })
+  })
+
   describe('the invitation form', () => {
     it('empties once the invitation is sent', async () => {
       const sent = later<InvitationView>()

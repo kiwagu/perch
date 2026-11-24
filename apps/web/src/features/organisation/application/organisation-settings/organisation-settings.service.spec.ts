@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { BusError } from '@workspace/cqrs'
 import type { Command } from '@workspace/data'
-import { FakeShapeRunner } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { identityIdFactory } from '@workspace/ids'
 import { type Ability, CONTRACT_ROLES, defineAbilityFor } from '@workspace/kernel'
@@ -11,23 +10,24 @@ import { type Ability, CONTRACT_ROLES, defineAbilityFor } from '@workspace/kerne
 import type { CommandsPort } from '../../../../platform/commands.port'
 import type { TenantCommandsPort } from '../../../../platform/tenant-commands.port'
 
-import {
-  type OrganisationSettingsResult,
-  organisationSettingsCommands,
-  organisationSettingsShape,
-} from './organisation-settings.model.gen'
+import { organisationSettingsCommands } from './organisation-settings.model.gen'
 import { OrganisationSettingsService } from './organisation-settings.service'
 import { organisationSettingsIdOf } from './organisation-settings-id'
 
-/** Records the commands it is asked to run, by the organisation they go to, and runs none. */
+/**
+ * Records the commands it is asked to run, by the organisation they go to and the condition each
+ * is admitted under, and runs none.
+ */
 class RecordingTenantCommands implements TenantCommandsPort {
   readonly calls: Array<{ readonly key: string; readonly id: string; readonly params: unknown }> =
     []
+  readonly admissions: Array<() => boolean> = []
 
-  forTenant(key: string): CommandsPort {
+  forTenant(key: string, admitted: () => boolean = () => true): CommandsPort {
     return {
       execute: <Params>(command: Command<Params>, params: Params): ResultAsync<void, BusError> => {
         this.calls.push({ key, id: command.id, params })
+        this.admissions.push(admitted)
 
         return okAsync(undefined)
       },
@@ -37,20 +37,20 @@ class RecordingTenantCommands implements TenantCommandsPort {
 
 const ann = identityIdFactory.create()
 
-let runner: FakeShapeRunner
+let admins: Set<string>
 let tenants: RecordingTenantCommands
 let ability: Ability
 let service: OrganisationSettingsService
 
 beforeEach(() => {
-  runner = new FakeShapeRunner()
+  admins = new Set(['acme'])
   tenants = new RecordingTenantCommands()
   ability = defineAbilityFor({ id: ann, role: CONTRACT_ROLES.admin }, replicaSchema)
   service = new OrganisationSettingsService(
-    runner,
     tenants,
-    { shape: organisationSettingsShape, commands: organisationSettingsCommands },
+    { commands: organisationSettingsCommands },
     () => ability,
+    (key) => admins.has(key),
   )
 })
 
@@ -70,19 +70,6 @@ describe('OrganisationSettingsService', () => {
     expect(organisationSettingsIdOf('acme')).toBe('ost_acme')
   })
 
-  it('watches the one row of the organisation it is asked about', () => {
-    const row: OrganisationSettingsResult = [{ id: organisationSettingsIdOf('acme'), locale: 'es' }]
-    const seen: unknown[] = []
-
-    runner.set(organisationSettingsShape, row)
-    service.watch('acme', (tree) => seen.push(tree))
-
-    expect(seen).toEqual([row])
-    expect(runner.lastParams(organisationSettingsShape)).toEqual({
-      id: organisationSettingsIdOf('acme'),
-    })
-  })
-
   it('sets then removes the language of the organisation acted on, whichever is current', async () => {
     expect((await service.setLanguage('acme', 'es')).isOk()).toBe(true)
     expect((await service.clearLanguage('acme')).isOk()).toBe(true)
@@ -95,6 +82,18 @@ describe('OrganisationSettingsService', () => {
       },
       { key: 'acme', id: organisationSettingsCommands.clearLocale.id, params: { id: 'ost_acme' } },
     ])
+  })
+
+  it('admits each change only while the account is still admin of the organisation acted on', async () => {
+    expect((await service.setLanguage('acme', 'es')).isOk()).toBe(true)
+    expect((await service.clearLanguage('acme')).isOk()).toBe(true)
+
+    expect(tenants.admissions.map((admitted) => admitted())).toEqual([true, true])
+
+    admins.add('globex')
+    admins.delete('acme')
+
+    expect(tenants.admissions.map((admitted) => admitted())).toEqual([false, false])
   })
 
   it("refuses a member's change before any command runs", async () => {

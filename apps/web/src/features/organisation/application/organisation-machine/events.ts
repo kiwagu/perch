@@ -2,6 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 import { assertEvent } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
+import type { Locale } from '@workspace/i18n'
 import type { IdentityId, InvitationId, NoteId } from '@workspace/ids'
 import type { TenantRole } from '@workspace/replica/protocol'
 
@@ -15,6 +16,7 @@ export interface OrganisationErrors {
   readonly notes?: string | undefined
   readonly members?: string | undefined
   readonly received?: string | undefined
+  readonly settings?: string | undefined
 }
 
 export type ErrorPart = keyof OrganisationErrors
@@ -90,6 +92,8 @@ export type OrganisationEvent =
   | { readonly type: 'organisation.sent.revoke-button'; readonly invitation: InvitationId }
   | { readonly type: 'organisation.received.accept-button'; readonly invitation: InvitationId }
   | { readonly type: 'organisation.received.decline-button'; readonly invitation: InvitationId }
+  | { readonly type: 'organisation.settings.locale-select'; readonly locale: Locale }
+  | { readonly type: 'organisation.settings.clear-button' }
 
 /**
  * What the machine asks of its host: a code shown outside the page's own errors, and a field
@@ -124,6 +128,12 @@ export interface OrganisationMachineDeps {
   /** Accepts an invitation for the account: the organisation it is to becomes current. */
   readonly accept: (invitation: InvitationId) => ResultAsync<unknown, BusError>
   readonly decline: (invitation: InvitationId) => ResultAsync<void, BusError>
+  /** Stores the organisation's default language, in the organisation current now. */
+  readonly setDefaultLanguage: (locale: Locale) => ResultAsync<void, BusError>
+  /** Removes the organisation's default language, in the organisation current now. */
+  readonly clearDefaultLanguage: () => ResultAsync<void, BusError>
+  /** Whether the current organisation's settings are on this device. */
+  readonly defaultsHeld: () => boolean
   /** The account signed in now, none once it signed out. */
   readonly account: () => IdentityId | undefined
   /** The key of the organisation current now, none without one. */

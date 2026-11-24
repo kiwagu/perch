@@ -12,10 +12,7 @@ import { TENANT_COMMANDS } from '../../platform/tenant-commands.port'
 
 import { NOTES_SERVICE, NotesService } from './application/notes.service'
 import { ORGANISATION_SERVICE, OrganisationService } from './application/organisation.service'
-import {
-  organisationSettingsCommands,
-  organisationSettingsShape,
-} from './application/organisation-settings/organisation-settings.model.gen'
+import { organisationSettingsCommands } from './application/organisation-settings/organisation-settings.model.gen'
 import {
   ORGANISATION_SETTINGS_SERVICE,
   OrganisationSettingsService,
@@ -49,10 +46,17 @@ export const OrganisationModule = defineModule({
       provide: ORGANISATION_SETTINGS_SERVICE,
       useFactory: (container) =>
         new OrganisationSettingsService(
-          container.get(SHAPE_RUNNER),
           container.get(TENANT_COMMANDS),
-          { shape: organisationSettingsShape, commands: organisationSettingsCommands },
+          { commands: organisationSettingsCommands },
           () => container.get(ORGANISATION_SERVICE).ability(),
+          (key) =>
+            container
+              .get(ORGANISATION_SERVICE)
+              .memberships()
+              .some(
+                (membership) =>
+                  membership.tenant.key === key && membership.role === CONTRACT_ROLES.admin,
+              ),
         ),
     },
     {

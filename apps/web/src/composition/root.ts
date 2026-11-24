@@ -189,7 +189,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
       logger: options.logger,
       events,
     })
-  const tenantCommands: TenantCommandsPort = { forTenant: (key) => commandsFor(key) }
+  const tenantCommands: TenantCommandsPort = { forTenant: commandsFor }
   const organisations = createOrganisations(organisationsApi, session)
   const devices = options.devicesApi(bearer)
   const twoFactor = options.twoFactorApi(bearer)
