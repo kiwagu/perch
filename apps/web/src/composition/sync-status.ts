@@ -71,9 +71,12 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
   // outbox answers only the period it was asked in, and only while it is the latest one asked.
   let period = 0
   let asked = 0
-  // When this tab first asked the leader for a beat it has not heard since: the leader's next
-  // record answers it, however often it is sent again.
-  let askedAt: number | undefined
+  // This tab's first ask for a beat not answered yet: when it asked, and the record it found late
+  // (by its time); a record other than that one answers it, however often the ask is sent again.
+  let pending: { readonly at: number; readonly about: number } | undefined
+  // The time of a record found dated after now, written before the clock was set back: it keeps
+  // no known age, even once the clock has caught up with it, until the leader writes another.
+  let unaged: number | undefined
   let stopped = false
   let cancel = () => {}
   const notify = () => {
@@ -130,28 +133,33 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
   }
   // How long ago the leader wrote its record. One dated after now has no known age, since the
   // clock was set back after it was written: it counts as late and stale alike.
-  const ageOf = (leader: Leader, now: number) => (leader.at <= now ? now - leader.at : Infinity)
-  // A tab that does not lead asks for a beat when the record is late. The first ask not heard
-  // back keeps its time; one dated after now (the clock was set back) starts again.
+  const ageOf = (leader: Leader, now: number) =>
+    leader.at > now || leader.at === unaged ? Infinity : now - leader.at
+  // A tab that does not lead asks for a beat when the record is late. The first ask about a record
+  // keeps its time; one dated after now (the clock was set back) starts again.
   const ask = () => {
     const leader = savedSyncLeader(options.storage)
     const now = options.clock.now()
+
+    if (leader !== undefined && leader.at > now) {
+      unaged = leader.at
+    }
 
     if (leading || leader === undefined || ageOf(leader, now) <= LATE) {
       return
     }
 
-    if (askedAt === undefined || askedAt > now) {
-      askedAt = now
+    if (pending === undefined || pending.about !== leader.at || pending.at > now) {
+      pending = { at: now, about: leader.at }
     }
 
     askSyncLeader(options.storage, now)
   }
-  // A stale record belongs to a leader that went away, unless this tab asked it for a beat less
-  // than a beat ago and its answer may still be on the way. The leading tab is not gone to itself.
+  // A stale record belongs to a leader that went away, unless this tab asked about it less than a
+  // beat ago and the answer may still be on the way. The leading tab is not gone to itself.
   const gone = (leader: Leader) => {
     const now = options.clock.now()
-    const answering = askedAt !== undefined && askedAt <= now && now - askedAt < EVERY
+    const answering = pending !== undefined && pending.at <= now && now - pending.at < EVERY
 
     return !leading && ageOf(leader, now) > STALE && !answering
   }
@@ -175,8 +183,6 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
         beat()
       }
     } else if (key === SYNC_LEADER_KEY || key === undefined) {
-      // The leader wrote, or the record went: no ask of this tab waits for an answer any more.
-      askedAt = undefined
       notify()
     }
   })

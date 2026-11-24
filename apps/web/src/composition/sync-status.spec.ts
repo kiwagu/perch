@@ -106,10 +106,16 @@ function tabsOfOneBrowser() {
     setBack: (ms: number) => {
       shift -= ms
     },
-    /** A signed-in tab with nothing waiting in its outbox, in view unless its timers say otherwise. */
-    tab: (timers: Clock & { readonly visibility?: VisibilitySource } = wall) =>
+    /**
+     * A signed-in tab with nothing waiting in its outbox, in view unless its timers say otherwise;
+     * `view` is its storage, which the test may hand a change late.
+     */
+    tab: (
+      timers: Clock & { readonly visibility?: VisibilitySource } = wall,
+      view: MemoryStorage = storage.tab(),
+    ) =>
       syncStatus({
-        storage: storage.tab(),
+        storage: view,
         clock: timers,
         online: () => true,
         onOnlineChange: () => () => {},
@@ -467,6 +473,27 @@ describe('syncStatus', () => {
       expect(shown.current()).toBe('synced')
     })
 
+    it('keeps saying synced in a tab back into view when the news of the leader’s last beat reaches it after its ask', async () => {
+      const browser = tabsOfOneBrowser()
+      const leader = browser.tab(hiddenTab(browser.wall))
+      const tab = hiddenTab(browser.wall)
+      const view = browser.storage.tab()
+      const shown = browser.tab(tab, view)
+
+      leader.syncState({ leader: true, channel: 'up' })
+      await settle()
+      await browser.pass(5 * 60_000 + 30_000)
+      tab.show()
+      // The storage event of the leader's last beat, told only now: the record is the one asked about.
+      view.changeElsewhere('perch.sync.leader', view.get('perch.sync.leader'))
+
+      expect(shown.current()).toBe('synced')
+
+      await settle()
+
+      expect(shown.current()).toBe('synced')
+    })
+
     it('says synced the moment the leading tab itself comes back into view after minutes hidden', async () => {
       const browser = tabsOfOneBrowser()
       const tab = hiddenTab(browser.wall)
@@ -550,9 +577,20 @@ describe('syncStatus', () => {
       await settle()
       await browser.pass(5_000)
       browser.setBack(60_000)
+
+      // An ask dated after now waits for nothing: the record has no known age.
+      expect(shown.current()).toBe('connecting')
+
       await browser.pass(10_000)
 
       expect(shown.current()).toBe('connecting')
+
+      // Nor once the clock has caught up with the time of that ask.
+      for (let second = 11; second <= 80; second += 1) {
+        await browser.pass(1_000)
+
+        expect(shown.current(), `after ${second} s`).toBe('connecting')
+      }
     })
 
     it('does not take a record written before the clock was set back for a fresh one once its leader stopped answering', async () => {
@@ -565,6 +603,13 @@ describe('syncStatus', () => {
       await browser.pass(10_000)
 
       expect(shown.current()).toBe('connecting')
+
+      // Nor once the clock has caught up with the time the record carries.
+      for (let second = 11; second <= 80; second += 1) {
+        await browser.pass(1_000)
+
+        expect(shown.current(), `after ${second} s`).toBe('connecting')
+      }
     })
   })
 })

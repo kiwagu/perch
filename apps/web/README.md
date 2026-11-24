@@ -358,10 +358,12 @@ modeling stage.
   asks for a beat (`perch.sync.ask`, the time it asked) when it opens, on each of its own two
   seconds and when it comes back into view, and the leading tab answers by writing its record
   and reading its outbox again. In a tab that does not lead, a record older than six seconds
-  belongs to a leader that went away, unless the tab's first ask not answered since was made less
+  belongs to a leader that went away, unless the tab's first ask about that record was made less
   than two seconds ago (a tab that opens or comes back into view is not told "connecting" while
-  its ask is on the way); a record dated after the tab's clock, which was set back since, is of no
-  known age and counts as older. The leading tab's sync channel hears the same network (`browser.ts` hands it to
+  its ask is on the way); a record other than the one asked about answers the ask. A record dated
+  after the tab's clock, which was set back since, is of no known age and counts as older, even
+  once the clock has caught up with it, until the leader writes another; an ask dated after the
+  tab's clock starts again. The leading tab's sync channel hears the same network (`browser.ts` hands it to
   `WebSocketTransport`): once the browser is back online it connects within a second, not after
   its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
   screens' machines and the frame's, from the facts of this browser no account owns, each a key
