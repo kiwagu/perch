@@ -203,7 +203,7 @@ function activityProblems(inActivity: InActivity): Problem[] {
     ...activity.roles.flatMap((role, index) =>
       has(contract.vocabulary.roles, role)
         ? []
-        : [problem(['roles', index], `"${role}" is not a role of the vocabulary`)],
+        : [problem(['roles', index], `"${role}" is not a role of the contract`)],
     ),
     ...Object.entries(activity.data ?? {}).flatMap(([name, { model }]) => {
       const missing = model === undefined ? undefined : fieldProblem(contract.model, model)

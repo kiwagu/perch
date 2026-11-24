@@ -1,4 +1,7 @@
 // scenario: organisation/base/accept-by-link
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, signUp, test, toast } from '../../support/fixtures'
 import { openMailLink } from '../../support/mail-contract'
@@ -56,7 +59,7 @@ test.describe('Accept an invitation by the link of its mail', { tag: '@full' }, 
       //   shows the organisation name, [organisation.invitation.role-badge] carries
       //   [value:member], and [organisation.invitation.accept-button] and
       //   [organisation.invitation.decline-button] show; the page shows no email
-      await expectPathname(deviceB, '/invitation')
+      await expectPathname(deviceB, CONTRACT_ROUTES['organisation.invitation'])
       await expect(deviceB.getByTestId('organisation.invitation.heading')).toHaveText(data.name)
       await expect(deviceB.getByTestId('organisation.invitation.role-badge')).toHaveAttribute(
         'data-value',
@@ -74,7 +77,7 @@ test.describe('Accept an invitation by the link of its mail', { tag: '@full' }, 
       //   [organisation.page.role-badge] carries [value:member]
       await Promise.all([
         expect(toast(deviceB, 'invitation-accepted')).toBeVisible(),
-        expectPathname(deviceB, '/org', 10_000),
+        expectPathname(deviceB, CONTRACT_ROUTES.organisation, 10_000),
       ])
       await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name)
       await expect(deviceB.getByTestId('organisation.page.role-badge')).toHaveAttribute(

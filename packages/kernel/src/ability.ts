@@ -6,7 +6,9 @@
  * whoever holds the region reads all of it.
  */
 
-export const TENANT_ROLES = ['member', 'admin'] as const
+import { CONTRACT_ROLES } from './contract-terms.gen'
+
+export const TENANT_ROLES = [CONTRACT_ROLES.member, CONTRACT_ROLES.admin] as const
 
 export type TenantRole = (typeof TENANT_ROLES)[number]
 
@@ -14,7 +16,7 @@ export type TenantRole = (typeof TENANT_ROLES)[number]
  * The roles an account holds on the platform itself, apart from its role in any organisation:
  * `operator` runs the platform's console of accounts. An account holds none unless it is given one.
  */
-export const PLATFORM_ROLES = ['operator'] as const
+export const PLATFORM_ROLES = [CONTRACT_ROLES.operator] as const
 
 export type PlatformRole = (typeof PLATFORM_ROLES)[number]
 

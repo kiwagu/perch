@@ -2,6 +2,8 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
@@ -32,8 +34,8 @@ describe('ConfirmEmailView', () => {
   })
 
   it.each([
-    ['profile', 'user.confirm-email.profile-link', '/me'],
-    ['sign-in', 'user.confirm-email.sign-in-link', '/sign-in'],
+    ['profile', 'user.confirm-email.profile-link', CONTRACT_ROUTES['user.profile']],
+    ['sign-in', 'user.confirm-email.sign-in-link', CONTRACT_ROUTES['user.sign-in']],
   ] as const)('says the email is the new one, leading to the %s', (_onward, link, to) => {
     renderView({ message: 'email-changed', renders: only(link) })
 

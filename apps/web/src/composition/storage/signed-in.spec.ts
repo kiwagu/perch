@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { accountStartKeyOf, keptAccountStart } from './account-start'
@@ -23,7 +24,7 @@ import {
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const ann = {
@@ -114,7 +115,7 @@ describe('the signed-in device', () => {
     const session = save(storage, ann)
 
     saveTenant(storage, session.signIn, 'acme')
-    saveRoles(storage, session, ['operator'])
+    saveRoles(storage, session, [CONTRACT_ROLES.operator])
     saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', session)
     keptAccountStart(storage).keep(session.signIn, {
       identity: ann.identity.id,
@@ -143,12 +144,12 @@ describe('the signed-in device', () => {
     const earlier = save(storage, ann)
     const current = save(storage, { ...ann, token: 'token-2' })
 
-    saveRoles(storage, current, ['operator'])
+    saveRoles(storage, current, [CONTRACT_ROLES.operator])
     forgetSignIn(storage, earlier.signIn)
 
     expect(savedSession(storage)).toEqual(current)
     expect(savedMemberships(storage, current)).toEqual([acme])
-    expect(savedRoles(storage, current)).toEqual(['operator'])
+    expect(savedRoles(storage, current)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it("lets an account's next sign-in replace its earlier one: what the earlier kept goes once the pointer moved", () => {

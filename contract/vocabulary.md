@@ -1,12 +1,11 @@
 # Vocabulary
 
-Contract version: 1
-
 The closed lists of the UI contract. Every kind, suffix, attribute, state, code, choice
-value, role and screen name that the screen files (`contract/domain/screens/`) and the platform
+value and screen name that the screen files (`contract/domain/screens/`) and the platform
 file (`contract/domain/platform.yaml`) use is listed here once; the anchors themselves are declared
-in the screen files. A name that is not here is a problem of the contract, not a new word:
-a new word is added to its table in the same change that first uses it.
+in the screen files, and the roles in `contract/domain/terms.yaml`. A name of these lists that is
+not here is a problem of the contract, not a new word: a new word is added to its table in the
+same change that first uses it.
 
 ## Grammar
 
@@ -124,7 +123,7 @@ state of one anchor, never a second anchor.
 | Attribute | On | Meaning |
 |---|---|---|
 | `data-testid` | the element | the anchor of the element |
-| `data-id` | an `item` or `row` | the id of the entity the entry shows (a note, a member's identity, a device session) |
+| `data-id` | an `item` or `row` | the id of the entity the entry shows (a note, a member's account; a device by its latest session) |
 | `data-value` | an `option`, a `badge`, a `button` that switches a mode, a `visibility-button` | the stable key of a choice that is not an entity, one of the rows of "Choice values"; on a `visibility-button`, `show` or `hide`, the values of its suffix; on an option of a paged list's `size-select`, the page size it chooses |
 | `data-state` | a `status`, a `list`, a `section`, an `item`, an `input`, a `textarea`, a `select` | an app, container, row or field state from the tables below |
 | `data-code` | a `message`, `error`, `toast` or `dialog` | the stable code of what the element says, which tests assert instead of the wording |
@@ -185,7 +184,9 @@ bound to a model field can carry `saved`.
 ## Codes
 
 The `data-code` values. Each code is used by at least one anchor of the screen files, and a
-dialog's code names what it asks (`unsent-changes`), not the answer.
+dialog's code names what it asks (`unsent-changes`), not the answer. The meaning says what the
+code tells the user; when an action answers with it is the action's condition in
+`domain/platform.yaml`, and a rule several actions keep is the invariant it refuses for there.
 
 | Code | Where | Meaning |
 |---|---|---|
@@ -211,7 +212,13 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `verified-before` | `user.verify-email.message`, `console.account.verification.error` | the link's email was verified before; the account signs in on the sign-in page; for an operator's resend, the email is verified already, so no mail is sent |
 | `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error`, `organisation.invitation.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account or its organisation is gone, the account changed since the mail was sent, or the invitation was declined or revoked) |
 | `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error`, `organisation.invitation.error` | the link is too old: a verification or confirmation link after a day, a reset or deletion link after an hour, an invitation's after seven days; a new one is asked for |
-| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error` | the email or the password is wrong |
+| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.deletion.error` | the email or the password is wrong, a password longer or shorter than its value allows included |
+| `invalid-code` | `user.settings.two-factor.error`, `user.sign-in.code.error` | the code is not one the authenticator app shows now for the account's key, nor a backup code of the account not used yet |
+| `code-required` | `user.sign-in.code.dialog` | the dialog asks for a code of the account's authenticator app, or one of its backup codes, since its second factor is on: the right password alone signs nothing in |
+| `code-expired` | `user.sign-in.error` | the sign-in waited about ten minutes for its code, took five wrong ones, or the account's password or email changed meanwhile, so it starts again from the password |
+| `passkey-cancelled` | `user.sign-in.error`, `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing was signed in or added |
+| `passkey-unknown` | `user.sign-in.error` | the passkey picked is no account's here: removed from its account, or never added to one |
+| `two-factor-changed` | `user.settings.two-factor.error` | the second factor changed meanwhile from elsewhere: turned on or off, or its key replaced, so nothing changed here; the section shows it as it is now |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error`, `organisation.invite.error`, `console.account.email.error` | the email typed is not an email |
@@ -221,24 +228,24 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `invitation-gone` | `organisation.invitation.error`, `organisation.received.error` | the invitation was revoked, replaced by a newer one, accepted, declined or expired meanwhile |
 | `account-deleted` | `user.delete-account.message` | the account is gone for good, with its data, and every device of it is signed out; its email can sign up again |
 | `passwords-differ` | `user.sign-in.error`, `user.reset-password.error`, `user.settings.password.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
-| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invitation.error`, `console.account.email.error`, `console.account.reset.error`, `console.account.verification.error` | too many attempts were made, so the user waits and tries again |
+| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invitation.error`, `console.account.email.error`, `console.account.reset.error`, `console.account.verification.error` | too many attempts were made, so the user waits and tries again |
 | `other-account` | `user.sign-in.error`, `user.verify-email.error`, `organisation.invitation.error`, `organisation.received.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is empty |
-| `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than 80 characters |
-| `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
+| `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than its value allows |
+| `bio-too-long` | `user.profile.error` | the bio is longer than its value allows |
+| `failed` | `user.sign-in.error`, `user.sign-in.code.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.passkeys.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
-| `not-admin` | `organisation.invite.error` | only an administrator of the organisation may do this |
-| `not-operator` | `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | only an operator of the platform may do this; an account without the role gets not-found at the console, so the code shows only when the role was taken away while the console was open |
-| `own-account` | `console.account.ban.error`, `console.account.sessions.error`, `console.account.removal.error` | the account is the operator's own, so the console refuses to ban it, sign it out everywhere or remove it; its own devices page signs it out everywhere and its own settings delete it |
-| `account-gone` | `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the account was removed meanwhile, so there is nothing to show or to act on |
+| `not-admin` | `organisation.invite.error` | the account is not, or no longer, an admin of the organisation |
+| `not-operator` | `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the account is not, or no longer, an operator; one without the role gets not-found at the console, so the code shows only when the role went while the console was open |
+| `own-account` | `console.account.ban.error`, `console.account.sessions.error`, `console.account.removal.error` | the account is the operator's own: its own devices page signs it out everywhere and its own settings delete it |
+| `account-gone` | `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the account was removed meanwhile, or never existed, so there is nothing to show or to act on |
 | `email-taken` | `console.account.email.error` | the new email has an account already |
-| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error`, `console.account.removal.error` | the account is the only administrator of an organisation: it cannot be made a member until another member is made an administrator, nor deleted or removed while the organisation has other members until one of them is made an administrator or they are removed; the organisation page shows them |
-| `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
+| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error`, `console.account.removal.error` | the account is an organisation's only admin: another member must be made one first, or, to delete or remove it, the others must leave or be removed; the organisation page shows them |
+| `forbidden` | `organisation.notes.error` | only the author of a note or an admin may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
-| `text-too-long` | `organisation.notes.error` | the note is longer than 500 characters |
+| `text-too-long` | `organisation.notes.error` | the note is longer than its value allows |
 | `no-notes` | `organisation.notes.empty-message` | the organisation has no notes yet |
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
@@ -276,16 +283,16 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
 | `organisation.page.role-badge` | `member` | the signed-in member is a plain member of the organisation |
-| `organisation.invitation.role-badge` | `admin` | the invitation makes the account an administrator of the organisation |
+| `organisation.invitation.role-badge` | `admin` | the invitation makes the account an admin of the organisation |
 | `organisation.invitation.role-badge` | `member` | the invitation makes the account a plain member of the organisation |
 | `organisation.invite.role-select.option` | `member` | the option invites the account as a plain member |
-| `organisation.invite.role-select.option` | `admin` | the option invites the account as an administrator |
+| `organisation.invite.role-select.option` | `admin` | the option invites the account as an admin |
 | `organisation.members.role-select.option` | `member` | the option makes the member a plain member |
-| `organisation.members.role-select.option` | `admin` | the option makes the member an administrator |
+| `organisation.members.role-select.option` | `admin` | the option makes the member an admin |
 | `organisation.sent.role-badge` | `member` | the invitation makes the account a plain member |
-| `organisation.sent.role-badge` | `admin` | the invitation makes the account an administrator |
+| `organisation.sent.role-badge` | `admin` | the invitation makes the account an admin |
 | `organisation.received.role-badge` | `member` | the invitation makes the account a plain member |
-| `organisation.received.role-badge` | `admin` | the invitation makes the account an administrator |
+| `organisation.received.role-badge` | `admin` | the invitation makes the account an admin |
 | `console.account.organisations.role-badge` | `admin` | the account administers the organisation |
 | `console.account.organisations.role-badge` | `member` | the account is a plain member of the organisation |
 | `organisation.page.current-select.option` | `^[a-z][a-z0-9_]{1,31}$` | the option selects the organisation with this key (a pattern that every organisation key matches) |
@@ -304,24 +311,14 @@ screen name of its own.
 | `user.reset-password` | the page the link of a password reset mail opens, which sets a new password (`/reset-password`) |
 | `user.confirm-email` | the page the link of an email confirmation mail opens, which changes the account's email (`/confirm-email`) |
 | `user.profile` | the signed-in account's own profile (`/me`) |
-| `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an administrator (`/org`) |
+| `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an admin (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | the settings of the signed-in account: the theme, the language, the password and the email, and the deletion of the account (`/settings`) |
+| `user.settings` | where the signed-in account sets how it looks and speaks, guards and changes how it signs in, and asks to be deleted (`/settings`) |
 | `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press (`/delete-account`) |
 | `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it (`/invitation`) |
 | `console.users` | the accounts of the platform, for an operator: a page at a time, found by a part of their name or email (`/console/users`) |
 | `console.account` | one account of the platform, for an operator: what it is, its organisations, and the actions on it (`/console/account`) |
-
-## Roles
-
-| Role | Meaning |
-|---|---|
-| `guest` | nobody is signed in on the device; for the frame also a device whose saved account is not open: while the app starts, when its start or its data fails, and while it signs out from there |
-| `identity` | an account is signed in, with or without organisations |
-| `member` | the signed-in account is a member of the current organisation |
-| `admin` | the signed-in account administers the current organisation |
-| `operator` | the signed-in account operates the platform: it sees every account from the console and acts on it |
 
 ## Reserved anchors
 
@@ -347,11 +344,11 @@ included.
 | `app-shell.crash-message` | the message in the place of a screen that failed to render, which carries `data-code` and renders no derived anchor |
 | `app-shell.reload-button` | the button that loads the page again, shown with `app-shell.crash-message`, which renders no derived anchor |
 | `app-shell.update-message` | the message that the page should load again, a newer version served or the sync protocol refused, which carries `data-code` and renders no derived anchor |
-| `app-shell.update-button` | the button that loads the page again on the version the server serves, shown with `app-shell.update-message`, which renders no derived anchor |
+| `app-shell.update-button` | the button that loads the page again on the version the server serves, which renders no derived anchor |
 | `app-shell.sync-message` | the state of this device's sync for a signed-in account, the same in every tab, which carries `data-code` and renders no derived anchor |
 | `app-shell.install-message` | the reminder to install the app until it is installed, which carries `data-code` and renders no derived anchor |
-| `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
-| `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
+| `app-shell.install-button` | the button that asks the browser to install the app, which renders no derived anchor |
+| `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |
 
 ## Composites

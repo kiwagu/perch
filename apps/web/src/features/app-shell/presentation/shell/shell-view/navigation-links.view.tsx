@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
 
 import { type Translate, useT } from '@workspace/i18n'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { navItemVariants } from '@workspace/ui/components/platform/nav-item'
 import { admits } from '@workspace/ui-contract/anchors'
 
@@ -26,33 +27,33 @@ export interface NavigationLink {
 /** The links of the navigation, in order; `navigation-links-contract.spec.ts` holds them to the frame's. */
 export const NAVIGATION_LINKS: readonly NavigationLink[] = [
   {
-    to: '/me',
+    to: CONTRACT_ROUTES['user.profile'],
     testId: 'app-shell.nav.profile-link',
-    roles: ['identity', 'member', 'admin'],
+    roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
     label: (t) => t('app.shell.nav.profile'),
   },
   {
-    to: '/org',
+    to: CONTRACT_ROUTES.organisation,
     testId: 'app-shell.nav.organisation-link',
-    roles: ['identity', 'member', 'admin'],
+    roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
     label: (t) => t('app.shell.nav.organisation'),
   },
   {
-    to: '/devices',
+    to: CONTRACT_ROUTES.device,
     testId: 'app-shell.nav.devices-link',
-    roles: ['identity', 'member', 'admin'],
+    roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
     label: (t) => t('app.shell.nav.devices'),
   },
   {
-    to: '/settings',
+    to: CONTRACT_ROUTES['user.settings'],
     testId: 'app-shell.nav.settings-link',
-    roles: ['identity', 'member', 'admin'],
+    roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
     label: (t) => t('app.shell.nav.settings'),
   },
   {
-    to: '/console/users',
+    to: CONTRACT_ROUTES['console.users'],
     testId: 'app-shell.nav.console-link',
-    roles: ['operator'],
+    roles: [CONTRACT_ROLES.operator],
     label: (t) => t('app.shell.nav.console'),
   },
 ]

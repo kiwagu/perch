@@ -1,4 +1,7 @@
 // scenario: user/flows/change-email-two-devices
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { askToChangeEmail, openChangeEmailMail } from '../../support/email-change'
 import {
@@ -43,7 +46,7 @@ test.describe('Change the email while another device is signed in', { tag: '@ful
       })
 
     await test.step('3. On device A, open [/settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], click [user.settings.email.send-button], and open the link of [mail:change-email]', async () => {
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await askToChangeEmail(page, data.newEmail, data.password)
       await openChangeEmailMail(page, data)
@@ -75,7 +78,7 @@ test.describe('Change the email while another device is signed in', { tag: '@ful
       // Expected: After step 5 [app-shell.notice-message] carries [code:welcome] on device B and
       //   its URL is [/me]
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

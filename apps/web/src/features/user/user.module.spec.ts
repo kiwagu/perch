@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SHAPE_RUNNER } from '@workspace/data'
 import { Container } from '@workspace/di'
 import { profileIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { openTestSession, type TestSession } from '../../composition/__fixtures__/session'
 import type { SessionService } from '../../composition/session'
@@ -95,54 +96,60 @@ describe('UserModule', () => {
         search: route.search === undefined ? undefined : Object.keys(route.search.shape),
       })),
     ).toEqual([
-      { path: '/sign-in', page: 'SignInPage', guard: 'guest', roles: ['guest'], search: ['email'] },
       {
-        path: '/verify-email',
-        page: 'VerifyEmailPage',
+        path: CONTRACT_ROUTES['user.sign-in'],
+        page: 'SignInPage',
         guard: 'guest',
-        roles: ['guest'],
-        search: ['token'],
-      },
-      {
-        path: '/forgot-password',
-        page: 'ForgotPasswordPage',
-        guard: 'guest',
-        roles: ['guest'],
+        roles: [CONTRACT_ROLES.guest],
         search: ['email'],
       },
       {
-        path: '/reset-password',
+        path: CONTRACT_ROUTES['user.verify-email'],
+        page: 'VerifyEmailPage',
+        guard: 'guest',
+        roles: [CONTRACT_ROLES.guest],
+        search: ['token'],
+      },
+      {
+        path: CONTRACT_ROUTES['user.forgot-password'],
+        page: 'ForgotPasswordPage',
+        guard: 'guest',
+        roles: [CONTRACT_ROLES.guest],
+        search: ['email'],
+      },
+      {
+        path: CONTRACT_ROUTES['user.reset-password'],
         page: 'ResetPasswordPage',
         guard: undefined,
-        roles: ['guest', 'identity'],
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: ['token'],
       },
       {
-        path: '/confirm-email',
+        path: CONTRACT_ROUTES['user.confirm-email'],
         page: 'ConfirmEmailPage',
         guard: undefined,
-        roles: ['guest', 'identity'],
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: ['token'],
       },
       {
-        path: '/delete-account',
+        path: CONTRACT_ROUTES['user.delete-account'],
         page: 'DeleteAccountPage',
         guard: undefined,
-        roles: ['guest', 'identity'],
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: ['token'],
       },
       {
-        path: '/me',
+        path: CONTRACT_ROUTES['user.profile'],
         page: 'ProfilePage',
         guard: 'authenticated',
-        roles: ['identity'],
+        roles: [CONTRACT_ROLES.identity],
         search: undefined,
       },
       {
-        path: '/settings',
+        path: CONTRACT_ROUTES['user.settings'],
         page: 'SettingsPage',
         guard: 'authenticated',
-        roles: ['identity'],
+        roles: [CONTRACT_ROLES.identity],
         search: undefined,
       },
     ])

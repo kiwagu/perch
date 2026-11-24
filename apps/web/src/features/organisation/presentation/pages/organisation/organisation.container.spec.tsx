@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory, invitationIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import {
   gatewayWith,
@@ -20,6 +21,7 @@ import {
 import { fakeServices } from '../../../../../platform/__fixtures__/session'
 import { englishCatalog } from '../../../../../platform/catalogs'
 import { CLIPBOARD } from '../../../../../platform/clipboard.port'
+import type { CommandsPort } from '../../../../../platform/commands.port'
 import type { InvitationsPort, ReceivedInvitation } from '../../../../../platform/invitations.port'
 import { defineModule } from '../../../../../platform/module'
 import type {
@@ -42,34 +44,38 @@ import { organisationCommands, organisationShape } from './organisation.model.ge
 const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
 const bea = { id: identityIdFactory.create(), email: 'bea@example.test' }
 
-const annAdmin: MemberView = { identity: ann, role: 'admin' }
-const beaMember: MemberView = { identity: bea, role: 'member' }
+const annAdmin: MemberView = { identity: ann, role: CONTRACT_ROLES.admin }
+const beaMember: MemberView = { identity: bea, role: CONTRACT_ROLES.member }
 
 const sentToBea: InvitationView = {
   id: invitationIdFactory.create(),
   email: bea.email,
-  role: 'member',
+  role: CONTRACT_ROLES.member,
   link: 'https://perch.example.test/invitation?token=t',
 }
 
-const acme = membership('acme', 'Acme', 'admin')
-const globex = membership('globex', 'Globex', 'admin')
+type Membership = ReturnType<typeof membership>
+
+const acme = membership('acme', 'Acme', CONTRACT_ROLES.admin)
+const globex = membership('globex', 'Globex', CONTRACT_ROLES.admin)
 
 const fromInitech: ReceivedInvitation = {
   id: invitationIdFactory.create(),
   organisation: { name: 'Initech' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /**
  * The organisation page of `ann`, a member of `memberships` (the first is current), over
- * `gateway` and the invitations to her (`invitations`). `select` makes another organisation
- * current without the page choosing it.
+ * `gateway`, the invitations to her (`invitations`) and the commands that write her notes
+ * (`commands`, none that works by default). `select` makes another organisation current
+ * without the page choosing it.
  */
 async function openPage(
   memberships: Parameters<typeof sessionIn>[1],
   gateway: OrganisationsPort,
   invitations: InvitationsPort = noInvitations,
+  commands: CommandsPort = { execute: unavailable },
 ) {
   const { session, select } = sessionIn(ann, memberships)
   const organisations = new OrganisationService(session, gateway, invitations, replicaSchema)
@@ -82,7 +88,7 @@ async function openPage(
       () =>
         new NotesService(
           services.runner,
-          { execute: unavailable },
+          commands,
           { shape: organisationShape, commands: organisationCommands },
           () => organisations.ability(),
         ),
@@ -94,10 +100,10 @@ async function openPage(
     declarations: { Organisation: OrganisationContainer },
     routes: [
       {
-        path: '/org',
+        path: CONTRACT_ROUTES.organisation,
         page: 'Organisation',
         guard: 'authenticated',
-        roles: ['identity', 'member', 'admin'],
+        roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
       },
     ],
   })
@@ -105,7 +111,7 @@ async function openPage(
     modules: [TestModule],
     session,
     layout: () => <Outlet />,
-    history: createMemoryHistory({ initialEntries: ['/org'] }),
+    history: createMemoryHistory({ initialEntries: [CONTRACT_ROUTES.organisation] }),
   })
 
   render(
@@ -159,7 +165,9 @@ describe('OrganisationContainer', () => {
       await openPage([acme], gatewayWith({ invite }))
       type('organisation.invite.email-input', 'bea@example.test')
       fireEvent.click(screen.getByTestId('organisation.invite.submit-button'))
-      await waitFor(() => expect(invite).toHaveBeenCalledWith('acme', 'bea@example.test', 'member'))
+      await waitFor(() =>
+        expect(invite).toHaveBeenCalledWith('acme', 'bea@example.test', CONTRACT_ROLES.member),
+      )
 
       expect(field('organisation.invite.email-input').value).toBe('bea@example.test')
 
@@ -179,7 +187,7 @@ describe('OrganisationContainer', () => {
       type('organisation.invite.email-input', 'late@example.test')
       fireEvent.click(screen.getByTestId('organisation.invite.submit-button'))
       await waitFor(() =>
-        expect(invite).toHaveBeenCalledWith('acme', 'late@example.test', 'member'),
+        expect(invite).toHaveBeenCalledWith('acme', 'late@example.test', CONTRACT_ROLES.member),
       )
 
       // The membership in Acme goes away on another device, which makes Globex current here.
@@ -197,6 +205,82 @@ describe('OrganisationContainer', () => {
     })
   })
 
+  describe('the new note form', () => {
+    it('empties once the note is written', async () => {
+      const written = later<void>()
+      const execute = vi.fn(() => written.result)
+
+      await openPage([acme], gatewayWith({}), noInvitations, { execute })
+      type('organisation.notes.new-textarea', 'Plans')
+      fireEvent.click(screen.getByTestId('organisation.notes.add-button'))
+      await waitFor(() => expect(execute).toHaveBeenCalled())
+
+      expect(field('organisation.notes.new-textarea').value).toBe('Plans')
+
+      await act(async () => {
+        written.done(undefined)
+      })
+
+      await waitFor(() => expect(field('organisation.notes.new-textarea').value).toBe(''))
+    })
+
+    it('keeps what was typed when the note is refused', async () => {
+      const written = later<void>()
+
+      await openPage([acme], gatewayWith({}), noInvitations, { execute: () => written.result })
+      type('organisation.notes.new-textarea', 'Plans')
+      fireEvent.click(screen.getByTestId('organisation.notes.add-button'))
+      await act(async () => {
+        written.refuse('failed')
+      })
+
+      await screen.findByTestId('organisation.notes.error')
+
+      expect(field('organisation.notes.new-textarea').value).toBe('Plans')
+    })
+  })
+
+  describe('the create form', () => {
+    it('empties once the organisation is created, which is current by then', async () => {
+      const created = later<Membership>()
+      const create = vi.fn(() => created.result)
+
+      await openPage([acme], gatewayWith({ create }))
+      fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
+      type('organisation.create.key-input', 'acme')
+      type('organisation.create.name-input', 'Acme')
+      fireEvent.click(screen.getByTestId('organisation.create.submit-button'))
+      await waitFor(() => expect(create).toHaveBeenCalledWith({ key: 'acme', name: 'Acme' }))
+
+      expect(field('organisation.create.key-input').value).toBe('acme')
+
+      await act(async () => {
+        created.done(acme)
+      })
+
+      await waitFor(() => expect(field('organisation.create.key-input').value).toBe(''))
+      expect(field('organisation.create.name-input').value).toBe('')
+    })
+
+    it('keeps what was typed when the creation is refused', async () => {
+      const created = later<Membership>()
+
+      await openPage([acme], gatewayWith({ create: () => created.result }))
+      fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
+      type('organisation.create.key-input', 'acme')
+      type('organisation.create.name-input', 'Acme')
+      fireEvent.click(screen.getByTestId('organisation.create.submit-button'))
+      await act(async () => {
+        created.refuse('key-taken')
+      })
+
+      await screen.findByTestId('organisation.create.error')
+
+      expect(field('organisation.create.key-input').value).toBe('acme')
+      expect(field('organisation.create.name-input').value).toBe('Acme')
+    })
+  })
+
   describe("a member's role select", () => {
     it('shows the role being set only in the organisation the change runs in', async () => {
       const change = later<void>()
@@ -205,22 +289,24 @@ describe('OrganisationContainer', () => {
       const { select } = await openPage([acme, globex], gatewayWith({ members, setRole }))
 
       await makeAdmin(beaMember)
-      await waitFor(() => expect(setRole).toHaveBeenCalledWith('acme', bea.id, 'admin'))
+      await waitFor(() =>
+        expect(setRole).toHaveBeenCalledWith('acme', bea.id, CONTRACT_ROLES.admin),
+      )
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       // The membership in Acme goes away on another device, which makes Globex current here;
       // bea is a member there too, and nobody changed her role in it.
       act(() => select('globex'))
       await waitFor(() => expect(members).toHaveBeenCalledWith('globex'))
 
-      expect(await roleOf(beaMember)).toBe('member')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member)
 
       await act(async () => {
         change.done(undefined)
       })
 
-      expect(await roleOf(beaMember)).toBe('member')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member)
     })
 
     it('keeps the role just set until the members read after the change settle', async () => {
@@ -231,20 +317,22 @@ describe('OrganisationContainer', () => {
 
       await openPage([acme], gatewayWith({ members, setRole }))
 
-      expect(await roleOf(beaMember)).toBe('member')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member)
 
       await makeAdmin(beaMember)
-      await waitFor(() => expect(setRole).toHaveBeenCalledWith('acme', bea.id, 'admin'))
+      await waitFor(() =>
+        expect(setRole).toHaveBeenCalledWith('acme', bea.id, CONTRACT_ROLES.admin),
+      )
       // The members are read again once the change is done; that read has not come yet.
       await waitFor(() => expect(members).toHaveBeenCalledTimes(2))
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       await act(async () => {
-        reread.done([annAdmin, { ...beaMember, role: 'admin' }])
+        reread.done([annAdmin, { ...beaMember, role: CONTRACT_ROLES.admin }])
       })
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
     })
 
     it('shows what the members read after the change lists once it settled', async () => {
@@ -256,14 +344,14 @@ describe('OrganisationContainer', () => {
       await makeAdmin(beaMember)
       await waitFor(() => expect(members).toHaveBeenCalledTimes(2))
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       // Another administrator put the member back meanwhile: the list is what the select shows.
       await act(async () => {
         reread.done([annAdmin, beaMember])
       })
 
-      await waitFor(async () => expect(await roleOf(beaMember)).toBe('member'))
+      await waitFor(async () => expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member))
     })
 
     it('shows the role the member keeps when the change is refused', async () => {
@@ -277,13 +365,13 @@ describe('OrganisationContainer', () => {
       await makeAdmin(beaMember)
       await waitFor(() => expect(setRole).toHaveBeenCalled())
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       await act(async () => {
         change.refuse('not-admin')
       })
 
-      await waitFor(async () => expect(await roleOf(beaMember)).toBe('member'))
+      await waitFor(async () => expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member))
       expect(screen.getByTestId('organisation.invite.error').getAttribute('data-code')).toBe(
         'not-admin',
       )

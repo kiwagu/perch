@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import {
   NOT_HTTP_LINKS,
   rootLanguage,
@@ -26,7 +28,7 @@ const written = (
   renderInvitationMail({
     to: ADDRESS,
     organisation: 'Acme Robotics',
-    role: 'member',
+    role: CONTRACT_ROLES.member,
     link: LINK,
     locale: 'en',
     ...overrides,

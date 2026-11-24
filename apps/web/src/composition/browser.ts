@@ -27,6 +27,8 @@ import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { invitationsApi } from './invitations-api'
 import { organisationsApi } from './organisations-api'
+import { browserPasskeyCeremony } from './passkey-ceremony'
+import { passkeysApi } from './passkeys-api'
 import { type AppStart, type BootFailure, createAppRoot } from './root'
 import { servedBuild } from './served-build'
 import type { VisibilitySource } from './session'
@@ -34,6 +36,7 @@ import { siteStorage } from './site-storage'
 import { spaceCode } from './space-code'
 import { browserStorage } from './storage'
 import { syncTransport } from './sync-transport'
+import { twoFactorApi } from './two-factor-api'
 import build from 'virtual:perch-build'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
@@ -165,6 +168,9 @@ export function bootBrowser(
       organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
       devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
       invitationsApi: (deps) => invitationsApi(`${origin}/backend`, deps),
+      twoFactorApi: (deps) => twoFactorApi(`${origin}/backend`, deps),
+      passkeysApi: (deps) => passkeysApi(`${origin}/backend`, deps, browserPasskeyCeremony),
+      passkeyCeremony: browserPasskeyCeremony,
       accountsApi: (deps) => accountsApi(`${origin}/backend`, deps),
       // Undefined in a page that is not a secure context: a copy then fails and says so.
       clipboard: browserClipboard(navigator.clipboard),

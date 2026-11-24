@@ -36,12 +36,39 @@ modeling stage.
   `X-Perch-Device` and `X-Perch-Device-Label`; the device keeps the raw session token of the
   answer's body, never the signed one of its `set-auth-token` header; a 401 is
   `data:INVALID_CREDENTIALS`, a 403 `data:ACCOUNT_BANNED` when its body names `account-banned` and
-  else `data:EMAIL_NOT_VERIFIED`, a 409 `data:DEVICE_LIMIT` (the
+  else `data:EMAIL_NOT_VERIFIED`, a 409 the outcome `device-limit` (the
   account is signed in on as many devices as it may be: nothing is signed in, and the sign-in page
   asks before it signs in all the same with `signOutOldest`, which signs out the account's device
   seen least recently), a 429 `data:RATE_LIMITED`, and the
   sign-in page says to wait; an unreachable gateway is `data:OFFLINE`, keeping nothing of what the
-  request carried).
+  request carried). `SessionPort.signIn` answers one of three outcomes: `signed-in` with the user,
+  `code-required` with the challenge and the email typed (the account's second factor is on: the
+  gateway answered `200 { secondFactor: { challenge } }` and signed nothing in, no device in or
+  out), or `device-limit`. The code step is `SessionPort.confirmSignIn(step, code, signOutOldest)`,
+  the gateway's own `POST /backend/auth/confirm-sign-in` with the challenge, the email, the code
+  and the device's headers: the same three-outcome union (`device-limit` signs nothing in, and its
+  confirmation signs in again from the password), a wrong code `data:INVALID_CODE`, a challenge
+  that is dead `data:CODE_EXPIRED` (the sign-in starts again from the password), a 403
+  `data:ACCOUNT_BANNED`, a 429 `data:RATE_LIMITED`. A passkey signs in with
+  `SessionPort.signInWithPasskey(signOutOldestFor?)`: the gateway's `POST /backend/auth/passkey-options`
+  (options and challenge, no session), the browser's window (`composition/passkey-ceremony.ts`,
+  `@simplewebauthn/browser` over `navigator.credentials`, loaded by a dynamic import at the press
+  of a passkey control and never with the first frame: a window closed, declined or timed out
+  is `data:PASSKEY_CANCELLED`, any other refusal, a library that cannot load included,
+  `data:AUTH_FAILED`), then `POST /backend/auth/sign-in/passkey`
+  with the assertion and the challenge (a passkey no account holds is `data:PASSKEY_UNKNOWN`; the
+  limit of devices answers `device-limit` with `consentFor`, the account it asked about, which the
+  retry names as `signOutOldestFor`). Every call that can sign a device in (the password, the code
+  step, the assertion) runs inside the browser's sign-in lock right after the check that no other
+  account is saved (`data:OTHER_ACCOUNT` before the gateway is asked: for the code step, an account
+  other than the email typed; for a passkey, any saved account); the browser's passkey window
+  runs before the lock, so it never holds another tab's sign-in up: a passkey sign-in checks
+  before the options are asked for, again once they arrived and before the window opens, and again
+  in the lock before the assertion is sent. The gateway's answers are recognised by their status
+  and code (`401 INVALID_EMAIL_OR_PASSWORD`, `403 EMAIL_NOT_VERIFIED` or `account-banned`,
+  `409 device-limit`, `429 rate-limited`; the code step's `400 invalid-code` and `401 code-expired`;
+  the passkey's `401 passkey-unknown` and a `409` that names the account): any other answer, a 403
+  of Better Auth's origin check included, is `data:AUTH_FAILED` naming its status.
   A verification link's token signs the device in the same way the first time it is exchanged
   (`SessionService.verifyEmail`, the gateway's own `POST /backend/auth/verify-email` with
   `{ token }` and the device's headers, its answer read through a zod schema): in the same lock,
@@ -210,7 +237,13 @@ modeling stage.
   adopted, so the service selects the organisation then; a 410 is read as a refusal code like a 409). `devicesApi` is the `DEVICES` port over
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
-  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. `accountsApi` is the `ACCOUNTS`
+  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. `twoFactorApi` is the `TWO_FACTOR`
+  port over `GET /two-factor` (`{ enabled }`), `POST /two-factor/enable`, `/confirm`, `/disable` and
+  `/renew-codes` (a wrong password is `data:INVALID_CREDENTIALS`, a wrong code `data:INVALID_CODE`,
+  a key or a factor that changed meanwhile `data:TWO_FACTOR_CHANGED`, a request to wait
+  `data:RATE_LIMITED`, any other refusal `data:WRITE_REJECTED` with the gateway's code). `passkeysApi`
+  is the `PASSKEYS` port over `GET /passkeys`, `POST /passkeys/options` plus the browser's window
+  plus `POST /passkeys` (`add`) and `DELETE /passkeys/:id`. `accountsApi` is the `ACCOUNTS`
   port over the console routes `GET /console/accounts?q&page&size`,
   `GET /console/accounts/:id` and the actions on an account,
   `POST /console/accounts/:id/{rename,email,ban,unban,sign-out,reset,verification,removal}`
@@ -359,7 +392,10 @@ modeling stage.
   class `dark` on `<html>` and following the device's setting under the system's; a guest's choice
   and the account's theme a signed-in tab shows are kept there, and `follow()` shows one another
   tab kept, keeping nothing itself; the start makes it before the first frame and gives it to
-  views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
+  views through `ThemeContext`, read with `useDeviceTheme()`), the length of a text as the gateway
+  and the database count it (`text-length.ts`, `textLength`: one for each code point, which every
+  domain rule judging a name, a bio or a note against its limit uses, though the native `maxLength`
+  of an input counts UTF-16 units), and this tab's own writes of
   the account's settings (`settings-writes.ts`: the settings screen's store of a setting tells the
   frame of each write before it starts and when it failed, `trackedStore`, so a late echo of an
   earlier write is not taken for a value another tab or device stored; the start provides them
@@ -485,7 +521,7 @@ accounts and the organisations they created are swept; it applies the directory 
 gateway does, which leaves a stand that already has it alone. `openStandTenant()` opens an organisation's database on the stand the same way. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 `src/field-state-colour.test-support.ts` is the one assertion that a field the contract opts out draws no state colour.
-`src/platform/field-facts.gen.ts` (generated, `bun run emit`) holds what the contract says of each field by its anchor (its limit, input type, whether it marks its state, whether it holds input), and `src/main.tsx` gives it to the kit's `FieldFactsProvider` around the app, so the fields take it from there. `src/field-facts.test-support.ts` renders a view inside that provider (`renderWithFacts`) and holds each declared field it renders to the facts (`expectFieldFacts`).
+`src/platform/field-facts.gen.ts` (generated, `bun run emit`) holds what the contract says of each field by its anchor (its limit, input type, whether it marks its state, whether it holds input), and `src/main.tsx` gives it to the kit's `FieldFactsProvider` around the app, so the fields take it from there: a view gives its fields none of these itself, and the domain rules and the console's route search read their bounds from `CONTRACT_VALUES` of `@workspace/kernel`. `src/field-facts.test-support.ts` renders a view inside that provider (`renderWithFacts`) and holds each declared field it renders to the facts (`expectFieldFacts`).
 
 ## Commands
 

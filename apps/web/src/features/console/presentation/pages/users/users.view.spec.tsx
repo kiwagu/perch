@@ -5,12 +5,13 @@ import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 import { sizeOptionOf } from '@workspace/ui-contract/anchors'
 
+import { renderWithFacts } from '../../../../../field-facts.test-support'
 import { accountsNamed, bart, opal, una } from '../../../../../platform/__fixtures__/accounts'
 import type { AccountPage } from '../../../../../platform/accounts.port'
-import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/console.en.json'
 import es from '../../i18n/console.es.json'
 
@@ -55,13 +56,13 @@ function renderView(
     page: { accounts: [bart, una, opal], total: 3 },
     failure: undefined,
     at: { page: 1, size: 25 },
-    pageHref: (page) => `/console/users?page=${page}`,
-    accountHref: (id: IdentityId) => `/console/account?id=${id}`,
+    pageHref: (page) => `${CONTRACT_ROUTES['console.users']}?page=${page}`,
+    accountHref: (id: IdentityId) => `${CONTRACT_ROUTES['console.account']}?id=${id}`,
     can: () => true,
     ...handlers,
     ...props,
   }
-  const rendered = renderWithProviders(around(<UsersView {...all} />))
+  const rendered = renderWithFacts(around(<UsersView {...all} />))
 
   return { ...rendered, ...handlers, view: all }
 }
@@ -175,8 +176,8 @@ describe('UsersView', () => {
     const next = screen.getByTestId(`${LIST}.next-link`)
 
     expect(range.textContent).toBe('11-20 of 25')
-    expect(previous.getAttribute('href')).toBe('/console/users?page=1')
-    expect(next.getAttribute('href')).toBe('/console/users?page=3')
+    expect(previous.getAttribute('href')).toBe(`${CONTRACT_ROUTES['console.users']}?page=1`)
+    expect(next.getAttribute('href')).toBe(`${CONTRACT_ROUTES['console.users']}?page=3`)
     expect(next.textContent).toBe('Next')
 
     expect(fireEvent.click(next)).toBe(false)
@@ -212,7 +213,7 @@ describe('UsersView', () => {
     ])
     expect(range.textContent).toBe('0 of 11')
     expect(screen.getByTestId(`${LIST}.previous-link`).getAttribute('href')).toBe(
-      '/console/users?page=2',
+      `${CONTRACT_ROUTES['console.users']}?page=2`,
     )
     expect(screen.queryByTestId(`${LIST}.next-link`)).toBeNull()
   })
@@ -284,7 +285,7 @@ describe('UsersView', () => {
     const [, unaRow] = rows()
     const open = within(unaRow ?? expect.unreachable('a row')).getByTestId(`${LIST}.open-link`)
 
-    expect(open.getAttribute('href')).toBe(`/console/account?id=${una.id}`)
+    expect(open.getAttribute('href')).toBe(`${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     expect(open.textContent).toBe('Open')
     expect(fireEvent.click(open, { ctrlKey: true })).toBe(true)
     expect(onOpen).not.toHaveBeenCalled()

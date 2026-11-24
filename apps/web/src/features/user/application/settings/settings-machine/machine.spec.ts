@@ -1,70 +1,11 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
-import { createActor, waitFor } from 'xstate'
+import { waitFor } from 'xstate'
 
 import { dataError } from '@workspace/data'
-import type { Locale } from '@workspace/i18n'
 
-import type { Theme } from '../../../../../platform/theme'
-
-import {
-  createSettingsMachine,
-  SETTINGS_PASSWORDS_DIFFER,
-  type SettingsMachineDeps,
-  type SettingsValues,
-} from '.'
-
-function screen(
-  options: {
-    readonly store?: () => ResultAsync<void, unknown>
-    readonly storeTheme?: () => ResultAsync<void, unknown>
-    readonly changePassword?: SettingsMachineDeps['changePassword']
-    readonly changeEmail?: SettingsMachineDeps['changeEmail']
-    readonly requestAccountDeletion?: SettingsMachineDeps['requestAccountDeletion']
-  } = {},
-) {
-  let values: SettingsValues = { held: true, account: 'idn_ann', storingFor: undefined }
-  const setTheme = vi.fn<(theme: Theme) => void>()
-  const storeTheme = vi.fn<(theme: Theme) => ResultAsync<void, unknown>>(
-    options.storeTheme ?? (() => okAsync(undefined)),
-  )
-  const storeLocale = vi.fn<(locale: Locale) => ResultAsync<void, unknown>>(
-    options.store ?? (() => okAsync(undefined)),
-  )
-  const actor = createActor(
-    createSettingsMachine({
-      values: () => values,
-      setTheme,
-      storeTheme: (theme) => {
-        values = { ...values, storingFor: values.account }
-
-        return storeTheme(theme)
-      },
-      storeLocale: (locale) => {
-        values = { ...values, storingFor: values.account }
-
-        return storeLocale(locale)
-      },
-      changePassword: options.changePassword ?? (() => okAsync(undefined)),
-      changeEmail: options.changeEmail ?? (() => okAsync(undefined)),
-      requestAccountDeletion: options.requestAccountDeletion ?? (() => okAsync(undefined)),
-    }),
-  ).start()
-  const emitted: unknown[] = []
-
-  actor.on('*', (event) => emitted.push(event))
-
-  return {
-    actor,
-    setTheme,
-    storeTheme,
-    storeLocale,
-    emitted,
-    set: (more: Partial<SettingsValues>) => {
-      values = { ...values, ...more }
-    },
-  }
-}
+import { screen } from './__fixtures__/screen'
+import { SETTINGS_PASSWORDS_DIFFER, type SettingsMachineDeps } from '.'
 
 const NOT_STORED = {
   type: 'show',

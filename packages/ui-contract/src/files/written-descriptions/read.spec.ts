@@ -45,6 +45,10 @@ describe('readDescriptions', () => {
       'contract/domain/model.schema.json:7 model entity thing',
       'contract/domain/model.schema.json:16 model action thing.createThing',
       'contract/domain/model.schema.json:27 model field thing.id',
+      'contract/domain/terms.yaml:4 context sample',
+      'contract/domain/terms.yaml:8 role guest',
+      'contract/domain/terms.yaml:10 role identity',
+      'contract/domain/terms.yaml:12 role member',
     ])
   })
   it('gives each its text as written and the kind of the field it is', () => {

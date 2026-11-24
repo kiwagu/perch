@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { z } from '@workspace/zod'
 
 import { SCHEMA_OUTPUTS, SCREEN_SCHEMA_FILE } from '../files'
-import { authoredAnchorDefSchema } from '../schemas'
+import { authoredAnchorDefSchema, DESCRIPTION_BUDGET, descriptionLength } from '../schemas'
 
 import { schemaKeys } from './keys'
+import { ruleIdsNamedIn } from './mentions'
 import { renderReference } from './render'
 import { REFERENCE_RULES } from './rules'
 import { referenceSlug } from './slug'
@@ -69,6 +70,16 @@ const entries: readonly Entry[] = blocks
 
 const entryAt = (slug: string): Entry | undefined => entries.find((entry) => entry.slug === slug)
 
+/**
+ * What an entry says: its text together with the text of each rule that text names. A key's text
+ * says what the key is for and names the rule that holds the rest, so a reader takes both.
+ */
+function saidBy(entry: Entry | undefined): string {
+  const named = ruleIdsNamedIn(entry?.text ?? '').map((id) => entryAt(`rule-${id}`)?.text ?? '')
+
+  return [entry?.text ?? '', ...named].join('\n\n')
+}
+
 /** The facets of the screen file, each a key name: the reference says every one of them in full. */
 const FACET_KEYS = [
   'binding',
@@ -121,8 +132,141 @@ const FACET_HOMES: Readonly<Record<Facet, string>> = {
   pattern: 'screen-flow-states-name-states-name-pattern',
 }
 
-/** The shortest text that says a facet: what it is and how the engine treats it, not a label. */
+/**
+ * The shortest text that says a facet: what it is and how the engine treats it, not a label. A
+ * key's own text and the rules it names together reach it.
+ */
 const FACET_TEXT_LENGTH = 80
+
+/** The facets whose key text is a hint within the budget, its rule held by the rules it names. */
+const SHORT_FACETS = FACET_KEYS.filter(
+  (facet) => descriptionLength(entryAt(FACET_HOMES[facet])?.text ?? '') <= DESCRIPTION_BUDGET,
+)
+
+/**
+ * Each rule a facet's hint must name once the hint is short, with a fact of that rule the hint
+ * leaves out: a hint that stops naming one of them, or a rule that loses the fact, fails here.
+ */
+const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: string]> = [
+  [
+    'screen-anchors-name-binding',
+    'anchor-binding',
+    'An `item` or a `row` named as a parameter gives the `data-id`',
+  ],
+  [
+    'screen-anchors-name-binding',
+    'flow-effects',
+    'The effects, in `actions`, `entry` and `exit`, are four',
+  ],
+  [
+    'screen-anchors-name-roles',
+    'anchor-roles',
+    'Every restriction above an anchor admits a device by the roles it holds together',
+  ],
+  ['screen-anchors-name-roles', 'roles', "A role is one of the terms file's `roles`"],
+  [
+    'screen-anchors-name-roles',
+    'link-roles',
+    'A link bound to one route (`binding: { route: /me }`)',
+  ],
+  [
+    'screen-anchors-name-own',
+    'own-entries',
+    'data (the owner of each entry) decides whether it shows',
+  ],
+  [
+    'screen-anchors-name-holdsinput',
+    'field-holds-input',
+    'It holds none when its own change applies it at once',
+  ],
+  ['screen-anchors-name-holdsinput', 'field-holds-input', 'the app is to ask before such a leave'],
+  ['screen-anchors-name-marksstate', 'state-colour', "the field's `fieldStates` still hold"],
+  [
+    'screen-anchors-name-marksstate',
+    'check-sources',
+    '`bun run contract:check:sources` holds the JSX',
+  ],
+  ['screen-anchors-name-secret', 'secret-field', 'a secret is never filled from a URL'],
+  [
+    'screen-anchors-name-dataid',
+    'attributes',
+    "an invoke's `input` or as a navigate's `{ item }` search",
+  ],
+  [
+    'screen-anchors-name-datavalue',
+    'attributes',
+    'A value asserted on an anchor must be one that anchor',
+  ],
+  [
+    'screen-anchors-name-datavalue',
+    'kind-parts',
+    "From version 4 an anchor's kind says what a file would only repeat",
+  ],
+  ['screen-anchors-name-states', 'attributes', 'The state of a field is not written here'],
+  [
+    'screen-anchors-name-states',
+    'field-states-carried',
+    'a reload or leaving the screen clears it',
+  ],
+  [
+    'screen-anchors-name-derived',
+    'derived-parts',
+    'From version 4 so are the parts a kind brings by itself',
+  ],
+  [
+    'screen-anchors-name-derived',
+    'kind-parts',
+    "From version 4 an anchor's kind says what a file would only repeat",
+  ],
+  [
+    'screen-anchors-name-derived',
+    'visibility-button',
+    'One derived part is presentation only: `visibility-button`',
+  ],
+  [
+    'screen-anchors-name-source',
+    'list-reads',
+    '`{ platform: <action> }`: the entries are the answer of that platform action',
+  ],
+  [
+    'screen-anchors-name-source',
+    'paged-list',
+    "`paged: true` makes the list a page of the action's entries.",
+  ],
+  ['screen-anchors-name-composite', 'composite-of-the-platform', 'Only a secret `input` opts in.'],
+  [
+    'screen-anchors-name-source-paged',
+    'paged-list',
+    '`paged: { sizes, default }` in `platform.yaml`',
+  ],
+  [
+    'screen-anchors-name-codes',
+    'error-codes-and-fields',
+    'is mapped to a contract code (`forbidden`) in the presentation layer',
+  ],
+  [
+    'screen-anchors-name-fields',
+    'error-codes-and-fields',
+    'the written entries merge over the derived ones code by code',
+  ],
+  ['screen-anchors-name-fields', 'error-placement', 'shows beside the controls of its part'],
+  [
+    'screen-anchors-name-ranked',
+    'ranked-message',
+    'A code raised waits until the message shows or a flow clears it.',
+  ],
+  [
+    'screen-anchors-name-confirm',
+    'destructive-question',
+    'On a control that runs no destructive action it bans nothing and is refused.',
+  ],
+  ['screen-flow-states-name-meta-renders', 'renders', 'a derived part is rendered with its base'],
+  [
+    'screen-flow-states-name-states-name-pattern',
+    'flow-shorter-forms',
+    'its states list nothing in `meta.renders`',
+  ],
+]
 
 /** The describe text of a key's schema, through the optional that wraps it. */
 const describeText = (schema: z.core.$ZodType): string | undefined =>
@@ -163,6 +307,7 @@ describe('renderReference', () => {
       'Screen file',
       'Platform file',
       'Activity file',
+      'Terms file',
       'Model (x-perch)',
       'Manifest (derived)',
       'Rules',
@@ -224,9 +369,26 @@ describe('renderReference', () => {
   })
   it.each(FACET_KEYS)('writes the facet %s under its key, with its rule in full', (facet) => {
     const home = entryAt(FACET_HOMES[facet])
+    const ruleIds = new Set(REFERENCE_RULES.map(({ id }) => id))
 
     expect(home?.heading.endsWith(`${facet}\``)).toBe(true)
-    expect(home?.text.length ?? 0).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
+    expect(ruleIdsNamedIn(home?.text ?? '').filter((id) => !ruleIds.has(id))).toEqual([])
+    expect(saidBy(home).length).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
+  })
+  it.each(FACET_RULES)(
+    'the hint of %s names the rule %s, which says what the hint leaves out',
+    (slug, rule, fact) => {
+      expect(ruleIdsNamedIn(entryAt(slug)?.text ?? '')).toContain(rule)
+      expect(entryAt(`rule-${rule}`)?.text).toContain(fact)
+    },
+  )
+  it.each(SHORT_FACETS)('lists in FACET_RULES every rule the short hint of %s names', (facet) => {
+    const slug = FACET_HOMES[facet]
+    const named = ruleIdsNamedIn(entryAt(slug)?.text ?? '')
+    const listed = new Set(FACET_RULES.filter(([of]) => of === slug).map(([, rule]) => rule))
+
+    expect(listed.size).toBeGreaterThan(0)
+    expect([...listed].sort()).toEqual([...new Set(named)].sort())
   })
   it('says where an error shows each code, and the fields key names that rule', () => {
     expect(entryAt('rule-error-placement')?.text).toContain('shows beside the controls of its part')
@@ -254,8 +416,11 @@ describe('renderReference', () => {
     ['rule-email-format', 'is submitted by no form'],
     ['rule-clear-keeps', 'while its draft lives'],
     ['rule-clear-keeps', "an entry's edit form closing because another entry is edited or deleted"],
-  ])('answers a question builders asked, in the text of %s', (slug, answer) => {
-    expect(entryAt(slug)?.text).toContain(answer)
+    ['screen-anchors-name-binding', 'a secret is never filled from a URL'],
+    ['screen-anchors-name-own', 'data (the owner of each entry) decides whether it shows'],
+    ['screen-anchors-name-source-paged', 'a paged list has at most 3 segments'],
+  ])('answers a question builders asked, in the text of %s or a rule it names', (slug, answer) => {
+    expect(saidBy(entryAt(slug))).toContain(answer)
   })
   it('gives each rule an id of its own', () => {
     const ids = REFERENCE_RULES.map(({ id }) => id)

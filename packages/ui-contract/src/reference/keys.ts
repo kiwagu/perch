@@ -10,6 +10,7 @@ import {
   PLATFORM_SCHEMA_FILE,
   SCHEMA_OUTPUTS,
   SCREEN_SCHEMA_FILE,
+  TERMS_SCHEMA_FILE,
 } from '../files'
 
 /** A file the reference describes: its name in a slug, its section's title and its schema. */
@@ -19,11 +20,12 @@ export interface ReferenceFile {
   readonly schemaFile: string
 }
 
-/** The five roots, in the order the reference writes their sections. */
+/** The six roots, in the order the reference writes their sections. */
 const REFERENCE_FILES: readonly ReferenceFile[] = [
   { name: 'screen', title: 'Screen file', schemaFile: SCREEN_SCHEMA_FILE },
   { name: 'platform', title: 'Platform file', schemaFile: PLATFORM_SCHEMA_FILE },
   { name: 'activity', title: 'Activity file', schemaFile: ACTIVITY_SCHEMA_FILE },
+  { name: 'terms', title: 'Terms file', schemaFile: TERMS_SCHEMA_FILE },
   { name: 'model', title: 'Model (x-perch)', schemaFile: ENTITY_SCHEMA_FILE },
   { name: 'manifest', title: 'Manifest (derived)', schemaFile: MANIFEST_SCHEMA_FILE },
 ]
@@ -116,7 +118,7 @@ export interface ReferenceSection {
   readonly keys: readonly ReferenceKey[]
 }
 
-/** The section of each of the five roots, read from the schema the engine writes for it. */
+/** The section of each of the six roots, read from the schema the engine writes for it. */
 export function referenceSections(): ReferenceSection[] {
   return REFERENCE_FILES.map((file) => {
     const output = SCHEMA_OUTPUTS.find((candidate) => candidate.file === file.schemaFile)

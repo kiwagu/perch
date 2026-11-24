@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { Container } from '@workspace/di'
+import { CONTRACT_ROLES, CONTRACT_ROUTES, CONTRACT_VALUES } from '@workspace/kernel'
 import { loadScreens } from '@workspace/ui-contract'
 import { z } from '@workspace/zod'
 
@@ -34,17 +35,17 @@ describe('ConsoleModule', () => {
   it("routes operators to the platform's accounts, the size they chose kept across a search, and to an account's card", () => {
     expect(ConsoleModule.routes).toEqual([
       {
-        path: '/console/users',
+        path: CONTRACT_ROUTES['console.users'],
         page: 'UsersPage',
-        roles: ['operator'],
+        roles: [CONTRACT_ROLES.operator],
         history: 'push',
         retain: ['size'],
         search: AccountSearchSchema,
       },
       {
-        path: '/console/account',
+        path: CONTRACT_ROUTES['console.account'],
         page: 'AccountPage',
-        roles: ['operator'],
+        roles: [CONTRACT_ROLES.operator],
         history: 'push',
         search: AccountCardSearchSchema,
       },
@@ -66,10 +67,13 @@ describe('ConsoleModule', () => {
     expect(account?.anchors['console.account.section']?.source).toEqual(ACCOUNT_SECTION_SOURCE)
   })
 
-  it('takes an id of 1 to 64 characters for the card, and none', () => {
+  it("takes an id the contract's length for the card, and none", () => {
     expect(z.parse(AccountCardSearchSchema, { id: 'idn_ann' })).toEqual({ id: 'idn_ann' })
     expect(z.parse(AccountCardSearchSchema, {})).toEqual({})
     expect(z.safeParse(AccountCardSearchSchema, { id: '' }).success).toBe(false)
-    expect(z.safeParse(AccountCardSearchSchema, { id: 'i'.repeat(65) }).success).toBe(false)
+    expect(
+      z.safeParse(AccountCardSearchSchema, { id: 'i'.repeat(CONTRACT_VALUES.id.maxLength + 1) })
+        .success,
+    ).toBe(false)
   })
 })

@@ -2,7 +2,7 @@ import { errAsync, type ResultAsync } from 'neverthrow'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
 import type { BusError } from '@workspace/cqrs'
-import { ownerKeyOf } from '@workspace/kernel'
+import { CONTRACT_ROLES, ownerKeyOf } from '@workspace/kernel'
 
 import { CLIPBOARD } from '../../../../../platform/clipboard.port'
 import { useFieldClears } from '../../../../../platform/field-clears'
@@ -16,9 +16,12 @@ import { ORGANISATION_SERVICE } from '../../../application/organisation.service'
 import { createOrganisationMachine } from '../../../application/organisation-machine'
 
 import { organisationShape } from './organisation.model.gen'
-import { type OrganisationChoice, OrganisationView } from './organisation.view'
+import { type CreateDraft, type OrganisationChoice, OrganisationView } from './organisation.view'
 import { roleShown } from './role-shown'
 import { useInviteDraft } from './use-invite-draft'
+import { useOrganisationDraft } from './use-organisation-draft'
+
+const NO_CREATE: CreateDraft = { key: '', name: '' }
 
 const choice = (membership: {
   readonly tenant: { readonly key: string; readonly name: string }
@@ -69,7 +72,7 @@ export function OrganisationContainer() {
     deletable: ability.can('delete', 'note', note),
   }))
   const key = current?.tenant.key
-  const admin = current?.role === 'admin' ? key : undefined
+  const admin = current?.role === CONTRACT_ROLES.admin ? key : undefined
   // The link a copy puts on the clipboard is the one the list shows now.
   const sent = useRef<readonly InvitationView[] | undefined>(undefined)
   // Each write reads the organisation current, and the account signed in, when it runs.
@@ -130,12 +133,18 @@ export function OrganisationContainer() {
   )
 
   sent.current = invitations.list
-  // The invitation form empties as the flow says once an invitation is sent.
+  // The forms' fields, typed in the organisation shown: the flow empties them once their action
+  // is done (an invitation sent, an organisation created, a note written).
   const invite = useInviteDraft(key)
+  const create = useOrganisationDraft(key, NO_CREATE)
+  const note = useOrganisationDraft(key, '')
 
   useFieldClears(actor, {
     'organisation.invite.email-input': invite.clearEmail,
     'organisation.invite.role-select': invite.clearRole,
+    'organisation.create.key-input': () => create.change((draft) => ({ ...draft, key: '' })),
+    'organisation.create.name-input': () => create.change((draft) => ({ ...draft, name: '' })),
+    'organisation.notes.new-textarea': () => note.change(() => ''),
   })
 
   const { errors, changingRole, rolesSet } = state.context
@@ -187,6 +196,10 @@ export function OrganisationContainer() {
       }
       editing={editing ? state.context.editing : undefined}
       onToggleCreate={() => send({ type: 'organisation.create.toggle-button' })}
+      create={create.draft}
+      onCreateChange={(draft) => create.change(() => draft)}
+      newNote={note.draft}
+      onNewNoteChange={(text) => note.change(() => text)}
       onCreate={(input) => submit({ type: 'organisation.create.submit-button', ...input })}
       // A switch of organisation leaves what was typed for this one: the hook asks the frame first.
       onSelect={(next) => send({ type: 'organisation.page.current-select', key: next })}

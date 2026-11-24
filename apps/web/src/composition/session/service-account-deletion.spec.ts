@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, signedDevice, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
 import { savedIdentity, savedSession, savedToken } from '../storage'
 
@@ -111,9 +111,9 @@ describe("the deletion of an account by its mailed link's", () => {
     expect((await verifiedElsewhere(auth, bob)).isOk()).toBe(true)
 
     // Bob asks on his own device, and his link is opened in Ann's browser.
-    const bobSession = (
-      await auth.signIn(bob, { id: 'bob-device', label: 'Edge on Windows' })
-    )._unsafeUnwrap()
+    const bobSession = signedDevice(
+      (await auth.signIn(bob, { id: 'bob-device', label: 'Edge on Windows' }))._unsafeUnwrap(),
+    )
 
     expect(
       (
@@ -137,9 +137,11 @@ describe("the deletion of an account by its mailed link's", () => {
     worlds.push(world)
     expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
 
-    const ann = (
-      await auth.signIn(annSignUp, { id: 'ann-device', label: 'Edge on Windows' })
-    )._unsafeUnwrap()
+    const ann = signedDevice(
+      (
+        await auth.signIn(annSignUp, { id: 'ann-device', label: 'Edge on Windows' })
+      )._unsafeUnwrap(),
+    )
 
     expect(
       (

@@ -2,10 +2,13 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { bart, opal, una } from '../../../../../platform/__fixtures__/accounts'
 import type { AccountCard } from '../../../../../platform/accounts.port'
-import { renderWithProviders } from '../../../../../test-utils'
-import type { AccountEvent } from '../../../application/account-machine/machine'
+import type { AccountErrorCode, AccountEvent } from '../../../application/account-machine/machine'
 import en from '../../i18n/console.en.json'
 import es from '../../i18n/console.es.json'
 
@@ -19,8 +22,8 @@ const unaCard: AccountCard = {
   hasProfile: true,
   lastSeenAt: at('2026-10-18T09:30:00.000Z'),
   organisations: [
-    { key: 'acme', name: 'Acme', role: 'admin' },
-    { key: 'beta', name: 'Beta', role: 'member' },
+    { key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin },
+    { key: 'beta', name: 'Beta', role: CONTRACT_ROLES.member },
   ],
 }
 
@@ -54,7 +57,7 @@ function renderView(
   // An account left out is Una's; one given as undefined is being read.
   const account = 'account' in props ? given : unaCard
 
-  renderWithProviders(
+  renderWithFacts(
     <AccountView
       account={account}
       failure={failure}
@@ -83,7 +86,7 @@ describe('AccountView', () => {
 
     const back = byId('console.account.back-link')
 
-    expect(back.getAttribute('href')).toBe('/console/users')
+    expect(back.getAttribute('href')).toBe(CONTRACT_ROUTES['console.users'])
     expect(back.textContent).toBe(en['console.account.back'])
     expect(back.className).toMatch(/min-h-11/)
     expect(back.className).toMatch(/min-w-11/)
@@ -153,7 +156,7 @@ describe('AccountView', () => {
           .getByTestId('console.account.organisations.role-badge')
           .getAttribute('data-value'),
       ),
-    ).toEqual(['admin', 'member'])
+    ).toEqual([CONTRACT_ROLES.admin, CONTRACT_ROLES.member])
     expect(
       items.map(
         (item) => within(item).getByTestId('console.account.organisations.role-badge').textContent,
@@ -181,7 +184,7 @@ describe('AccountView', () => {
   )
 
   it('acts on nothing where it is given no areas', () => {
-    renderWithProviders(<AccountView account={unaCard} failure={undefined} />)
+    renderWithFacts(<AccountView account={unaCard} failure={undefined} />)
 
     expect(byId('console.account.section').getAttribute('data-state')).toBe('ready')
     expect(screen.queryAllByRole('button')).toEqual([])
@@ -197,6 +200,18 @@ describe('AccountView', () => {
     expect(byId<HTMLInputElement>('console.account.name.name-input').value).toBe('Una S')
     expect(screen.getByRole('button', { name: 'Save the name' })).toBe(
       byId('console.account.name.save-button'),
+    )
+  })
+
+  it('gives the name, the email and the reason what the contract says of them', () => {
+    renderView({ name: 'Una S' })
+
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([
+        'console.account.name.name-input',
+        'console.account.email.email-input',
+        'console.account.ban.reason-input',
+      ]),
     )
   })
 
@@ -221,7 +236,7 @@ describe('AccountView', () => {
     expect(shown('console.account.verification.resend-button')).toBe(false)
   })
 
-  it('offers the ban with a reason of at most 500 characters while the account is not banned', () => {
+  it('offers the ban with a reason while the account is not banned', () => {
     renderView({ reason: 'spam' })
 
     const reason = byId<HTMLInputElement>('console.account.ban.reason-input')
@@ -229,7 +244,6 @@ describe('AccountView', () => {
     expect(byId('console.account.ban.form').tagName).toBe('FORM')
     expect(screen.getByRole('textbox', { name: 'Reason' })).toBe(reason)
     expect(reason.value).toBe('spam')
-    expect(reason.maxLength).toBe(500)
     expect(byId('console.account.ban.ban-button').textContent).toBe('Ban')
     expect(shown('console.account.ban.unban-button')).toBe(false)
   })
@@ -342,6 +356,18 @@ describe('AccountView', () => {
       expect(input.getAttribute('aria-invalid')).toBe('true')
       expect(input.getAttribute('aria-describedby')).toBe(error.id)
       expect(input.parentElement?.contains(error)).toBe(true)
+    },
+  )
+
+  it.each([
+    ['name', 'console.account.name.error'],
+    ['email', 'console.account.email.error'],
+  ] as const)(
+    "marks the field each code of the %s error concerns, as the screen's fields say, and no other",
+    (area, error) => {
+      expectEachCodeMarksItsField(error, (code) =>
+        renderView({ errors: { [area]: code as AccountErrorCode } }),
+      )
     },
   )
 

@@ -27,6 +27,7 @@ import {
   type Problem,
   type Screen,
   type ScreensFile,
+  type Terms,
   TOAST_RULE_ROW,
   type Vocabulary,
   type WrittenDescription,
@@ -50,6 +51,14 @@ export interface Contract {
    * (`readDescriptions`): never one the engine derives or the loader fills in.
    */
   readonly descriptions: readonly WrittenDescription[]
+  /**
+   * The project's language, `contract/domain/terms.yaml`, when the contract writes it: its roles
+   * are then the vocabulary's `roles` (the loader fills them in), and its terms name the synonyms
+   * the texts never use.
+   */
+  readonly terms: Terms | undefined
+  /** The line of each key and item of the terms file. */
+  readonly termsLines: Lines
 }
 
 export interface DeclaredAnchor {

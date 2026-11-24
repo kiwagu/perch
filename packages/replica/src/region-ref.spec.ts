@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import { identityRegions, privateRegionId, regionRefOf, tenantKeyOf } from './region-ref'
 
 describe('region references', () => {
@@ -33,8 +35,8 @@ describe('region references', () => {
 
     expect(
       identityRegions('idn_a', [
-        { tenant: tenant('acme'), role: 'admin' },
-        { tenant: tenant('globex'), role: 'member' },
+        { tenant: tenant('acme'), role: CONTRACT_ROLES.admin },
+        { tenant: tenant('globex'), role: CONTRACT_ROLES.member },
       ]),
     ).toEqual([
       { kind: 'private', id: 'identity:idn_a' },

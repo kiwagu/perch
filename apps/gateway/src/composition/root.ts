@@ -22,11 +22,21 @@ import { AccountDeletions, EmailChanges, ResetLinks } from '../auth/account-link
 import { AccountMails } from '../auth/account-mails'
 import { AccountPasswords } from '../auth/account-passwords'
 import { AccountTeardown } from '../auth/account-teardown'
-import type { AccountDepartures } from '../auth/auth-handler'
+import {
+  type AccountDepartures,
+  type PasskeyChallenges,
+  passkeyChallenges,
+  type TwoFactorChallenges,
+  twoFactorChallenges,
+} from '../auth/auth-handler'
 import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
+import { PasskeyRows } from '../auth/passkey-rows'
 import { ProfileEmails } from '../auth/profile-emails'
+import { accountChoicePolicy } from '../auth/second-factor-policy.account-choice'
+import type { SecondFactorPolicy } from '../auth/second-factor-policy.port'
+import { TwoFactorRows } from '../auth/two-factor-rows'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
 import { AccountBans, AccountDirectory, ProfileNames } from '../console'
 import { KeyedTurns } from '../keyed-turns'
@@ -51,6 +61,22 @@ export interface GatewayRoot {
   readonly deviceSessions: DeviceSessions
   /** The reset, the change and the check of a password, through Better Auth on the server. */
   readonly passwords: AccountPasswords
+  /**
+   * Better Auth's two-factor challenges: the cookie a password step's challenge comes in, the
+   * account a challenge belongs to, the end of one.
+   */
+  readonly challenges: TwoFactorChallenges
+  /**
+   * The second factor of accounts in the directory, as the settings read, confirm and turn it off
+   * without rotating the caller's session, and as a sign-in's code step reads it.
+   */
+  readonly twoFactorRows: TwoFactorRows
+  /** Whether an account may turn its second factor on, and whether it must keep it on. */
+  readonly secondFactorPolicy: SecondFactorPolicy
+  /** The passkeys of accounts in the directory: listed, removed, their account read by credential. */
+  readonly passkeyRows: PasskeyRows
+  /** Better Auth's passkey challenges: the cookie a passkey ceremony's challenge comes in. */
+  readonly passkeyChallenges: PasskeyChallenges
   /** The reset links Better Auth keeps: read by token, ended for an account. */
   readonly resets: ResetLinks
   /** The pending changes of accounts' emails, their links, and the change itself. */
@@ -105,6 +131,8 @@ export interface GatewayRoot {
    * on it, by its identity's key.
    */
   readonly accountTurns: KeyedTurns<string>
+  /** The front's public origin, which the gateway's own calls of Better Auth's endpoints name. */
+  readonly publicUrl: string
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -240,6 +268,11 @@ export function createGatewayRoot(
       }),
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
       passwords: new AccountPasswords({ auth, directory: local, clock: options.clock }),
+      challenges: twoFactorChallenges(auth, local),
+      twoFactorRows: new TwoFactorRows(local),
+      secondFactorPolicy: accountChoicePolicy,
+      passkeyRows: new PasskeyRows(local),
+      passkeyChallenges: passkeyChallenges(auth),
       resets: new ResetLinks(local),
       emailChanges: new EmailChanges({
         directory: local,
@@ -274,6 +307,7 @@ export function createGatewayRoot(
       local,
       limits: new RequestLimits({ clock: options.clock }),
       accountTurns,
+      publicUrl: options.publicUrl,
       clock: options.clock,
       close: async () => {
         // The re-tells stop first, the one running awaited, before anything they read or tell

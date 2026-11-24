@@ -1,5 +1,6 @@
 /** The accounts and organisations a load run signs up; they stay on the stand. */
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { callAs, type SignedIn, signUp as smokeSignUp } from '../../smoke'
@@ -51,7 +52,7 @@ export async function organise(run: Run, accounts: readonly SignedIn[]): Promise
     const invitations = await inParallel(members, async (member) => {
       const answer = await callAs(run.base, 'POST', `/organisations/${key}/invitations`, creator, {
         email: member.identity.email,
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
 
       if (answer.status !== 201) fail(`inviting into ${key}: ${answer.status}`)

@@ -6,3 +6,4 @@
 export { INVITE_FLOOR_MS } from './invitation-handlers'
 export type { OrganisationRoutesOptions } from './options'
 export { organisationRoutes } from './routes'
+export { ORGANISATION_PATHS } from './targets'

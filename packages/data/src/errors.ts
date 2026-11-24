@@ -22,6 +22,11 @@ export type DataErrorCode =
   | 'data:PASSWORD_REJECTED'
   | 'data:EMAIL_INVALID'
   | 'data:LAST_ADMIN'
+  | 'data:INVALID_CODE'
+  | 'data:CODE_EXPIRED'
+  | 'data:PASSKEY_UNKNOWN'
+  | 'data:PASSKEY_CANCELLED'
+  | 'data:TWO_FACTOR_CHANGED'
 
 export interface DataError {
   readonly code: DataErrorCode

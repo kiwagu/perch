@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
-import { NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
+import { CONTRACT_ROLES, NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { memberActor, regionsFor, regionsOf } from './device-regions'
@@ -12,7 +12,7 @@ describe('regionsFor', () => {
   const other = identityIdFactory.create()
   const membership = (key: string): Membership => ({
     tenant: { id: tenantIdFactory.create(), key, name: key },
-    role: 'member',
+    role: CONTRACT_ROLES.member,
   })
 
   it("makes the identity the owner of its private region and judges its organisation's region by its role", () => {
@@ -39,8 +39,8 @@ describe('memberActor', () => {
   const other = identityIdFactory.create()
 
   it("is the identity pushing with the abilities of its role: a member's own notes, an admin's every note", () => {
-    const member = memberActor(identity, 'member', replicaSchema)
-    const admin = memberActor(identity, 'admin', replicaSchema)
+    const member = memberActor(identity, CONTRACT_ROLES.member, replicaSchema)
+    const admin = memberActor(identity, CONTRACT_ROLES.admin, replicaSchema)
 
     expect(member.id).toBe(identity)
     expect(admin.id).toBe(identity)

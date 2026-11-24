@@ -1,4 +1,7 @@
 // scenario: user/base/delete-account
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import {
   accountDeleted,
   askToDeleteAccount,
@@ -47,7 +50,7 @@ test.describe('Delete the account', { tag: '@smoke' }, () => {
       await openDeletionMail(page, data.email, 1)
       // Expected: After step 3 the link opens [/delete-account] with
       //   [user.delete-account.delete-button]
-      await expectPathname(page, '/delete-account')
+      await expectPathname(page, CONTRACT_ROUTES['user.delete-account'])
       await expect(page.getByTestId('user.delete-account.delete-button')).toBeVisible()
       await expect(page.getByTestId('user.delete-account.delete-button')).toBeEnabled()
     })
@@ -62,7 +65,7 @@ test.describe('Delete the account', { tag: '@smoke' }, () => {
       await expect(page.getByTestId('user.delete-account.sign-in-link')).toBeVisible({
         timeout: 10_000,
       })
-      await expectPathname(page, '/delete-account')
+      await expectPathname(page, CONTRACT_ROUTES['user.delete-account'])
       // The email's third mail, after the sign-up's and the deletion mail, in the account's
       // language.
       await nextDeclaredNotice(
@@ -74,7 +77,7 @@ test.describe('Delete the account', { tag: '@smoke' }, () => {
 
     await test.step('5. Click [user.delete-account.sign-in-link], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.delete-account.sign-in-link').click()
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
       await page.getByTestId('user.sign-in.email-input').fill(data.email)
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
       await page.getByTestId('user.sign-in.submit-button').click()
@@ -83,7 +86,7 @@ test.describe('Delete the account', { tag: '@smoke' }, () => {
         'data-code',
         'invalid-credentials',
       )
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('6. Sign up with the email, the password and the name', async () => {

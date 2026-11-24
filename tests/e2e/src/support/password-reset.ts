@@ -1,5 +1,6 @@
 import type { Page, Response } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import type { Mail } from '@workspace/mailbox'
 
 import { appReady, expect } from './fixtures'
@@ -35,7 +36,7 @@ export const resetRequested = (page: Page) =>
  * until the gateway answered and the page asks to open the link of the mail.
  */
 export async function askForReset(page: Page, email: string): Promise<void> {
-  await page.goto('/forgot-password')
+  await page.goto(CONTRACT_ROUTES['user.forgot-password'])
   await appReady(page)
   await page.getByTestId('user.forgot-password.email-input').fill(email)
   await sendResetRequest(page)

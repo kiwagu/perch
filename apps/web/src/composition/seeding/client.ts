@@ -39,12 +39,16 @@ import { devicesApi } from '../devices-api'
 import { type Fetcher, gatewayAuth } from '../gateway-auth'
 import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
+import type { PasskeyCeremony } from '../passkey-ceremony'
+import { passkeysApi } from '../passkeys-api'
 import { type AppServices, createAppRoot } from '../root'
 import { type KeyValueStorage, memoryStorage, savedSession } from '../storage'
 import { syncTransport } from '../sync-transport'
+import { twoFactorApi } from '../two-factor-api'
 
 import { ensureAccount, readAccount } from './accounts'
 import { ensureInvited, ensureJoined, ensureOrganisation, readOrganisation } from './organisations'
+import { seedSession } from './session'
 import type {
   ClientOptions,
   Inbox,
@@ -63,6 +67,13 @@ const silent: CommandLogger = { info: () => {}, warn: () => {} }
 /** Web Locks for a process that is its identity's only device: each request is granted at once. */
 const soleDevice: LockManagerLike = {
   request: (_name, _options, callback) => callback(),
+}
+
+/** A seed client has no browser window: a passkey is neither made nor picked in a process. */
+const noAuthenticator: PasskeyCeremony = {
+  register: () => errAsync(dataError('data:AUTH_FAILED', 'a seed client has no passkey window')),
+  authenticate: () =>
+    errAsync(dataError('data:AUTH_FAILED', 'a seed client has no passkey window')),
 }
 
 /** The gateway's sync WebSocket under its address: `http(s)://…` becomes `ws(s)://…/sync`. */
@@ -143,8 +154,9 @@ function seedClient(
       .andThen(signIn)
       .andThen((user) => settle().map(() => user))
 
+  const session = seedSession(services.session)
   const device: SeedDevice & SeedOrganisationDevice = {
-    session: services.session,
+    session,
     organisations: services.organisations,
     invitations: services.container.get(INVITATIONS),
     profiles,
@@ -157,7 +169,7 @@ function seedClient(
   }
 
   return {
-    signIn: (input) => enter(() => services.session.signIn(input)),
+    signIn: (input) => enter(() => session.signIn(input)),
     ensureOrganisation: (input) => ensureOrganisation(device, input),
     ensureInvited: (key, email) => ensureInvited(device, key, email),
     ensureJoined: (invitation) => ensureJoined(device, invitation),
@@ -213,6 +225,9 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     invitationsApi: (deps) => invitationsApi(options.gatewayUrl, { ...deps, fetcher }),
     accountsApi: (deps) => accountsApi(options.gatewayUrl, { ...deps, fetcher }),
+    twoFactorApi: (deps) => twoFactorApi(options.gatewayUrl, { ...deps, fetcher }),
+    passkeysApi: (deps) => passkeysApi(options.gatewayUrl, { ...deps, fetcher }, noAuthenticator),
+    passkeyCeremony: noAuthenticator,
     transport: syncTransport({ url: gatewaySyncUrl(options.gatewayUrl), clock: systemClock }),
     locks: soleDevice,
     hints: () => syncHints(undefined),

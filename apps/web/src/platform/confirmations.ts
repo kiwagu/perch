@@ -19,6 +19,7 @@ export const ASKING_CONTROLS: Readonly<Record<string, string>> = {
   'organisation.notes.delete-button': 'note-delete',
   'organisation.sent.revoke-button': 'organisations-revoke-invitation',
   'user.delete-account.delete-button': 'delete-account',
+  'user.settings.passkeys.remove-button': 'passkeys-remove',
 }
 
 /** The code `control` asks the confirmation with; none when it runs nothing destructive. */

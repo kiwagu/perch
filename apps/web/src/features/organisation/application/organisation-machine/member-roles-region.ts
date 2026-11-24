@@ -1,4 +1,4 @@
-import { forget, READ_MEMBERS, ROLE_CHANGED, ROLE_REFUSED } from './effects'
+import { CLEAR_INVITE_ERROR, READ_MEMBERS, ROLE_CHANGED, ROLE_REFUSED } from './effects'
 import { taken } from './events'
 
 /**
@@ -25,11 +25,11 @@ export const MEMBER_ROLES_REGION = {
           {
             target: 'idle',
             guard: 'ownDemotion',
-            actions: [forget('members'), 'settleRole', ROLE_CHANGED],
+            actions: [CLEAR_INVITE_ERROR, 'settleRole', ROLE_CHANGED],
           },
           {
             target: 'idle',
-            actions: [forget('members'), READ_MEMBERS, 'rememberRole', 'settleRole', ROLE_CHANGED],
+            actions: [CLEAR_INVITE_ERROR, READ_MEMBERS, 'rememberRole', 'settleRole', ROLE_CHANGED],
           },
         ],
         onError: { target: 'idle', actions: ['settleRole', ROLE_REFUSED] },

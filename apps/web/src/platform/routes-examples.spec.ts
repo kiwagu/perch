@@ -20,6 +20,7 @@ import { join } from 'node:path'
 import { trimPathRight } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import {
   type Binding,
   bindingSchema,
@@ -85,13 +86,17 @@ const SampleModule = defineModule({
   id: 'sample',
   declarations: { Page },
   routes: [
-    { path: '/things/$key', page: 'Page', roles: ['guest', 'identity'] },
-    { path: '/notes/{-$tab}', page: 'Page', roles: ['guest', 'identity'] },
-    { path: '/files/$', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/things/$key', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
+    {
+      path: '/notes/{-$tab}',
+      page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+    },
+    { path: '/files/$', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
     {
       path: '/list',
       page: 'Page',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({
         view: z.enum(['read', 'edit']).default('read'),
         pageSize: z.int().default(10),
@@ -117,7 +122,7 @@ const flat = (properties: Readonly<Record<string, unknown>>) => ({
 })
 
 const sample = (fields: Readonly<Record<string, unknown>>): Binding =>
-  bindingSchema.parse({ roles: ['identity'], ...fields })
+  bindingSchema.parse({ roles: [CONTRACT_ROLES.identity], ...fields })
 
 describe('the example link on the router', () => {
   it('builds a path parameter from its example, encoded as the router encodes it', () => {

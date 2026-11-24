@@ -1,4 +1,7 @@
 // scenario: user/flows/delete-account-after-handover
+
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import {
   accountDeleted,
   askToDeleteAccount,
@@ -19,7 +22,7 @@ import {
 } from '../../support/organisation'
 
 test.describe('Hand an organisation over, then delete the account', { tag: '@full' }, () => {
-  test('The only administrator makes a member an administrator, makes itself a member, then deletes its account; the organisation stays with the new administrator and keeps the note the deleted account wrote', async ({
+  test('The only admin makes a member an admin, makes itself a member, then deletes its account; the organisation stays with the new admin and keeps the note the deleted account wrote', async ({
     page,
     anotherAccount,
   }) => {
@@ -63,7 +66,7 @@ test.describe('Hand an organisation over, then delete the account', { tag: '@ful
     await test.step("5. On device A, reload [/org] and, on user B's [organisation.members.item], set [organisation.members.role-select] to [value:admin]", async () => {
       await page.reload()
       await appReady(page)
-      await chooseMemberRole(page, userB.email, 'admin')
+      await chooseMemberRole(page, userB.email, CONTRACT_ROLES.admin)
       // The change is done once its toast shows; the toast is let go, so step 6's is its own.
       await expect(toast(page, 'role-changed')).toBeVisible()
       await expect(toast(page, 'role-changed')).toHaveCount(0, { timeout: 15_000 })
@@ -73,7 +76,7 @@ test.describe('Hand an organisation over, then delete the account', { tag: '@ful
     })
 
     await test.step('6. On device A, on its own [organisation.members.item], set [organisation.members.role-select] to [value:member]', async () => {
-      await chooseMemberRole(page, userA.email, 'member')
+      await chooseMemberRole(page, userA.email, CONTRACT_ROLES.member)
       // Expected: After step 6 [app-shell.toast] carries [code:role-changed] on device A,
       //   [organisation.page.role-badge] carries [value:member], and no
       //   [organisation.members.list] and no [organisation.invite.form] show

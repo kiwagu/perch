@@ -7,16 +7,6 @@ bindings:
   - path: /delete-account
     roles: [ guest, identity ]
     history: push
-    search:
-      type: object
-      properties:
-        token:
-          type: string
-          minLength: 1
-          maxLength: 4096
-          description: The token the deletion mail carries in its link.
-          examples: [ eyJhbGciOiJIUzI1NiJ9.eyJwdXJwb3NlIjoiZGVsZXRlLWFjY291bnQifQ.c2lnbmF0dXJl ]
-      additionalProperties: false
 entry: [ user.delete-account.delete-button ]
 anchors:
   user.delete-account.delete-button:
@@ -31,7 +21,6 @@ anchors:
     kind: link
     description: Leads to the sign-in page; the device signed in to the account is signed out by the deletion, so it sees the link too.
     binding: { route: /sign-in }
-    roles: [ guest ]
   user.delete-account.error:
     kind: error
 states:

@@ -1,4 +1,7 @@
 // scenario: user/base/password-visibility
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test } from '../../support/fixtures'
 
@@ -11,7 +14,7 @@ test.describe('Show the password as it is typed', { tag: '@smoke' }, () => {
     const eye = page.getByTestId('user.sign-in.password-input.visibility-button')
 
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
 

@@ -18,6 +18,7 @@ import type { ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import type { DataError, LocalDb } from '@workspace/data'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { openDirectory } from './open-directory'
 import { OPERATOR_USAGE, type OperatorRequest, readOperatorRequest } from './operator-options'
@@ -47,7 +48,11 @@ export async function main(
   }
 
   const directory = opened.value
-  const written = await setPlatformRole(directory, email, action === 'grant' ? 'operator' : 'user')
+  const written = await setPlatformRole(
+    directory,
+    email,
+    action === 'grant' ? CONTRACT_ROLES.operator : 'user',
+  )
 
   await directory.close()
 

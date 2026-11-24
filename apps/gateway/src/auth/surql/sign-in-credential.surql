@@ -1,11 +1,13 @@
 -- The identity (its key) whose email is $email, in any case, the hash on its credential row,
--- whether it is banned, the name and the language it signed up with, and whether it has started
--- (its profile and its settings both reached the directory through its private region), or NONE
--- when no account has the email: what a sign-in reads before Better Auth checks the password and
--- again once Better Auth wrote the session, and a verification likewise.
+-- whether it is banned, whether its second factor is on, the name and the language it signed up
+-- with, and whether it has started (its profile and its settings both reached the directory
+-- through its private region), or NONE when no account has the email: what a sign-in reads before
+-- Better Auth checks the password and again once Better Auth wrote the session or its challenge,
+-- and a verification likewise.
 SELECT
   record::id(id) AS identity,
   banned,
+  two_factor_enabled ?? false AS second_factor,
   name,
   locale,
   (

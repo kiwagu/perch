@@ -32,10 +32,12 @@ import {
   describedOf,
   failuresOf,
   fieldValueOf,
+  invariantActions,
   type Model,
   type ResolvedValue,
   type Screen,
   type ScreensFile,
+  type Terms,
   TOAST_RULE_ROW,
   type Vocabulary,
 } from '../files'
@@ -61,6 +63,8 @@ export interface ManifestInput {
   readonly model: Model
   readonly activities: Activity[]
   readonly scenarios: Scenario[]
+  /** The terms file, when the contract writes one. */
+  readonly terms?: Terms | undefined
   readonly product: Product
   /** When the manifest is built; now by default. */
   readonly now?: Date
@@ -181,6 +185,27 @@ const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =
     ]),
   )
 
+/** The platform as the manifest carries it: each invariant with the actions that name it. */
+function platformOf(platform: ScreensFile['platform']): Manifest['platform'] {
+  const { invariants, ...rest } = platform
+
+  if (invariants === undefined) {
+    return rest
+  }
+
+  const actions = invariantActions(platform)
+
+  return {
+    ...rest,
+    invariants: Object.fromEntries(
+      Object.entries(invariants).map(([name, invariant]) => [
+        name,
+        { ...invariant, actions: [...(actions[name] ?? [])] },
+      ]),
+    ),
+  }
+}
+
 function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['contract'] {
   const { defaults } = screens.platform
 
@@ -238,6 +263,7 @@ export function buildManifest({
   model,
   activities,
   scenarios,
+  terms,
   product,
   now = new Date(),
 }: ManifestInput): Manifest {
@@ -247,6 +273,7 @@ export function buildManifest({
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
+    ...(terms === undefined ? {} : { terms }),
     screens: screensOf(screens.screens, {
       screens: screens.screens,
       codes: vocabulary.codes,
@@ -254,7 +281,7 @@ export function buildManifest({
     }),
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens, vocabulary, model),
-    platform: screens.platform,
+    platform: platformOf(screens.platform),
     activities,
     scenarios,
     model: model.document,

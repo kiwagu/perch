@@ -1,3 +1,5 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import {
   BAN_CODES,
   CHANGE_EMAIL_CODES,
@@ -12,8 +14,8 @@ import {
 /**
  * The effects of the card's flow, as its transitions list them, which `contract:flow
  * console.account` prints and `platform/machines.spec.ts` compares exactly: a code shown in an
- * area's error (the codes of the action that area runs) or in a toast, a field emptied, the card
- * read again, the move to the accounts.
+ * area's error (the codes of the action that area runs) or in a toast, an area's error or a field
+ * emptied, the card read again, the move to the accounts.
  */
 
 /** The areas of the card that show an error of their own, each by its error's anchor. */
@@ -64,10 +66,22 @@ export const RESET_SENT = toast('reset-sent')
 export const VERIFICATION_SENT = toast('verification-sent')
 export const ACCOUNT_REMOVED = toast('account-removed')
 
+/** An area's error goes once an action of that area is done, as the flow's `clear` says. */
+const errorCleared = <Anchor extends keyof typeof AREA_ERRORS>(anchor: Anchor) =>
+  ({ type: 'clear', params: { anchor } }) as const
+
+export const CLEAR_NAME_ERROR = errorCleared('console.account.name.error')
+export const CLEAR_EMAIL_ERROR = errorCleared('console.account.email.error')
+export const CLEAR_BAN_ERROR = errorCleared('console.account.ban.error')
+export const CLEAR_SESSIONS_ERROR = errorCleared('console.account.sessions.error')
+export const CLEAR_RESET_ERROR = errorCleared('console.account.reset.error')
+export const CLEAR_VERIFICATION_ERROR = errorCleared('console.account.verification.error')
+export const CLEAR_REMOVAL_ERROR = errorCleared('console.account.removal.error')
+
 export const READ_SECTION = { type: 'read', params: { anchor: SECTION } } as const
 export const CLEAR_EMAIL = { type: 'clear', params: { anchor: EMAIL_INPUT } } as const
 export const CLEAR_REASON = { type: 'clear', params: { anchor: REASON_INPUT } } as const
-export const TO_ACCOUNTS = { type: 'navigate', params: { to: '/console/users' } } as const
-
-/** Forgets the error of an area once an action of that area was done. */
-export const forget = (area: ErrorArea) => ({ type: 'forget', params: { area } }) as const
+export const TO_ACCOUNTS = {
+  type: 'navigate',
+  params: { to: CONTRACT_ROUTES['console.users'] },
+} as const

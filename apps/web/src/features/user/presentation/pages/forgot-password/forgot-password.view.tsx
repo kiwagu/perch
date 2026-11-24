@@ -1,6 +1,7 @@
 import { type ComponentType, useId } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -8,6 +9,7 @@ import { Field, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import type { ForgotPasswordEvent } from '../../../application/forgot-password.machine'
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
 export interface ForgotPasswordViewProps {
@@ -21,8 +23,8 @@ export interface ForgotPasswordViewProps {
   readonly sentTo?: string | undefined
   /** The code of the last failure. */
   readonly error?: string | undefined
-  /** Whether the flow takes the send button now: it is enabled while it does. */
-  readonly canSend: boolean
+  /** Whether the flow takes the event now: a control is enabled exactly while it does. */
+  readonly can: (event: ForgotPasswordEvent) => boolean
   /** Asks for the mail for `email`: resolves whether it went through. */
   readonly onSend: (email: string) => Promise<boolean>
   readonly link?: ComponentType<PageLinkProps>
@@ -78,22 +80,22 @@ export function ForgotPasswordView(props: ForgotPasswordViewProps) {
                 id={emailId}
                 value={props.email}
                 onChange={(event) => props.onEmailChange(event.target.value)}
-                type="email"
                 autoComplete="email"
                 required
-                marksState={false}
                 data-testid="user.forgot-password.email-input"
               />
             </Field>
             <Button
               type="submit"
-              disabled={!props.canSend}
+              disabled={
+                !props.can({ type: 'user.forgot-password.send-button', email: props.email })
+              }
               data-testid="user.forgot-password.send-button"
             >
               {t('user.forgot-password.send')}
             </Button>
             <Link
-              to="/sign-in"
+              to={CONTRACT_ROUTES['user.sign-in']}
               className="text-sm underline"
               data-testid="user.forgot-password.sign-in-link"
             >

@@ -33,12 +33,15 @@ import {
   bindingSchema,
   derivedFromSchema,
   leavesSchema,
+  platformActionNameSchema,
   platformDefaultsSchema,
+  platformInvariantSchema,
   platformSchema,
   resolvedValueSchema,
   screenSchema,
   withEntrySchema,
 } from './screens-schema'
+import { termsFileSchema } from './terms.schema'
 
 /** A table of the vocabulary: its key, then what the key means. */
 const tableOf = (key: z.ZodString, meaning: string, what: string) =>
@@ -68,7 +71,7 @@ const contractSchema = z
     defaults: platformDefaultsSchema
       .optional()
       .describe(
-        "From version 6, what a value takes where it writes nothing of its own, `platform.defaults`: the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
+        "From version 6, what a value takes where it writes nothing of its own; the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
       ),
     idAttribute: z.literal('data-testid').describe('The attribute that carries an anchor.'),
     idPattern: z.string().min(1).describe('The regular expression every rendered anchor matches.'),
@@ -274,6 +277,11 @@ export const manifestSchema = z
       })
       .describe('The product the manifest describes.'),
     contract: contractSchema,
+    terms: termsFileSchema
+      .optional()
+      .describe(
+        "`contract/domain/terms.yaml`, verbatim, when the contract writes it: the contexts, the platform's terms and the roles. See the rule `terms`.",
+      ),
     screens: z
       .array(manifestScreenSchema)
       .describe(
@@ -285,9 +293,27 @@ export const manifestSchema = z
     ids: z
       .record(baseAnchorSchema, idSchema)
       .describe('Every declared anchor by name; a derived one is its base plus a suffix.'),
-    platform: platformSchema.describe(
-      'The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out.',
-    ),
+    platform: platformSchema
+      .extend({
+        invariants: z
+          .record(
+            kebabNameSchema,
+            platformInvariantSchema.extend({
+              actions: z
+                .array(platformActionNameSchema)
+                .describe(
+                  'Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`.',
+                ),
+            }),
+          )
+          .optional()
+          .describe(
+            'The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.',
+          ),
+      })
+      .describe(
+        'The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out.',
+      ),
     activities: z
       .array(activitySchema)
       .describe(
@@ -319,7 +345,7 @@ export const manifestSchema = z
           .describe('One rule of the engine.'),
       )
       .describe(
-        'The rules of the engine that this manifest and its schema name, each under its id: wherever a description says "see the rule" and an id in backticks, its text is here, because the reference that holds it is not part of the manifest. A rule they do not name is not carried, and neither is one that these texts name in turn.',
+        'The texts of the rules this manifest and its schema name by id, each id in backticks after "rule" or "rules"; the reference is not shipped. A rule only these texts name is not carried.',
       ),
   })
   .describe('The UI manifest: the contract of the application for tests and agents.')

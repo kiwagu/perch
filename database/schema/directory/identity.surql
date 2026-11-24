@@ -43,5 +43,9 @@ DEFINE FIELD OVERWRITE ban_reason ON identity TYPE option<string>;
 -- When a ban would lift by itself, as the admin plugin keeps it: the plugin lifts an expired ban at
 -- the account's next sign-in. The gateway sets none, so a ban lasts until an operator lifts it.
 DEFINE FIELD OVERWRITE ban_expires ON identity TYPE option<datetime>;
+-- Whether the account's second factor is on, as Better Auth's two-factor plugin keeps it: on once
+-- a code of the key it made confirmed the key, so each sign-in by password then asks for a code of
+-- that key or for one of its backup codes. NONE (off) for every account until then.
+DEFINE FIELD OVERWRITE two_factor_enabled ON identity TYPE option<bool>;
 
 DEFINE INDEX OVERWRITE identity_email ON identity FIELDS email UNIQUE;

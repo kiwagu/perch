@@ -18,7 +18,14 @@ const settledSchema: z.ZodType<SettledState> = z.object({
   value: valueSchema,
   page: z.object({
     url: z.string(),
-    anchors: z.array(z.object({ anchor: z.string(), kind: z.string(), visible: z.boolean() })),
+    anchors: z.array(
+      z.object({
+        anchor: z.string(),
+        kind: z.string(),
+        code: z.string().exactOptional(),
+        visible: z.boolean(),
+      }),
+    ),
   }),
 })
 

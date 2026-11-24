@@ -1,4 +1,7 @@
 // scenario: user/base/theme-from-the-frame
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, expectPathname, signOut, signUp, test } from '../../support/fixtures'
 
 test.describe('Choose the theme of this device from the frame as a guest, and the account starts with it', {
@@ -11,7 +14,7 @@ test.describe('Choose the theme of this device from the frame as a guest, and th
     const settingsTheme = page.getByTestId('user.settings.theme-select')
 
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       // Expected: After step 1 [app-shell.theme-select] shows [value:system]
       await expect(theme).toHaveAttribute('data-value', 'system')
@@ -60,7 +63,7 @@ test.describe('Choose the theme of this device from the frame as a guest, and th
       await signOut(page)
       // Expected: After step 6 the URL is [/sign-in] and [app-shell.theme-select] shows
       //   [value:light], the theme this device showed last
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       await expect(theme).toHaveAttribute('data-value', 'light')
     })

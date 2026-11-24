@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, SHAPE_RUNNER, WRITE_PATH } from '@workspace/data'
 import { type IdentityId, identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { ProfileService } from '../features/user/application/profile.service'
@@ -89,7 +90,7 @@ describe('createAppRoot', () => {
     const storage = memoryStorage()
     const acme: Membership = {
       tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     }
     const gateway = fakeFetch(respond(200, { membership: acme }))
 

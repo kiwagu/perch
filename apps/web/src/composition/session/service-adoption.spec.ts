@@ -2,6 +2,7 @@ import { ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import {
@@ -43,12 +44,12 @@ const bob: KeptDevice = {
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const globex: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const worlds: TestWorld[] = []
@@ -349,7 +350,7 @@ describe('the adopter of a membership the gateway answers', () => {
   it('writes nothing when the saved list names the organisation, also with another role saved by another tab whose event is not handled yet', async () => {
     const { session, storage, saved, space } = await signedIn()
     const adopt = session.membershipAdopter()
-    const asMember: Membership = { ...acme, role: 'member' }
+    const asMember: Membership = { ...acme, role: CONTRACT_ROLES.member }
 
     // Another tab kept a list naming Acme with another role; its storage event is not handled yet.
     saveMemberships(storage, saved, [asMember])

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { fireEvent, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { renderWithProviders } from '../../../../../test-utils'
 import type { InvitationErrorCode } from '../../../application/invitation.machine'
@@ -29,10 +31,9 @@ function renderView(props: Partial<InvitationViewProps> = {}, locale: 'en' | 'es
   renderWithProviders(
     <InvitationView
       organisation="Acme"
-      joinAs="admin"
+      joinAs={CONTRACT_ROLES.admin}
       renders={rendering(...ASKING)}
-      canAccept
-      canDecline
+      can={() => true}
       guest={false}
       {...handlers}
       {...props}
@@ -76,7 +77,7 @@ describe('InvitationView', () => {
 
     const badge = screen.getByTestId('organisation.invitation.role-badge')
 
-    expect(badge.getAttribute('data-value')).toBe('admin')
+    expect(badge.getAttribute('data-value')).toBe(CONTRACT_ROLES.admin)
     expect(badge.textContent).toBe('Administrator')
     expect(screen.queryByTestId('organisation.invitation.status')).toBeNull()
     expect(screen.queryByTestId('organisation.invitation.message')).toBeNull()
@@ -97,19 +98,32 @@ describe('InvitationView', () => {
   })
 
   it('words the role of a plain member', () => {
-    renderView({ joinAs: 'member' })
+    renderView({ joinAs: CONTRACT_ROLES.member })
 
     const badge = screen.getByTestId('organisation.invitation.role-badge')
 
-    expect(badge.getAttribute('data-value')).toBe('member')
+    expect(badge.getAttribute('data-value')).toBe(CONTRACT_ROLES.member)
     expect(badge.textContent).toBe('Member')
   })
 
   it('holds the buttons while the flow takes no press', () => {
-    renderView({ canAccept: false, canDecline: false })
+    renderView({ can: () => false })
 
     expect((screen.getByTestId(ACCEPT) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByTestId(DECLINE) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('enables each button exactly while the flow takes its own event', () => {
+    renderView({ can: (event) => event.type === ACCEPT })
+
+    expect((screen.getByTestId(ACCEPT) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByTestId(DECLINE) as HTMLButtonElement).disabled).toBe(true)
+
+    cleanup()
+    renderView({ can: (event) => event.type === DECLINE })
+
+    expect((screen.getByTestId(ACCEPT) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId(DECLINE) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('shows no email, anywhere', () => {
@@ -135,7 +149,7 @@ describe('InvitationView', () => {
     expect(message.getAttribute('data-code')).toBe('sign-in-to-accept')
     expect(message.textContent).toContain('Sign in')
     expect(screen.getByTestId('organisation.invitation.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Acme')
     expect(screen.getByTestId('organisation.invitation.role-badge')).toBeTruthy()

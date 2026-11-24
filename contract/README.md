@@ -93,7 +93,7 @@ contract/
   REFERENCE.md       every key and rule of the contract, generated, never edited by hand
   COVERAGE.md        the coverage note
   vocabulary.md      the closed lists
-  domain/            what a feature describes: the model, the platform, the screens, the activities
+  domain/            what a feature describes: the model, the platform, the screens, the activities, the terms
   schemas/           the JSON Schemas generated from the tooling, never edited by hand
 ```
 
@@ -101,13 +101,26 @@ The authored files, edited by hand or by a model in the modeling thread:
 
 - `vocabulary.md`, Markdown: the closed lists, one table per section (the kinds of anchors,
   the derived suffixes, the attributes, the app, container and row states, the codes, the
-  choice values, the screen names, the roles, the anchors the shell reserves and the
-  platform's composites). Its
+  choice values, the screen names, the anchors
+  the shell reserves and the platform's composites). Its
   `Grammar` section says how an anchor is spelled. The loader reads each table by its fixed
   heading. The grammar, the kinds, the suffixes and the attributes are the engine's (meta);
   every other table is content a feature adds with the screen file that first uses it
   (business). The contract version is not in it: since version 2 it is said only in
   `domain/platform.yaml`.
+- `domain/terms.yaml`, YAML: the project's language. Its `contexts` are the bounded contexts
+  (one while the product is one), its `terms` the platform's nouns (account, organisation,
+  membership, invitation, device, session) and its `roles` the roles a device holds: each with
+  its `meaning` within the budget of a description, its `synonyms`, the words the texts never
+  use for it, and its `storage`, the name storage gives it where that differs (organisation is
+  the table `tenant`; no applied migration is renamed). Every contract writes it and keeps its
+  roles there; the vocabulary lists none. The check refuses a synonym in a description, a
+  behaviour text, an action's, an invariant's, a screen's, an anchor's, a value's or a field's
+  name, an enum's value, a route path, a role's name, a row of the vocabulary's tables, an
+  activity's names or a scenario's prose; code and
+  tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`
+  (`ui-contract emit terms`), never by hand, which the ESLint rule `workspace/contract-terms`
+  holds ([the rule](REFERENCE.md#rule-terms)).
 - `domain/screens/<pathname>.yaml`: one screen per file, named by the path of the screen's
   first binding without the leading `/`. `/sign-in` is `domain/screens/sign-in.yaml` and `/me`
   is `domain/screens/me.yaml`; a nested path is a folder (`/org/$org` would be
@@ -126,6 +139,48 @@ The authored files, edited by hand or by a model in the modeling thread:
   first, `toasts`, the platform actions whose success toasts with their codes, `composites`,
   the lists with their items a screen derives by opting in (see "What a screen leaves out"),
   the reserved anchors and the readiness line.
+
+  An action says what it answers ([the rule](REFERENCE.md#rule-action-outcomes)): its
+  `result` is one outcome or a list of outcome lines, the plain success first, then each other
+  outcome under its own condition; its `codes` map each code a failure shows to the condition
+  it answers on, or to the invariants it refuses for, `{ invariant: <name> }` or
+  `{ invariant: [<name>, <name>] }`, with `condition: <text>` beside them for a cause that is no
+  invariant. An invariant, under `invariants`, is a rule
+  several actions keep, said once with the code it `refuses` with; each action that keeps it
+  names it under that code, and the engine derives the actions it limits, which the manifest
+  carries. Each outcome line, condition and rule keeps the budget of a description. From version
+  6 the check refuses the older forms, a list of the codes' names and a `result` of one string
+  past the budget; a contract at an older version still loads them:
+
+  ```yaml
+  invariants:
+    device-limit:
+      rule: An account is signed in on ten devices at most at once, each counted once while its session lasts.
+      refuses: device-limit
+    failed-sign-ins:
+      rule: Ten wrong passwords of one email within a quarter of an hour keep its password out.
+      refuses: rate-limited
+    address-mails:
+      rule: A network address is charged 200 mail requests a quarter of an hour at most.
+      refuses: rate-limited
+  actions:
+    sign-in:
+      # description, params, changes
+      result:
+        - the device is signed in, and the app moves to /me with code welcome
+        - "with the second factor on: the answer asks for a code and signs no device in"
+      codes:
+        invalid-credentials: the email or the password is wrong
+        device-limit: { invariant: device-limit }
+        rate-limited: { invariant: failed-sign-ins }
+        failed: anything else fails
+    change-email:
+      # description, params, result, changes
+      codes:
+        rate-limited:
+          invariant: [ failed-sign-ins, address-mails ]
+          condition: a fourth change by the account within a quarter of an hour
+  ```
 
   An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
   mail goes to, or `account`, the email of the account the action acts on; `language`, the
@@ -230,8 +285,9 @@ piece of its data's, each visit's and each transition's. Four maps hold descript
 the key: a screen's `states` (what is visible in each container state), the platform's `events`
 (what each means), a composite's `items` (each the description of the item anchor a screen
 derives from it) and the sentence guards of a `meta.guards` (a guard by failure code is
-structure). A platform action's `result` is no description: it is the action's behaviour, which
-the hand-over diff lists among the action's lines.
+structure). A platform action's `result`, the conditions of its codes and the rules of the
+invariants are no descriptions: they are behaviour, which the hand-over diff lists with their
+text, and they keep the same budget.
 
 A description says what its element is for, as a tester or a user tells it apart, and leaves
 out what the structure, another element, the platform, the model, the vocabulary or the flow
@@ -325,7 +381,8 @@ not-found screen at the same address ([the rule](REFERENCE.md#rule-roles),
 an anchor's [`roles`](REFERENCE.md#screen-anchors-name-roles)). A route that must not show
 itself to a guest leaves its `guard` out and names no `guest`. `GUEST`, `IDENTITY`,
 `heldRoles` and `admits` of `@workspace/ui-contract/anchors` read the roles for the app and
-the checks alike.
+the checks alike. The roles are the terms file's ([the rule](REFERENCE.md#rule-terms)), and code
+names one through `CONTRACT_ROLES`, a route through `CONTRACT_ROUTES`, never by hand.
 
 A parameter of `params` or `search` may carry `examples`, which `contract:check` holds to the
 parameter's schema; `bun run contract:routes` (`ui-contract routes [--json]`) prints the
@@ -637,11 +694,13 @@ gap is fixed in the contract files first, never worked around in a test
 ([the rule](REFERENCE.md#rule-checks)):
 
 - `bun run contract:check`: the files on their own and against each other: their shapes, the
-  vocabulary, the bindings, the flows, the platform, who each route serves, the scenarios, the
+  vocabulary, the terms and their synonyms ([the rule](REFERENCE.md#rule-terms)), the bindings, the flows, the platform, who each route serves, the scenarios, the
   schema drift, the reference's drift and each link of a guide into the reference
   ([the files](REFERENCE.md#rule-check-files), [the bindings](REFERENCE.md#rule-check-bindings),
   [the flows](REFERENCE.md#rule-check-flows), [the platform](REFERENCE.md#rule-check-platform),
-  [the access](REFERENCE.md#rule-check-access)).
+  [the access](REFERENCE.md#rule-check-access)). A commit on `main`, and `bun run check`, which
+  checks the tip of a branch before it lands, also check that the contract is at the version the
+  engine reads (`contract:check --current`).
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against the
   contract ([the rule](REFERENCE.md#rule-check-sources)).
 - `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the contract
@@ -751,14 +810,19 @@ sequence of more than one carries its position, `#<n>`. Descriptions are left ou
 lines, as they change nothing that runs, so a screen file written shorter that loads to the same
 flow shows no flow line. A platform action is listed by its name, and its lines as `platform action lines
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
-each parameter with its type (`param email: string`), its result (`result: <the text>`, the
-one prose that stays, since it says what holds once the action succeeds), each code its failure
-shows (`code rate-limited`), each role that may run it, its page sizes when it pages (`paged by
+each parameter with its type (`param email: string`), each line of its result (`result: <the
+line>`, `result #<n>: <the line>` by position when there are several, the first being the plain
+success; the prose that stays, since it says what the action answers), each code its failure
+shows with its invariants and its condition (`code invalid-code: <the condition>`, `code
+device-limit: invariant device-limit`, `code rate-limited: invariant failed-sign-ins,
+address-mails; <the condition>`), each role that may run it, its page sizes when it pages (`paged by
 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
-removed whole shows every line, as nothing else in the summary says its mail. The reads an
+removed whole shows every line, as nothing else in the summary says its mail. An invariant is
+listed by its name, as `invariant lines added in <name>` and `invariant lines removed in
+<name>`, its rule (`rule: <the text>`) and its code (`refuses <code>`). The reads an
 action of the model changes are listed by the entity and the action, as `model action lines
 added in <entity>.<action>` and `model action lines removed in <entity>.<action>`, a line each
 in the same form (`model action lines added in profile.updateName: changes accounts.list,

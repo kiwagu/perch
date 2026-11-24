@@ -1,4 +1,7 @@
 // scenario: user/base/blocked-storage
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { expect, test } from '../../support/fixtures'
 
 test.describe('Open the app in a browser that blocks site data', { tag: '@smoke' }, () => {
@@ -16,7 +19,7 @@ test.describe('Open the app in a browser that blocks site data', { tag: '@smoke'
     })
 
     await test.step('2. Open [/sign-in]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
     })
 
     // Expected:

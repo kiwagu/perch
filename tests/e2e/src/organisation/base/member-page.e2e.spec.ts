@@ -10,7 +10,7 @@ import {
 } from '../../support/organisation'
 
 test.describe('Open the organisation page as a member', { tag: '@smoke' }, () => {
-  test('An administrator invites an unknown email and an account alike; the account accepts on its organisation page and sees the organisation as a member, without its members or the invitations', async ({
+  test('An admin invites an unknown email and an account alike; the account accepts on its organisation page and sees the organisation as a member, without its members or the invitations', async ({
     page,
     anotherAccount,
   }) => {

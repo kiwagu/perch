@@ -3,8 +3,9 @@
 ## Role in the architecture
 
 The build-time modeling stage. It reads only `.surql` files (the shared schema and the
-shapes and commands next to components) plus the folder layout, and generates typed
-models, command operation plans, a page model and permission suites. It never reads
+shapes and commands next to components) plus the folder layout, and the kernel's generated
+`CONTRACT_VALUES` for the contract's length limits. It generates typed models, command operation
+plans, a page model, permission suites and the limits as database parameters. It never reads
 TypeScript or React code.
 
 ## Key exports
@@ -20,18 +21,35 @@ TypeScript or React code.
   `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`, plus `pages.model.json`, the
   `generated-<module>.toml` suites (shapes of the `tenant` region are left out: record users
   have no access to the tenant database on the server yet; a module with only such shapes
-  gets no suite) and the replica schema (every
+  gets no suite), the replica schema (every
   replicated table with its region and the kind of each of its fields) in the database workspace,
-  `<database>/src/replica.schema.gen.ts`. `--check` writes nothing and fails on missing,
-  different or stale output.
+  `<database>/src/replica.schema.gen.ts`, and the contract's length limits as database
+  parameters, `<schema>/common/contract-values.gen.surql` (see `emitValueParams`). `--check`
+  writes nothing and fails on missing, different or stale output.
 - CLI `lint-surql [dir ...]` (root `bun run lint:surql`, part of `lint` and `check`): fails on a
   string or template literal in TypeScript that holds a SurrealQL statement; reads the syntax
   tree with oxc-parser. The modeling sources are exempt: their tests feed SurrealQL to the parsers.
 - `findSurqlLiterals`: the same check for one file.
 - `parseShapeFile`, `parseCommandsFile`, `parseShape`, `tokenize`: the dialect parsers.
+- `emitValueParams`: the text of `contract-values.gen.surql` for the contract's values
+  (`CONTRACT_VALUES` of `@workspace/kernel`, which the stage reads): one `DEFINE PARAM OVERWRITE
+  $<value>_max_length VALUE <n>;` for each value with a `maxLength`, the value's name with `-` and
+  `.` as `_`, in the order of the names, under a GENERATED header. An assert of the schema may
+  name a parameter (`string::len($value) <= $profile_name_max_length`) instead of writing the
+  number. A problem: `the values <a> and <b> name the same database parameter $<name>` (two
+  limited values whose names map to one parameter).
+- `valueParamName`: the name of the parameter that holds the limit of a value (`profile.name` is
+  `profile_name_max_length`), the one rule `emitValueParams` names its parameters by, for a check
+  that finds the value a parameter backs.
 - `loadSchemaModel`, `parseStructure`: the schema model with its annotations
   (`@region private|public|tenant`, `@replicate none`, `@id`, `@crdt`, `@owner`, `@can`,
-  `@readonly`) and their problems. `-- @owner <field>` names the `record<member>` field that
+  `@readonly`) and their problems. Each table also carries `asserts` (the `ASSERT` clause of each
+  field that has one, by field name, worded as the database prints it) and `indexes` (each index
+  by name, with its fields and whether it is unique), so a check can hold the schema's limits to
+  another model. The result also carries `params`: each parameter the schema defines
+  (`DEFINE PARAM`) by name, with the value the database holds as text (`'80'`), so an assert that
+  names a parameter can be resolved; the parameters the data layer stores for itself are left out.
+  `-- @owner <field>` names the `record<member>` field that
   holds a record's author; `-- @can <member|admin> <action>[:own], …` (one line per role,
   actions `create`, `update`, `delete`, `:own` limiting the role to the records it owns)
   declares who may write a tenant table. The rules are emitted into the replica schema as

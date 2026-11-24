@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { routeFrameEffect } from './frame-effects'
 
 const channels = () => ({
@@ -62,7 +64,7 @@ describe('routeFrameEffect', () => {
       into,
     )
     routeFrameEffect({ type: 'clear', anchor: 'organisation.notes.error' }, into)
-    routeFrameEffect({ type: 'navigate', to: '/sign-in' }, into)
+    routeFrameEffect({ type: 'navigate', to: CONTRACT_ROUTES['user.sign-in'] }, into)
 
     expect(into.pushToast).not.toHaveBeenCalled()
     expect(into.notify).not.toHaveBeenCalled()

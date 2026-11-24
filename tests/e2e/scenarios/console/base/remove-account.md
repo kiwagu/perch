@@ -20,7 +20,7 @@ data:
 
 Where: [/console/account] on device A, an operator; [/org] on device B, the account's own browser; [/org] on device C, another member's browser
 
-## Scenario: The removal of an organisation's only administrator is refused while other members are in, the operator's own account is refused, and the removal then goes through with its notice
+## Scenario: The removal of an organisation's only admin is refused while other members are in, the operator's own account is refused, and the removal then goes through with its notice
 
 ### Steps
 1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page

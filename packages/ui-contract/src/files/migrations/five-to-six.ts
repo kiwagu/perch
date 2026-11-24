@@ -12,7 +12,10 @@
  * default never reaches (no string, an `enum`, a read-only field), and every value of a contract
  * that declares no default stay as written: the step never drops a limit the engine does not give
  * back, nor gives one a value did not have. The model is JSON, edited as text: the member goes
- * with its comma, every other byte stays.
+ * with its comma, every other byte stays. Version 6 also asks an action's codes as a map and a
+ * `result` of one string within the budget of a description: the step names each action that
+ * writes codes as a list or a longer result, left to the author, who alone knows when each code
+ * answers.
  */
 
 import { isDeepStrictEqual } from 'node:util'
@@ -20,7 +23,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { isMap, isNode, isScalar, type Range } from 'yaml'
 
 import { entriesOf, isRecord, recordOf } from '../../records'
-import type { PlatformDefaults } from '../../schemas'
+import { DESCRIPTION_BUDGET, descriptionLength, type PlatformDefaults } from '../../schemas'
 import { MODEL_FILE, PLATFORM_FILE } from '../paths'
 import { jsonPath } from '../problems'
 import { parseYamlDocument } from '../read-yaml-document'
@@ -203,6 +206,26 @@ const gainedParameters = (platform: Plain, defaults: PlatformDefaults): string[]
     ),
   )
 
+/** A line for each action in a form version 6 refuses: codes as a list, a longer `result` string. */
+const olderForms = (platform: Plain): string[] =>
+  entriesOf(platform['actions']).flatMap(([action, definition]) => {
+    const { codes, result } = recordOf(definition)
+    const length = typeof result === 'string' ? descriptionLength(result) : 0
+
+    return [
+      ...(Array.isArray(codes)
+        ? [
+            `${PLATFORM_FILE}: ${jsonPath(['actions', action, 'codes'])}: a list of codes, and from version 6 an action's codes are a map: write when each answers, \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep`,
+          ]
+        : []),
+      ...(length > DESCRIPTION_BUDGET
+        ? [
+            `${PLATFORM_FILE}: ${jsonPath(['actions', action, 'result'])}: one string of ${length} characters, and from version 6 it keeps the budget of ${DESCRIPTION_BUDGET}: write it as outcome lines within the budget, a refusal as its code's condition`,
+          ]
+        : []),
+    ]
+  })
+
 /** The model's text without each field limit the default gives back. */
 function withoutFieldLimits(model: string, defaults: PlatformDefaults): string {
   const document: unknown = model.trim() === '' ? {} : JSON.parse(model)
@@ -225,9 +248,10 @@ export const fiveToSix: Migration = {
   run: (files) => {
     const platform = plainOf(files.platform)
     const defaults = defaultsOf(platform)
+    const forms = olderForms(platform)
 
     if (defaults === undefined) {
-      return []
+      return forms
     }
 
     // Read before any limit is dropped: a field the step drops one from gains nothing.
@@ -236,6 +260,6 @@ export const fiveToSix: Migration = {
     keepValueLimits(files, defaults)
     files.model = withoutFieldLimits(files.model, defaults)
 
-    return gained
+    return [...gained, ...forms]
   },
 }

@@ -13,7 +13,7 @@ data:
 ---
 # Invite an email that has no account yet
 
-Where: [/org] on device A (user A, administrator, in Spanish) and [/sign-in], then [/org], on device B (another browser)
+Where: [/org] on device A (user A, admin, in Spanish) and [/sign-in], then [/org], on device B (another browser)
 
 ## Scenario: An invitation to an email with no account is mailed in the inviter's language and waits; the account later made with that email finds it on the organisation page and joins
 

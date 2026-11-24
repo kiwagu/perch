@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=../schemas/terms.schema.json
+contexts:
+  sample:
+    meaning: The sample platform the engine's specs check.
+terms: {}
+roles:
+  guest:
+    meaning: Nobody signed in.
+  identity:
+    meaning: An account signed in.
+  member:
+    meaning: A member of the organisation.

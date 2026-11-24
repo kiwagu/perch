@@ -29,6 +29,7 @@ Run through this table after editing a rule in `.cursor/rules/` or a skill in
 | Load the Spanish catalog only when the user picks Spanish | process -> static-imports-only |
 | Make the database port configurable per machine | process -> monorepo-env-minimalism |
 | Keep the old profile table working while adding the new one | process -> reset-mode-default, poc-no-fallbacks |
+| Keep accounts made before the new password rules signing in | process -> reset-mode-default |
 | Name the files of a new settings page | process -> entity-first-module-naming |
 | Add a new workspace package for the gateway | process -> package-readme |
 | Add a feature module with a new page | process -> package-readme |

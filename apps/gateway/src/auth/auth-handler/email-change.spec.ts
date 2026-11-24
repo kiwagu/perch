@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
+
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
@@ -21,11 +23,19 @@ import {
   signInRequest,
   turnsAsked,
 } from './__fixtures__/mount'
+import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { CHANGE_EMAIL_FLOOR_MS } from './email-change'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
+
+/** The longest email an address can be, as the contract says it. */
+const LONGEST = CONTRACT_VALUES.email.maxLength
+
+/** An email of exactly `length` characters. */
+const emailOf = (length: number): string =>
+  `${'a'.repeat(length - '@example.test'.length)}@example.test`
 
 /** Another client address, which nothing from `FROM` charges. */
 const ELSEWHERE = '203.0.113.8'
@@ -161,7 +171,7 @@ describe('authHandler, the request to change the email', () => {
       '@example.test',
       '',
       '   ',
-      `${'a'.repeat(310)}@example.test`,
+      emailOf(LONGEST + 1),
     ]) {
       const refused = await mounted.route(changeTo(ann.on('laptop'), email), FROM)
 
@@ -170,6 +180,17 @@ describe('authHandler, the request to change the email', () => {
     }
 
     expect((await asked(mounted, ann, NEW_EMAIL))?.status).toBe(202)
+  })
+
+  it('takes a new email of the longest length and mails it', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const longest = emailOf(LONGEST)
+
+    expect((await asked(mounted, ann, longest))?.status).toBe(202)
+    // The mail starts after the answer: wait for it, then count.
+    await mounted.outbox.next(longest)
+    expect(mounted.outbox.to(longest)).toHaveLength(1)
   })
 
   it('takes three changes of an account within a quarter of an hour; the fourth answers rate-limited and mails nothing', async () => {
@@ -204,15 +225,37 @@ describe('authHandler, the request to change the email', () => {
     expect((await mounted.route(confirm(second), FROM))?.status).toBe(200)
   })
 
-  it('refuses an empty password with invalid-credentials, mailing nothing', async () => {
+  it("forgets none of the account's failed sign-ins at a right password", async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
-    const empty = await mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL, ''), FROM)
 
-    expect(empty?.status).toBe(400)
-    expect(await empty?.json()).toEqual({ code: 'invalid-credentials' })
-    expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
-  })
+    await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+    expect((await asked(mounted, ann, NEW_EMAIL))?.status).toBe(202)
+    // The right password forgot nothing: the next failure is the tenth, and the sign-in waits.
+    expect(
+      (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+    ).toBe(401)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+  }, 60_000)
+
+  it.each(OUT_OF_LENGTH)(
+    'refuses %s as a wrong one, mailing nothing, and counts it as a failed sign-in',
+    async (_, password) => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+
+      const refused = await mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL, password), FROM)
+
+      expect(refused?.status).toBe(400)
+      expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
+      expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
+      // The tenth failure spent the account's failed sign-ins.
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    },
+    60_000,
+  )
 
   it('answers a request without a live session of its device 401', async () => {
     const mounted = await mountedOnRealAuth()

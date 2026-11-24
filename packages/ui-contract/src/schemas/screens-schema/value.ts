@@ -32,7 +32,7 @@ export const valueKeywords = {
     .enum(VALUE_FORMATS)
     .optional()
     .describe(
-      'The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.',
+      "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
     ),
   minimum,
   maximum,
@@ -48,7 +48,7 @@ export const valueSchema = z
       .nullable()
       .optional()
       .describe(
-        'The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.',
+        'The most characters of a string; from version 6 a string value that writes none, no `enum`, takes `defaults.maxLength`, and `null` takes no limit. See the rule `declared-values`.',
       ),
     description: z.string().describe(DESCRIPTION_PURPOSES.value),
     examples: z
@@ -64,7 +64,7 @@ export const valueRefSchema = z
   .string()
   .regex(/^([a-z][a-z0-9-]*|[a-z_]+\.[a-z_]+)$/)
   .describe(
-    'The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints a value has it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`.',
+    'The value the parameter takes: a name of `platform.values` or a model field, `<entity>.<field>`, with its constraints; a keyword beside it may narrow them, never widen. See the rule `declared-values`.',
   )
 
 export const resolvedValueSchema = z

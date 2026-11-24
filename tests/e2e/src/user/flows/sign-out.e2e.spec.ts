@@ -1,7 +1,11 @@
 // scenario: user/flows/sign-out
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, notice, signIn, test, toast } from '../../support/fixtures'
 import { SyncNetwork } from '../../support/network'
+import { atRoute } from '../../support/routes'
 import { databases, identityDatabase } from '../../support/storage'
 
 test.describe('Sign out of one device', { tag: '@full' }, () => {
@@ -20,7 +24,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     const database =
       await test.step('1. On device A, open [/me], enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]', async () => {
-        await page.goto('/me')
+        await page.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(page)
         await page.getByTestId('user.profile.bio-textarea').fill(data.bio)
         await page.getByTestId('user.profile.save-button').click()
@@ -48,7 +52,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       await page.getByTestId('user.profile.sign-out-button').click()
       // Expected: After step 3 device A is on [/sign-in], and its browser keeps no local database of
       //   the account
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
       await expect.poll(() => databases(page), { timeout: 10_000 }).not.toContain(database)
     })
 
@@ -57,7 +61,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       await deviceB.getByTestId('user.profile.save-button').click()
       // Expected: After step 4 device B, still signed in, shows [app-shell.toast] carrying
       //   [code:profile-saved]
-      await expect(deviceB).toHaveURL(/\/me$/)
+      await expect(deviceB).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await expect(toast(deviceB, 'profile-saved')).toBeVisible()
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.newName)
     })
@@ -103,7 +107,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       // Expected: After step 8 device A stays on [/me] with the unsent name, and its local database
       //   is kept
       await expect(page.getByTestId('user.profile.sign-out-dialog.confirm-button')).toBeHidden()
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await expect(page.getByTestId('user.profile.heading')).toHaveText(data.unsentName)
       expect(await databases(page)).toContain(database)
     })
@@ -116,7 +120,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       await page.getByTestId('user.profile.sign-out-dialog.confirm-button').click()
       // Expected: After step 9 device A is on [/sign-in] and shows no [app-shell.notice-message]:
       //   the notice of step 5 went with the account
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
       await expect(page.getByTestId('app-shell.notice-message')).toHaveCount(0)
     })
   })

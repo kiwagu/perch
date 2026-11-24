@@ -23,5 +23,5 @@ export const renderSetsSchema = z
       .describe('The anchors of the set, which each state that lists it renders.'),
   )
   .describe(
-    'Anchors that several states render, named once: a state that lists the name in its `meta.renders` renders those anchors, as if it listed them; the loader writes them in. A set serves two states or more. See the rule `render-sets`.',
+    'Anchors that several states render, named once: a state that lists the name in its `meta.renders` renders those anchors. A set serves two states or more. See the rule `render-sets`.',
   )

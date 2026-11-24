@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fromDriverValue, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, PASSWORD_LENGTH } from '@workspace/kernel'
 
+import { passwordOfLength } from '../__fixtures__/platform-values'
 import { linkToken } from '../mail/__fixtures__/outbox'
 
 import { sessionStates } from './__fixtures__/account-ban'
@@ -132,7 +134,7 @@ describe('createAuthInstance', () => {
     expect(accounts[0]?.identity).toBe(user.id)
   })
 
-  it("holds a new password to the length of the password rules, 10 to 35 characters, as Better Auth's own limits", async () => {
+  it("holds a new password to the length of the password rules, as Better Auth's own limits", async () => {
     const { auth, outbox } = await instance()
     const signUp = (email: string, password: string) =>
       auth.api.signUpEmail({
@@ -140,16 +142,20 @@ describe('createAuthInstance', () => {
         headers: deviceHeaders('laptop'),
       })
 
-    await expect(signUp('short@example.test', 'Abcdefg1!')).rejects.toMatchObject({
+    await expect(
+      signUp('short@example.test', passwordOfLength(PASSWORD_LENGTH.min - 1)),
+    ).rejects.toMatchObject({
       status: 'BAD_REQUEST',
       body: { code: 'PASSWORD_TOO_SHORT' },
     })
-    await expect(signUp('long@example.test', `Ab1!${'c'.repeat(32)}`)).rejects.toMatchObject({
+    await expect(
+      signUp('long@example.test', passwordOfLength(PASSWORD_LENGTH.max + 1)),
+    ).rejects.toMatchObject({
       status: 'BAD_REQUEST',
       body: { code: 'PASSWORD_TOO_LONG' },
     })
-    await signUp('shortest@example.test', 'Abcdefgh1!')
-    await signUp('longest@example.test', `Ab1!${'c'.repeat(31)}`)
+    await signUp('shortest@example.test', passwordOfLength(PASSWORD_LENGTH.min))
+    await signUp('longest@example.test', passwordOfLength(PASSWORD_LENGTH.max))
     await outbox.next('shortest@example.test')
     await outbox.next('longest@example.test')
     expect(outbox.to('short@example.test')).toEqual([])
@@ -515,7 +521,7 @@ describe('createAuthInstance', () => {
 
     await local.db.query(identityRoleSetStatement, {
       identity: user.id,
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
       reason: 'MARKER kept',
     })
 
@@ -554,7 +560,11 @@ describe('createAuthInstance', () => {
       identity: user.id,
     })
 
-    expect(standing).toEqual({ role: 'operator', banned: false, ban_reason: 'MARKER kept' })
+    expect(standing).toEqual({
+      role: CONTRACT_ROLES.operator,
+      banned: false,
+      ban_reason: 'MARKER kept',
+    })
     expect(await auth.api.getSession({ headers: bearer(token) })).not.toBeNull()
   })
 
