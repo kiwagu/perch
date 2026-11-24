@@ -29,20 +29,18 @@ export const SIGN_UP_FLOOR_MS = STARTING_LANGUAGE_BUDGET_MS + SIGN_UP_WORK_MS
 /**
  * As much of a sign-up's body as the mount reads before Better Auth does: the email its turn is
  * taken by (at most the `email` value's length), the password the rules of a new password are
- * checked on, and the name the rule of a profile's name is.
+ * checked on, the name the rule of a profile's name is, and the language, none or one the app
+ * speaks.
  */
 const signUpBody = z.object({
   email: z.string().min(1).max(CONTRACT_VALUES.email.maxLength),
   password: z.string(),
   name: z.string(),
+  locale: z.enum(SUPPORTED_LOCALES).optional(),
 })
 
-/** The sign-up's JSON as sent, every field kept, with the language it names, if any. */
-const sentBody = z.looseObject({ locale: z.unknown().optional() })
-
-/** Whether the language a sign-up was sent in is none, or one the app speaks. */
-const spoken = (locale: unknown): boolean =>
-  locale === undefined || SUPPORTED_LOCALES.some((supported) => supported === locale)
+/** The sign-up's JSON as sent, every field kept. */
+const sentBody = z.looseObject({})
 
 /**
  * Hands Better Auth a sign-up, once the client address's verification mails took it (every sign-up
@@ -51,17 +49,15 @@ const spoken = (locale: unknown): boolean =>
  * password that breaks the rules of a new password (`keepsPasswordRules`) is refused first, 400
  * `weak-password`, at once: before the email's turn, Better Auth and the directory, so the
  * refusal reads nothing of the email. So is a name that breaks the rule of a profile's name
- * (`profileNameOf`): 400 `name-required` (nothing left once trimmed) or `name-too-long`. Better
+ * (`profileNameOf`): 400 `name-required` (nothing left once trimmed) or `name-too-long`; and a
+ * language the app does not speak is a refused body, 400 `bad-request`, which looks nothing up. Better
  * Auth's answer names the account it made, or, for an
  * email that has one, an account it made up whose fields differ: the client gets `202` with no
- * body for both, no sooner than `SIGN_UP_FLOOR_MS` after the request began. A sign-up sent in no
- * language or in one the app speaks starts in the default language of the organisation that
- * invited the email (`startingLanguage`, looked up for a new email and a taken one alike), the
- * JSON handed on with that language alone replaced; a refusal of Better Auth's after that lookup
- * waits for the same floor, so its time tells nothing of the lookup. A refusal of a language the
- * gateway does not speak, which looks nothing up, passes at once as its status and code alone, as
- * any refusal that does not depend on the email having an account. Nothing is signed in, so no
- * socket closes.
+ * body for both, no sooner than `SIGN_UP_FLOOR_MS` after the request began. A sign-up starts in
+ * the default language of the organisation that invited the email (`startingLanguage`, looked up
+ * for a new email and a taken one alike), the JSON handed on with that language alone replaced;
+ * a refusal of Better Auth's after that lookup (a malformed email) waits for the same floor, so its
+ * time tells nothing of the lookup. Nothing is signed in, so no socket closes.
  */
 export async function signUp(
   deps: AuthMountDeps,
@@ -94,22 +90,17 @@ export async function signUp(
 
   const email = body.data.email.toLowerCase()
   const original = sentBody.parse(sent)
-  const looked = spoken(original.locale)
-  const chosen = looked ? await deps.startingLanguage.of(email) : undefined
+  const chosen = await deps.startingLanguage.of(email)
   const handed = chosen === undefined ? original : { ...original, locale: chosen }
   const answer = await deps.accounts.run(email, () =>
     deps.auth.handler(withJsonBody(request, handed)),
   )
 
-  if (answer.status !== 200) {
-    if (looked) {
-      await until(deps.clock, started + SIGN_UP_FLOOR_MS)
-    }
+  await until(deps.clock, started + SIGN_UP_FLOOR_MS)
 
+  if (answer.status !== 200) {
     return refusalOf(answer)
   }
-
-  await until(deps.clock, started + SIGN_UP_FLOOR_MS)
 
   return new Response(null, { status: 202 })
 }

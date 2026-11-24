@@ -200,8 +200,8 @@ language or in one the app speaks first asks `StartingLanguage` (`starting-langu
 organisation whose pending invitation of the email names one, the newest first, and hands Better
 Auth the JSON it was sent with that language alone in place of `locale`; a new and a taken email
 are both looked up, and a lookup that fails or outlasts its budget names none, so the account
-starts in the page's language. A language the app does not speak looks nothing up and is refused
-as before. It signs nothing in: Better Auth writes the identity and its credential
+starts in the page's language. A language the app does not speak is a refused body, 400
+`bad-request` at once, before the email's turn: it looks nothing up. It signs nothing in: Better Auth writes the identity and its credential
 row in one transaction and mails the account its verification link (`sendOnSignUp`), and for an
 email that has an account it writes nothing, mails nothing, and answers with an account it made up,
 whose fields differ from a real one's. So the mount answers every sign-up Better Auth accepted
@@ -227,9 +227,9 @@ field's length in characters once trimmed); one that breaks it answers 400 `name
 Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
 which it checks on a new password only: a sign-in checks no rule, and a password of another
 length is no account's, so it is refused as a wrong one. Better Auth's refusals (a malformed
-email, a language the gateway does not speak) pass as their status and code alone; they do not
-depend on the email having an account. One that comes after the starting language was looked up
-waits for the same floor, so its time tells nothing of the lookup. A sign-in takes `{ email, password }` with the device's headers and
+email) pass as their status and code alone; they do not depend on the email having an account,
+and they come after the starting language was looked up, so they wait for the same floor and their
+time tells nothing of the lookup. A sign-in takes `{ email, password }` with the device's headers and
 answers 200 with the raw session token (`token`) and the account (`user`: its `id`, the
 identity's, its `email`, its `name` and `emailVerified`). The answer is built by that allowlist
 from Better Auth's, parsed (`auth-handler/sign-in.ts`), never forwarded: nothing else of it

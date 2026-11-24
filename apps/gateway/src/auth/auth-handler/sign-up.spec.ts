@@ -12,6 +12,7 @@ import { STARTING_LANGUAGE_BUDGET_MS, type StartingLanguage } from '../starting-
 
 import {
   ANN,
+  holdTurn,
   mountedOnFakeAuth,
   mountedOnRealAuth,
   ORIGIN,
@@ -421,7 +422,7 @@ describe('authHandler, the starting language of a sign-up', () => {
     REAL_SIGN_UPS_MS,
   )
 
-  it('looks nothing up for a language the app does not speak, which is refused as before', async () => {
+  it("refuses a language the app does not speak at once, before the email's turn, looking nothing up", async () => {
     let lookups: ReturnType<typeof counted> | undefined
     const mounted = await mountedOnRealAuth({
       startingLanguage: (real) => {
@@ -433,9 +434,14 @@ describe('authHandler, the starting language of a sign-up', () => {
 
     await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
 
+    // Another sign-up of the email holds its turn: the refusal does not wait for it.
+    const release = await holdTurn(mounted.turns, ANN)
     const answer = await mounted.route(signUpIn('fr'), FROM)
 
+    release()
+
     expect(answer?.status).toBe(400)
+    expect(await answer?.json()).toEqual({ code: 'bad-request' })
     expect(lookups?.asked).toEqual([])
     expect(await mounted.localeOf(ANN)).toBeUndefined()
   })
