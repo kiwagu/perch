@@ -233,11 +233,15 @@ const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: str
     'paged-list',
     "`paged: true` makes the list a page of the action's entries.",
   ],
-  ['screen-anchors-name-composite', 'composite-of-the-platform', 'Only a secret `input` opts in.'],
+  [
+    'screen-anchors-name-composite',
+    'composite-of-the-platform',
+    'A secret input opts in with `composite: <name>`',
+  ],
   [
     'screen-anchors-name-source-paged',
     'paged-list',
-    '`paged: { sizes, default }` in `platform.yaml`',
+    '`paged: { sizes: [ 10, 25, 50 ], default: 25 }` in `platform.yaml`',
   ],
   [
     'screen-anchors-name-codes',
@@ -264,7 +268,7 @@ const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: str
   [
     'screen-flow-states-name-states-name-pattern',
     'flow-shorter-forms',
-    'its states list nothing in `meta.renders`',
+    'by its button list nothing in `meta.renders`',
   ],
 ]
 
