@@ -107,4 +107,3 @@ allow = true
 [[cases.assertions]]
 path = "0"
 exists = false
-
