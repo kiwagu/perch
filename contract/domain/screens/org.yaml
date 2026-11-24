@@ -477,11 +477,12 @@ flow:
                 toast: false
                 onDone:
                   target: idle
-                  description: The organisation's settings hold the chosen language; an account its invitation creates from now on starts in it.
+                  description: This device holds the chosen language; once the server has it, an account the organisation's invitation creates starts in it.
                   actions:
                     - clear: organisation.settings.error
                 onError:
                   target: idle
+                  description: This device could not store it; a refusal by the server comes later, as the frame's notice that a change was undone.
                   actions:
                     - show: organisation.settings.error
         notes-add:
