@@ -377,17 +377,19 @@ parameters expected), `expectRange` (the list's range by its `data-from`, `data-
 ## Commands
 
 - `bun run test:e2e` (repository root): runs the launcher through `mcproc exec`, under a 4G
-  memory lease (the run waits its turn when the host is short of memory), in mcproc's `e2e`
-  group (`--exclusive e2e`: one e2e run or `perf:measure` at a time on the host, whichever
-  checkout starts it; a waiting run says whom it waits for, for up to an hour) and with
-  `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
+  memory lease (the run waits its turn when the host is short of memory, for up to an hour:
+  `--timeout 3600`) and with `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright in a network namespace of its own (below); extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
   `playwright.config.ts`, measured on the dev host), and its log is
-  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
+  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own. The runs of two
+  checkouts go at the same time, each on its own stand (its ports come from the checkout's
+  slot) with its browser in a network of its own, so a gate never waits for another checkout's.
+  Within one checkout a run and `perf:measure` share its stand, and the later one's `--reload`
+  empties it under the earlier one: one at a time there.
 - The browser's own network (`scripts/isolated-network.ts`): Chromium on Linux aborts every
   request in flight (`net::ERR_NETWORK_CHANGED`) when a network interface it can see comes, goes
   or changes its address, and every container started or stopped on the host adds or removes one,
@@ -404,8 +406,10 @@ parameters expected), `expectRange` (the list's range by its `data-from`, `data-
   stops before the build and names the package; it never runs the browser on the host's network.
   `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
-  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease and in the
-  `e2e` group, so no e2e run shares the CPU with its timings). It builds
+  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease and in
+  mcproc's `e2e` group, `--exclusive e2e`, so two measurements never run at once). The e2e runs
+  stay out of that group, so a measurement taken while `mcproc leases` shows one running
+  shares the CPU with it: measure when none runs. It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
   a Pixel 7 with the CPU slowed four times and the service worker blocked, a guest's first
   visit (first paint 500 ms, ready 1 s) and a signed-in reload with the cache kept and cleared
