@@ -87,7 +87,14 @@ modeling stage.
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
   another one created. The ending of that sign-in forgets the start (`forgetSignIn`); a session
   that only closes (a tab that goes) keeps it. A start that a sign-out left unfinished
-  stays so until a sign-in learns of it. The first verification's answer (`{ name, locale }` of the
+  stays so until a sign-in learns of it. The settings row of each organisation the account
+  administers (`organisation_settings:ost_<key>`, with no default language) is ensured the same
+  way by `composition/organisation-starts.ts`: in the tab that leads, once the engine says that
+  organisation's region caught up, under the Web Lock `perch.session.organisation-start.<identity>.<key>`,
+  importing what the other tabs appended and flushing before it reads, creating only what is still
+  missing, and writing into that organisation whichever is current (`SessionService.tenantWritePath`,
+  under the identity's write lock, refused once the space, the engine, the admin role or the open
+  database changed). The first verification's answer (`{ name, locale }` of the
   sign-up), and a sign-in's answer that carries `start` (the account has no settings or profile at
   the gateway yet, because a reset verified its email or the device that verified it has not
   synced its start), keep that start before the device is saved

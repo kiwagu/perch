@@ -16,9 +16,16 @@ on the replica schema are applied on the device before a command runs
 - Routes: `/org` (guard `authenticated`) renders `OrganisationPage`; `/invitation?token` (open to
   anyone) renders `InvitationPage`, the page the link of an invitation mail opens.
 - Shape `organisation.shape.surql`: the notes of the current organisation (`note`, tenant
-  region), oldest first.
+  region), oldest first. Shape `organisation-settings.shape.surql`
+  (`application/organisation-settings/`): the organisation's one settings row
+  (`organisation_settings:ost_<key>`, `organisationSettingsIdOf`), with its default language or
+  none.
 - Commands `organisation.commands.surql`: `createNote`, `updateNote`, `deleteNote`, all in
-  the tenant region. Creating an organisation, inviting an email with a role, listing and
+  the tenant region. Commands `organisation-settings.commands.surql`:
+  `createOrganisationSettings` (the row with no language), `updateLocale`, `clearLocale`; an
+  admin's change goes through the `TENANT_COMMANDS` port to the organisation acted on, whichever
+  is current when it is admitted, and the row itself is created by the composition's
+  organisation starts (`composition/organisation-starts.ts`), in the tab that leads the sync. Creating an organisation, inviting an email with a role, listing and
   revoking the pending invitations, changing a member's role and removing a member go through
   the gateway's `/organisations` routes via the `ORGANISATIONS` port, not through the replica;
   reading the invitation a link carries, listing the invitations to the account, accepting and
@@ -37,7 +44,7 @@ on the replica schema are applied on the device before a command runs
   once their action is done, and which reads the members, the invitations sent and the
   invitations for the account through the platform's `useListed` (a list as last read, and the
   change it settled after).
-- Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
+- Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`, `ORGANISATION_SETTINGS_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screens `organisation` in `contract/domain/screens/org.yaml` and
   `organisation.invitation` in `contract/domain/screens/invitation.yaml`.
