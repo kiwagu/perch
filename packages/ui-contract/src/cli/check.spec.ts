@@ -49,12 +49,11 @@ function writeCurrentRepository(): void {
 const LONG_RESULT = `this device signs out ${'and forgets what it held '.repeat(8).trim()}`
 
 /**
- * The fixture migrated to the current version with the migration's work by hand left undone: the
- * action's codes still a list, and its result one string past the budget.
+ * The fixture with its result one string past the budget, migrated to the current version with the
+ * migration's work by hand left undone: both older forms survive it, the action's codes a list.
  */
 function writeMigratedRepositoryInOlderForms(): void {
   writeContractRepository(root)
-  migrate(root, { write: true })
   const platform = join(root, PLATFORM_FILE)
 
   writeFileSync(
@@ -64,6 +63,7 @@ function writeMigratedRepositoryInOlderForms(): void {
       `result: ${LONG_RESULT}\n`,
     ),
   )
+  migrate(root, { write: true })
 }
 
 /** An e2e test under `tests/e2e/src` that clicks an anchor the contract does not declare. */
