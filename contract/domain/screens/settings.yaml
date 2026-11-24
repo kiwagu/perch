@@ -100,6 +100,10 @@ anchors:
   user.settings.two-factor.off-badge:
     kind: badge
     description: Marks the account's second factor as off, once it was read.
+  user.settings.two-factor.required-message:
+    kind: message
+    description: "Says the second factor is required and names the account's organisations that require it, while one does; it shows on or off, beside turning it on or off."
+    codes: [ two-factor-enforced ]
   user.settings.two-factor.password-input:
     kind: input
     secret: true
@@ -215,6 +219,7 @@ flow:
       accountLeft: the account the store was for has signed out since it began
       deletionBlocked: { codes: [ last-admin ] }
       factorChanged: { codes: [ two-factor-changed ] }
+      factorRequired: { codes: [ two-factor-enforced ] }
   states:
     viewing:
       type: parallel
@@ -433,9 +438,16 @@ flow:
                     - clear: user.settings.two-factor.password-input
                     - read: user.settings.two-factor.section
                 onError:
-                  target: idle
-                  actions:
-                    - show: user.settings.two-factor.error
+                  - target: idle
+                    guard: factorRequired
+                    description: An organisation of the account requires the second factor, which stays on; the section reads it again and names the organisation.
+                    actions:
+                      - show: user.settings.two-factor.error
+                      - clear: user.settings.two-factor.password-input
+                      - read: user.settings.two-factor.section
+                  - target: idle
+                    actions:
+                      - show: user.settings.two-factor.error
             renewing:
               meta: { renders: [ user.settings.two-factor.password-input, user.settings.two-factor.enable-button, user.settings.two-factor.disable-button, user.settings.two-factor.renew-codes-button ] }
               entry:
