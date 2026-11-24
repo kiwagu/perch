@@ -100,10 +100,10 @@ invariants:
     rule: "A network address makes twenty credential checks within ten seconds: each of these actions takes one before reading the request's body, whatever it then answers; the next answers rate-limited."
     refuses: rate-limited
   email-changes:
-    rule: "An account's email takes three change requests a quarter of an hour, by itself or an operator, each counted once the new email is well formed and a mail allowed; the next answers rate-limited."
+    rule: "An account's email takes three change requests a quarter of an hour, its own or an operator's, each counted once the new email is well formed if address-mails allows; the next answers rate-limited."
     refuses: rate-limited
   invitation-attempts:
-    rule: "An account makes thirty invitations in ten minutes, its network address sixty of those the account allows, each counted once valid and a mail allowed, refused or not; the next answers rate-limited."
+    rule: "An account makes thirty invitations in ten minutes, its network address sixty of those the account allows, counted before the email is checked if address-mails allows; the next answers rate-limited."
     refuses: rate-limited
 actions:
   sign-up:
