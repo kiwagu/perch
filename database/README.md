@@ -80,13 +80,18 @@ only the gateway's own writes change it (the profile's email through the confirm
   gateway does; the product schema has none;
   `tests/anonymous`: the unauthenticated-client check over raw HTTP.
 - `src/model-contract.spec.ts`: holds the schema to the contract's model
-  (`contract/domain/model.schema.json`). Each entity has its table, its fields, region, id prefix,
-  crdt and read-only fields, owner and abilities, and a unique index for each unique set, and the
-  `ASSERT` of each field states the limits the kernel's generated values (`CONTRACT_VALUES`) give
-  the field (enum members, `minLength`, `maxLength`, `format: email`, `pattern`), no more and no
-  less; the values are held to the contract by their own spec, in the ahead mode as they were at
-  the branch's base or head, so this spec needs no contract of its own to follow a business
-  commit. An upper length bound is the parameter of a contract value, never a number, except on
+  (`contract/domain/model.schema.json`). Each entity has its table, its fields, region, id
+  prefix, crdt and read-only fields, owner and abilities, and a unique index for each unique
+  set, and the `ASSERT` of each field states the limits the kernel's generated values
+  (`CONTRACT_VALUES`) give the field (enum members, `minLength`, `maxLength`, `format: email`,
+  `pattern`), no more and no less; the values are held to the contract by their own spec, in the
+  ahead mode as they were at the branch's base or head, so this spec needs no contract of its
+  own to follow a business commit. In the same mode an entity the model declares now and did not
+  declare at the branch's merge base waits while the schema lacks the table the model names for
+  it (`src/__fixtures__/entities-ahead.ts`, with its spec), so a business commit may add an entity
+  before the implementation adds its table, which is then held like any other; on `main` and in
+  `bun run check` (which drops the ahead mode even when the shell exports it) every entity is
+  held. An upper length bound is the parameter of a contract value, never a number, except on
   the two columns that hold no value (`device_session.device` and `.label`, listed in the spec);
   `tenant.key` and `tenant.name`, which no model field states, are held to the platform values
   `organisation-key` and `organisation-name`.
