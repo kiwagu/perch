@@ -19,7 +19,7 @@ import { type DeclaredEntity, entitiesAhead } from './entities-ahead'
 
 const ROOT = join(import.meta.dirname, '../../..')
 
-const ADDED: DeclaredEntity = { name: 'probe_added', table: 'probe_added' }
+const ADDED: DeclaredEntity = { name: 'probe_added', table: 'probe_added_rows' }
 
 /** No table of the schema yet: the added entity's table is not among them. */
 const NONE_STORED: ReadonlySet<string> = new Set()
