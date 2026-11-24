@@ -23,6 +23,7 @@ export {
   isBare,
   mailSearchesOf,
   ownControlsOf,
+  questionCodeOf,
   type Request,
   requestsOf,
   type SearchTaker,
