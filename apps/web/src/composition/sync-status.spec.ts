@@ -3,32 +3,45 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { dataError } from '@workspace/data'
 import type { Clock } from '@workspace/replica'
-import { type ManualClock, manualClock } from '@workspace/replica/testing'
+import { manualClock } from '@workspace/replica/testing'
 
 import { sharedStorage } from './__fixtures__/shared-storage'
+import type { Visibility } from './identity-space'
+import type { VisibilitySource } from './session'
 import { type MemoryStorage, memoryStorage } from './storage'
 import { syncStatus } from './sync-status'
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
+/** A tab always in view. */
+const inView: VisibilitySource = { current: () => 'visible', onChange: () => () => {} }
+
 /** A leader's record as a tab the test does not open wrote it. */
 const record = (at: number) => JSON.stringify({ channel: 'up', waiting: false, stopped: false, at })
 
 /**
- * The timers of a tab the browser holds back while it is hidden, as Chrome does once a tab has
- * stayed hidden for minutes: a timer runs at the next whole minute at the soonest. Its time is the
- * browser's. Shown again, the tab runs at once every timer whose time came, and the others when
- * they fall due.
+ * A tab hidden long enough for the browser to hold its timers back, as Chrome does once a tab has
+ * stayed hidden for minutes: a timer set while it is hidden runs at the next whole minute at the
+ * soonest. Its time is the browser's. Shown again, the tab hears that it is visible first, then
+ * runs at once every timer whose time came, and the others when they fall due.
  */
-function hiddenTimers(clock: ManualClock): Clock & { show(): void } {
+function hiddenTab(
+  clock: Clock,
+): Clock & { readonly visibility: VisibilitySource; show(): void; hide(): void } {
   const MINUTE = 60_000
-  let hidden = true
+  let state: Visibility = 'hidden'
+  const listeners = new Set<(state: Visibility) => void>()
+  const tell = () => {
+    for (const listener of [...listeners]) {
+      listener(state)
+    }
+  }
   const held = new Set<{ readonly due: number; readonly run: () => void; cancel: () => void }>()
 
   return {
     now: () => clock.now(),
     schedule(ms, run) {
-      if (!hidden) {
+      if (state === 'visible') {
         return clock.schedule(ms, run)
       }
 
@@ -46,8 +59,21 @@ function hiddenTimers(clock: ManualClock): Clock & { show(): void } {
         timer.cancel()
       }
     },
+    visibility: {
+      current: () => state,
+      onChange: (listener) => {
+        listeners.add(listener)
+
+        return () => listeners.delete(listener)
+      },
+    },
+    hide() {
+      state = 'hidden'
+      tell()
+    },
     show() {
-      hidden = false
+      state = 'visible'
+      tell()
 
       for (const timer of [...held]) {
         held.delete(timer)
@@ -60,17 +86,28 @@ function hiddenTimers(clock: ManualClock): Clock & { show(): void } {
 
 /**
  * One browser whose tabs share their storage the way its `storage` event tells it, each tab with
- * timers of its own: the browser's, or those of a hidden tab.
+ * timers of its own: the browser's, or those of a hidden tab. The browser's clock is the wall
+ * clock, which may be set back.
  */
 function tabsOfOneBrowser() {
   const storage = sharedStorage()
   const clock = manualClock(1_000_000)
+  let shift = 0
+  const wall: Clock = {
+    now: () => clock.now() + shift,
+    schedule: (ms, run) => clock.schedule(ms, run),
+  }
 
   return {
     clock,
+    wall,
     storage,
-    /** A signed-in tab with nothing waiting in its outbox. */
-    tab: (timers: Clock = clock) =>
+    /** Sets the wall clock back by `ms`, as a correction of the system's time does. */
+    setBack: (ms: number) => {
+      shift -= ms
+    },
+    /** A signed-in tab with nothing waiting in its outbox, in view unless its timers say otherwise. */
+    tab: (timers: Clock & { readonly visibility?: VisibilitySource } = wall) =>
       syncStatus({
         storage: storage.tab(),
         clock: timers,
@@ -80,6 +117,7 @@ function tabsOfOneBrowser() {
         unsent: () => okAsync(false),
         protocolRefused: () => false,
         canSync: true,
+        visibility: timers.visibility ?? inView,
       }),
     /** Lets `ms` pass a second at a time, each tab hearing the others' writes in between. */
     pass: async (ms: number) => {
@@ -130,6 +168,7 @@ function browser() {
         unsent: () => okAsync(unsent),
         protocolRefused: options.protocolRefused ?? (() => false),
         canSync: options.canSync ?? true,
+        visibility: inView,
       })
 
       status.subscribe(heard)
@@ -289,6 +328,7 @@ describe('syncStatus', () => {
           ),
         protocolRefused: () => false,
         canSync: true,
+        visibility: inView,
       })
 
       return { storage, clock, reads, status }
@@ -363,7 +403,7 @@ describe('syncStatus', () => {
   describe('a leading tab the browser holds back while it is hidden', () => {
     it('keeps saying synced in a tab in view for minutes while the hidden leader runs its timers once a minute', async () => {
       const browser = tabsOfOneBrowser()
-      const leader = browser.tab(hiddenTimers(browser.clock))
+      const leader = browser.tab(hiddenTab(browser.wall))
       const shown = browser.tab()
 
       leader.syncState({ leader: true, channel: 'up' })
@@ -378,7 +418,7 @@ describe('syncStatus', () => {
 
     it('says synced at once in a tab opened while the hidden leader has not refreshed its record for most of a minute', async () => {
       const browser = tabsOfOneBrowser()
-      const leader = browser.tab(hiddenTimers(browser.clock))
+      const leader = browser.tab(hiddenTab(browser.wall))
 
       leader.syncState({ leader: true, channel: 'up' })
       await settle()
@@ -399,15 +439,25 @@ describe('syncStatus', () => {
 
     it('says synced the moment a tab comes back into view after both tabs stayed hidden for minutes', async () => {
       const browser = tabsOfOneBrowser()
-      const leader = browser.tab(hiddenTimers(browser.clock))
-      const timers = hiddenTimers(browser.clock)
-      const shown = browser.tab(timers)
+      const leader = browser.tab(hiddenTab(browser.wall))
+      const tab = hiddenTab(browser.wall)
+
+      tab.show()
+
+      const shown = browser.tab(tab)
 
       leader.syncState({ leader: true, channel: 'up' })
       await settle()
-      // Shown between two of its held-back wake-ups: its overdue timer runs at once.
+      // In view for a while, asking the hidden leader and heard back; then hidden too.
+      await browser.pass(30_000)
+      tab.hide()
+      // Shown between two of its held-back wake-ups: it hears that it is visible before its
+      // overdue timer runs.
       await browser.pass(5 * 60_000 + 30_000)
-      timers.show()
+      tab.show()
+
+      expect(shown.current()).toBe('synced')
+
       await browser.clock.advance(0)
 
       expect(shown.current()).toBe('synced')
@@ -417,9 +467,22 @@ describe('syncStatus', () => {
       expect(shown.current()).toBe('synced')
     })
 
+    it('says synced the moment the leading tab itself comes back into view after minutes hidden', async () => {
+      const browser = tabsOfOneBrowser()
+      const tab = hiddenTab(browser.wall)
+      const leader = browser.tab(tab)
+
+      leader.syncState({ leader: true, channel: 'up' })
+      await settle()
+      await browser.pass(5 * 60_000 + 30_000)
+      tab.show()
+
+      expect(leader.current()).toBe('synced')
+    })
+
     it('still says connecting in a tab in view when the hidden leader loses its channel, and synced once it is back', async () => {
       const browser = tabsOfOneBrowser()
-      const leader = browser.tab(hiddenTimers(browser.clock))
+      const leader = browser.tab(hiddenTab(browser.wall))
       const shown = browser.tab()
 
       leader.syncState({ leader: true, channel: 'up' })
@@ -444,7 +507,7 @@ describe('syncStatus', () => {
       const shown = browser.tab()
 
       // A leader whose page stopped running: its record stays, and it hears nothing.
-      browser.storage.tab().set('perch.sync.leader', record(browser.clock.now()))
+      browser.storage.tab().set('perch.sync.leader', record(browser.wall.now()))
       await settle()
 
       expect(shown.current()).toBe('synced')
@@ -454,6 +517,52 @@ describe('syncStatus', () => {
       expect(shown.current()).toBe('connecting')
 
       await browser.pass(60_000)
+
+      expect(shown.current()).toBe('connecting')
+    })
+
+    it('says connecting within ten seconds once the clock was set back and the leader then stopped answering', async () => {
+      const browser = tabsOfOneBrowser()
+      const shown = browser.tab()
+      const leader = browser.storage.tab()
+
+      leader.set('perch.sync.leader', record(browser.wall.now()))
+      await settle()
+      // The tab in view has asked once and heard nothing back yet.
+      await browser.pass(5_000)
+      browser.setBack(60_000)
+      // The leader's last word, at the time set back; then its page stops running.
+      leader.set('perch.sync.leader', record(browser.wall.now()))
+      await settle()
+
+      expect(shown.current()).toBe('synced')
+
+      await browser.pass(10_000)
+
+      expect(shown.current()).toBe('connecting')
+    })
+
+    it('says connecting within ten seconds when the clock is set back while an ask of the tab waits for an answer that never comes', async () => {
+      const browser = tabsOfOneBrowser()
+      const shown = browser.tab()
+
+      browser.storage.tab().set('perch.sync.leader', record(browser.wall.now()))
+      await settle()
+      await browser.pass(5_000)
+      browser.setBack(60_000)
+      await browser.pass(10_000)
+
+      expect(shown.current()).toBe('connecting')
+    })
+
+    it('does not take a record written before the clock was set back for a fresh one once its leader stopped answering', async () => {
+      const browser = tabsOfOneBrowser()
+      const shown = browser.tab()
+
+      browser.storage.tab().set('perch.sync.leader', record(browser.wall.now()))
+      await settle()
+      browser.setBack(60_000)
+      await browser.pass(10_000)
 
       expect(shown.current()).toBe('connecting')
     })

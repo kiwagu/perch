@@ -19,6 +19,7 @@ import type { Clock } from '@workspace/replica'
 import type { SyncStatus, SyncStatusPort } from '../platform/sync-status.port'
 
 import type { SyncState } from './identity-space'
+import type { VisibilitySource } from './session'
 import {
   askSyncLeader,
   forgetSyncLeader,
@@ -50,6 +51,8 @@ export interface SyncStatusOptions {
   readonly protocolRefused: () => boolean
   /** Whether this browser can lead a sync at all: without Web Locks no tab does. */
   readonly canSync: boolean
+  /** Whether this tab is in view: one that comes back asks a late leader at once. */
+  readonly visibility: VisibilitySource
 }
 
 export interface SyncStatusSource extends SyncStatusPort {
@@ -68,8 +71,8 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
   // outbox answers only the period it was asked in, and only while it is the latest one asked.
   let period = 0
   let asked = 0
-  // When this tab asked the leader for a beat it has not answered since (a record written then or
-  // later answers it): the first such ask, however often it is sent again.
+  // When this tab first asked the leader for a beat it has not heard since: the leader's next
+  // record answers it, however often it is sent again.
   let askedAt: number | undefined
   let stopped = false
   let cancel = () => {}
@@ -125,28 +128,32 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
     publish()
     check()
   }
-  // A tab that does not lead asks for a beat when the record is late.
+  // How long ago the leader wrote its record. One dated after now has no known age, since the
+  // clock was set back after it was written: it counts as late and stale alike.
+  const ageOf = (leader: Leader, now: number) => (leader.at <= now ? now - leader.at : Infinity)
+  // A tab that does not lead asks for a beat when the record is late. The first ask not heard
+  // back keeps its time; one dated after now (the clock was set back) starts again.
   const ask = () => {
     const leader = savedSyncLeader(options.storage)
     const now = options.clock.now()
 
-    if (leading || leader === undefined || now - leader.at <= LATE) {
+    if (leading || leader === undefined || ageOf(leader, now) <= LATE) {
       return
     }
 
-    if (askedAt === undefined || askedAt <= leader.at) {
+    if (askedAt === undefined || askedAt > now) {
       askedAt = now
     }
 
     askSyncLeader(options.storage, now)
   }
   // A stale record belongs to a leader that went away, unless this tab asked it for a beat less
-  // than a beat ago and its answer may still be on the way.
+  // than a beat ago and its answer may still be on the way. The leading tab is not gone to itself.
   const gone = (leader: Leader) => {
     const now = options.clock.now()
-    const answering = askedAt !== undefined && askedAt > leader.at && now - askedAt < EVERY
+    const answering = askedAt !== undefined && askedAt <= now && now - askedAt < EVERY
 
-    return now - leader.at > STALE && !answering
+    return !leading && ageOf(leader, now) > STALE && !answering
   }
   const tick = () => {
     cancel = options.clock.schedule(EVERY, () => {
@@ -168,10 +175,19 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
         beat()
       }
     } else if (key === SYNC_LEADER_KEY || key === undefined) {
+      // The leader wrote, or the record went: no ask of this tab waits for an answer any more.
+      askedAt = undefined
       notify()
     }
   })
   const unlistenNetwork = options.onOnlineChange(notify)
+  // A tab coming back into view may be read before its timers catch up: it asks at once.
+  const unlistenVisibility = options.visibility.onChange((state) => {
+    if (state === 'visible') {
+      ask()
+      notify()
+    }
+  })
 
   ask()
   tick()
@@ -240,6 +256,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
       cancel()
       unlistenStorage()
       unlistenNetwork()
+      unlistenVisibility()
 
       if (leading) {
         leading = false

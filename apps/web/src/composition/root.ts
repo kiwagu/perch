@@ -167,6 +167,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     unsent: () => session.space()?.unsent(),
     protocolRefused: () => session.protocolRefused(),
     canSync: options.locks !== undefined,
+    visibility: options.visibility,
   })
   const commands = createCommandBus({
     writePath: session.writePath,
