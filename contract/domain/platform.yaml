@@ -96,9 +96,6 @@ invariants:
   address-mails:
     rule: "A network address is charged 200 mail requests a quarter of an hour at most, whatever the email, sign-ups included; one another limit refuses is given back. The next answers rate-limited."
     refuses: rate-limited
-  second-factor-required:
-    rule: "An account in an organisation that requires the second factor cannot turn its second factor off; turning it on and signing in stay as they are."
-    refuses: two-factor-enforced
 actions:
   sign-up:
     description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
@@ -414,7 +411,7 @@ actions:
     description: Reads whether the signed-in account's second factor is on.
     params: {}
     result:
-      - "whether the account's second factor is on, so that each sign-in with its password also asks for a code, and the names of the account's organisations that require it"
+      - "whether the account's second factor is on, so that each sign-in with its password also asks for a code; each account turns it on or off as it chooses"
     changes: []
     codes:
       failed: "anything else fails"
@@ -461,7 +458,6 @@ actions:
     changes: [ two-factor.read ]
     codes:
       invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
-      two-factor-enforced: { invariant: second-factor-required }
       rate-limited: { invariant: failed-sign-ins }
       failed: "anything else fails"
   two-factor.renew-codes:

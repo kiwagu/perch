@@ -219,7 +219,6 @@ code tells the user; when an action answers with it is the action's condition in
 | `passkey-cancelled` | `user.sign-in.error`, `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing was signed in or added |
 | `passkey-unknown` | `user.sign-in.error` | the passkey picked is no account's here: removed from its account, or never added to one |
 | `two-factor-changed` | `user.settings.two-factor.error` | the second factor changed meanwhile from elsewhere: turned on or off, or its key replaced, so nothing changed here; the section shows it as it is now |
-| `two-factor-enforced` | `user.settings.two-factor.required-message`, `user.settings.two-factor.error` | an organisation of the account requires the second factor, so it cannot be turned off; the message names the organisations that require it |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error`, `organisation.invite.error`, `console.account.email.error` | the email typed is not an email |
