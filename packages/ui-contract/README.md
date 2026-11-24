@@ -89,8 +89,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     invariants and condition, and its outcome lines, read one way whether it writes the codes as a
     map or as the older list a contract before version 6 may write, its result as a list or as one
     string; `invariantActions(platform)`
-    (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, in
-    the platform file's order (`contract/REFERENCE.md#rule-action-outcomes`).
+    (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, by
+    name (`contract/REFERENCE.md#rule-action-outcomes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
     write, as they write them, each a `WrittenDescription` (`file`, `line`, `at`, `kind`, `place`,
     `text`); the `Contract` carries them as `descriptions`, read by `loadContract`

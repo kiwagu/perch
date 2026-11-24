@@ -9,8 +9,8 @@ import { codeEntriesOf } from './action-codes'
 import type { Platform } from './screens'
 
 /**
- * Per invariant of `platform`, the actions that name it, each once, in the order the platform
- * file writes them; an invariant no action names gets none.
+ * Per invariant of `platform`, the actions that name it, each once, by name, so the order the
+ * platform file writes its actions in changes nothing; an invariant no action names gets none.
  */
 export function invariantActions(
   platform: Pick<Platform, 'actions' | 'invariants'>,
@@ -24,7 +24,8 @@ export function invariantActions(
         .filter(([, action]) =>
           codeEntriesOf(action.codes).some(({ invariants }) => invariants.includes(name)),
         )
-        .map(([action]) => action),
+        .map(([action]) => action)
+        .sort((a, b) => a.localeCompare(b, 'en')),
     ]),
   )
 }
