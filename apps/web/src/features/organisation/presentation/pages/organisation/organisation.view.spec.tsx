@@ -129,6 +129,8 @@ function renderView(
     onRevoke: vi.fn(),
     onAccept: vi.fn(),
     onDecline: vi.fn(),
+    onChooseDefaultLanguage: vi.fn(),
+    onClearDefaultLanguage: vi.fn(),
   }
   const view = (more: Partial<Omit<OrganisationViewProps, Held>>) => (
     <Page
@@ -298,6 +300,50 @@ describe('OrganisationView without memberships', () => {
 })
 
 describe('OrganisationView of a member', () => {
+  describe("the organisation's default language", () => {
+    const anchors = [
+      'organisation.settings.locale-select',
+      'organisation.settings.clear-button',
+      'organisation.settings.error',
+    ]
+
+    it('shows an admin its select, and the clear button only while a default is set', () => {
+      const { rerender } = renderView({ current: acmeAdmin, organisations: [acmeAdmin] })
+
+      expect(
+        screen.getByTestId('organisation.settings.locale-select').hasAttribute('data-value'),
+      ).toBe(false)
+      expect(screen.queryByTestId('organisation.settings.clear-button')).toBeNull()
+
+      rerender({ defaultLanguage: 'es' })
+
+      expect(
+        screen.getByTestId('organisation.settings.locale-select').getAttribute('data-value'),
+      ).toBe('es')
+      expect(screen.getByTestId('organisation.settings.clear-button')).toBeDefined()
+    })
+
+    it("shows the error of the admin's last refused change under the select", () => {
+      renderView({
+        current: acmeAdmin,
+        organisations: [acmeAdmin],
+        errors: { settings: 'organisation_settings:FORBIDDEN' },
+      })
+
+      expect(screen.getByTestId('organisation.settings.error').getAttribute('data-code')).toBe(
+        'forbidden',
+      )
+    })
+
+    it('shows a member none of it', () => {
+      renderView({ defaultLanguage: 'es', errors: { settings: 'organisation_settings:FAILED' } })
+
+      for (const anchor of anchors) {
+        expect(screen.queryByTestId(anchor)).toBeNull()
+      }
+    })
+  })
+
   it('shows the organisation, the role and its notes, oldest first', () => {
     renderView()
 

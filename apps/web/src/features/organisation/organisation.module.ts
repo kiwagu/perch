@@ -8,9 +8,15 @@ import { INVITATIONS } from '../../platform/invitations.port'
 import { defineModule } from '../../platform/module'
 import { ORGANISATIONS } from '../../platform/organisations.port'
 import { SESSION } from '../../platform/session.port'
+import { TENANT_COMMANDS } from '../../platform/tenant-commands.port'
 
 import { NOTES_SERVICE, NotesService } from './application/notes.service'
 import { ORGANISATION_SERVICE, OrganisationService } from './application/organisation.service'
+import { organisationSettingsCommands } from './application/organisation-settings/organisation-settings.model.gen'
+import {
+  ORGANISATION_SETTINGS_SERVICE,
+  OrganisationSettingsService,
+} from './application/organisation-settings/organisation-settings.service'
 import { InvitationContainer } from './presentation/pages/invitation/invitation.container'
 import { OrganisationContainer } from './presentation/pages/organisation/organisation.container'
 import {
@@ -34,6 +40,23 @@ export const OrganisationModule = defineModule({
           container.get(COMMANDS),
           { shape: organisationShape, commands: organisationCommands },
           () => container.get(ORGANISATION_SERVICE).ability(),
+        ),
+    },
+    {
+      provide: ORGANISATION_SETTINGS_SERVICE,
+      useFactory: (container) =>
+        new OrganisationSettingsService(
+          container.get(TENANT_COMMANDS),
+          { commands: organisationSettingsCommands },
+          () => container.get(ORGANISATION_SERVICE).ability(),
+          (key) =>
+            container
+              .get(ORGANISATION_SERVICE)
+              .memberships()
+              .some(
+                (membership) =>
+                  membership.tenant.key === key && membership.role === CONTRACT_ROLES.admin,
+              ),
         ),
     },
     {

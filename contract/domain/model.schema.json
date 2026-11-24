@@ -77,7 +77,7 @@
         "id": "stg",
         "actions": {
           "createSettings": {
-            "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value: the language the account signed up with, and the theme that device shows.",
+            "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value: the language the account starts in, and the theme that device shows.",
             "params": { "id": "$id", "identity": "identity", "locale": "locale", "theme": "theme" },
             "changes": []
           },
@@ -117,6 +117,49 @@
         }
       },
       "required": ["id", "identity", "locale", "theme"],
+      "additionalProperties": false
+    },
+    "organisation_settings": {
+      "type": "object",
+      "description": "An organisation's defaults for its members, set by its admins and read by every member: today the language an account its invitation creates starts in. A member's own settings always win.",
+      "x-perch": {
+        "table": "organisation_settings",
+        "region": "tenant",
+        "id": "ost",
+        "can": {
+          "admin": { "create": "any", "update": "any" }
+        },
+        "actions": {
+          "createOrganisationSettings": {
+            "description": "Creates the organisation's settings, with no default language, at each opening of the organisation by an admin's device that holds none: under its one id, so a stored language stays.",
+            "params": { "id": "$id" },
+            "changes": []
+          },
+          "updateLocale": {
+            "description": "Stores the default language an admin chose for the organisation.",
+            "params": { "id": "$id", "locale": "locale" },
+            "changes": []
+          },
+          "clearLocale": {
+            "description": "Removes the organisation's default language, so sign-up reads none for an account its invitation creates.",
+            "params": { "id": "$id" },
+            "changes": []
+          }
+        }
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The settings' id, prefix ost: one per organisation, the same on every device, derived from the organisation's key.",
+          "x-perch": { "readonly": true }
+        },
+        "locale": {
+          "description": "The organisation's default language: an account its invitation creates starts in it; none until an admin chooses one.",
+          "enum": ["en", "es"],
+          "x-perch": { "crdt": "none" }
+        }
+      },
+      "required": ["id"],
       "additionalProperties": false
     },
     "note": {

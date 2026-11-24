@@ -20,6 +20,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
 
         const opened = await openDeclaredMail(page, 'sign-up', {
           params: { email: data.email, locale: 'en' },
+          account: { email: data.email, language: 'en' },
         })
 
         await expectPathname(page, CONTRACT_ROUTES['user.profile'])

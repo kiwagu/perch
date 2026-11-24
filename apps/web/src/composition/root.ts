@@ -38,6 +38,7 @@ import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SERVED_BUILD } from '../platform/served-build.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 import { SYNC_STATUS } from '../platform/sync-status.port'
+import { TENANT_COMMANDS, type TenantCommandsPort } from '../platform/tenant-commands.port'
 import { TWO_FACTOR } from '../platform/two-factor.port'
 
 import { accountStarts } from './account-starts'
@@ -47,6 +48,7 @@ import { createCommandBus } from './commands'
 import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace } from './identity-space'
 import { createInvitations } from './invitations'
+import { organisationStarts as startOrganisations } from './organisation-starts'
 import { createOrganisations } from './organisations'
 import { platformEvents } from './platform-events'
 import type { AppRootOptions, BootStep } from './root-options'
@@ -145,6 +147,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
       options.onSyncState(state)
       sync.syncState(state)
       starts.syncState(state)
+      organisationStarts.syncState(state)
     },
     // The start of an account a sign-in or a first verification learnt of waits for the first pull.
     keepAccountStart: (signIn, user, from) => starts.keepAfterPull(signIn, user, from),
@@ -177,6 +180,16 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     logger: options.logger,
     events,
   })
+  // Commands into one organisation's region, whichever is current when they are admitted.
+  const commandsFor = (key: string, admitted?: () => boolean): CommandsPort =>
+    createCommandBus({
+      writePath: session.tenantWritePath(key, admitted),
+      session,
+      deviceId: deviceIdFrom(options.storage),
+      logger: options.logger,
+      events,
+    })
+  const tenantCommands: TenantCommandsPort = { forTenant: commandsFor }
   const organisations = createOrganisations(organisationsApi, session)
   const devices = options.devicesApi(bearer)
   const twoFactor = options.twoFactorApi(bearer)
@@ -205,12 +218,22 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     locks: options.locks,
     logger: options.logger,
   })
+  // The settings row of each organisation the account administers, ensured by the leading tab.
+  const organisationStarts = startOrganisations({
+    session,
+    space: () => session.space(),
+    clock: options.clock,
+    locks: options.locks,
+    logger: options.logger,
+    commandsFor,
+  })
   // Reads and writes go to the space of whoever is signed in, and refuse while nobody is.
   const container = new Container()
     .singleton(SHAPE_RUNNER, () => session.runner)
     .singleton(WRITE_PATH, () => session.writePath)
     .singleton(SESSION, () => session)
     .singleton(COMMANDS, () => commands)
+    .singleton(TENANT_COMMANDS, () => tenantCommands)
     .singleton(EVENTS, () => events)
     .singleton(SETTINGS_SERVICE, () => settings)
     .singleton(ACCOUNT_START_SERVICE, () => starts.service)
