@@ -77,7 +77,7 @@
         "id": "stg",
         "actions": {
           "createSettings": {
-            "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value: the language the account signed up with, and the theme that device shows.",
+            "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value: the language the account starts in, and the theme that device shows.",
             "params": { "id": "$id", "identity": "identity", "locale": "locale", "theme": "theme" },
             "changes": []
           },
