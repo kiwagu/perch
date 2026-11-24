@@ -3,8 +3,12 @@
  * the sync holds a channel to the gateway, so it shares what only it knows (whether its channel
  * is up, whether changes made on this device wait to be sent, and a sync stopped for good) as a
  * record in the browser's storage, written when its channel changes and every two seconds while
- * it leads; every tab reads that record with its own network. A record nobody refreshed for a few
- * seconds belongs to a leader that went away: the tab that leads next is still connecting.
+ * it leads; every tab reads that record with its own network. The browser may hold back the
+ * timers of a hidden tab (Chrome, once it has been hidden for minutes, to one wake-up a minute),
+ * and the leader's two-second beat with them, but not what the tab hears: a tab that finds the
+ * record late asks the leader for its beat, and the leader answers. A record nobody refreshed for
+ * a few seconds, whose leader did not answer either, belongs to a leader that went away: the tab
+ * that leads next is still connecting.
  */
 
 import type { ResultAsync } from 'neverthrow'
@@ -16,16 +20,20 @@ import type { SyncStatus, SyncStatusPort } from '../platform/sync-status.port'
 
 import type { SyncState } from './identity-space'
 import {
+  askSyncLeader,
   forgetSyncLeader,
   type KeyValueStorage,
   type SyncLeader as Leader,
+  SYNC_ASK_KEY,
   SYNC_LEADER_KEY,
   savedSyncLeader,
   saveSyncLeader,
 } from './storage'
 
 const EVERY = 2_000
-/** A leader that has not refreshed its record for this long went away. */
+/** A record older than this missed a beat of its leader: a tab that reads it asks for one. */
+const LATE = EVERY + EVERY / 2
+/** A leader that has not refreshed its record for this long, nor answered when asked, went away. */
 const STALE = 3 * EVERY
 
 export interface SyncStatusOptions {
@@ -60,6 +68,9 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
   // outbox answers only the period it was asked in, and only while it is the latest one asked.
   let period = 0
   let asked = 0
+  // When this tab asked the leader for a beat it has not answered since (a record written then or
+  // later answers it): the first such ask, however often it is sent again.
+  let askedAt: number | undefined
   let stopped = false
   let cancel = () => {}
   const notify = () => {
@@ -109,11 +120,40 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
       },
     )
   }
+  // What the leading tab does every two seconds, and when another tab asks for it.
+  const beat = () => {
+    publish()
+    check()
+  }
+  // A tab that does not lead asks for a beat when the record is late.
+  const ask = () => {
+    const leader = savedSyncLeader(options.storage)
+    const now = options.clock.now()
+
+    if (leading || leader === undefined || now - leader.at <= LATE) {
+      return
+    }
+
+    if (askedAt === undefined || askedAt <= leader.at) {
+      askedAt = now
+    }
+
+    askSyncLeader(options.storage, now)
+  }
+  // A stale record belongs to a leader that went away, unless this tab asked it for a beat less
+  // than a beat ago and its answer may still be on the way.
+  const gone = (leader: Leader) => {
+    const now = options.clock.now()
+    const answering = askedAt !== undefined && askedAt > leader.at && now - askedAt < EVERY
+
+    return now - leader.at > STALE && !answering
+  }
   const tick = () => {
     cancel = options.clock.schedule(EVERY, () => {
       if (leading) {
-        publish()
-        check()
+        beat()
+      } else {
+        ask()
       }
 
       // A record nobody refreshed goes stale with time alone.
@@ -122,12 +162,18 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
     })
   }
   const unlistenStorage = options.storage.onChangeElsewhere((key) => {
-    if (key === SYNC_LEADER_KEY || key === undefined) {
+    if (key === SYNC_ASK_KEY) {
+      // Another tab found the record late: the browser held this tab's timers back, not its ears.
+      if (leading) {
+        beat()
+      }
+    } else if (key === SYNC_LEADER_KEY || key === undefined) {
       notify()
     }
   })
   const unlistenNetwork = options.onOnlineChange(notify)
 
+  ask()
   tick()
 
   return {
@@ -146,11 +192,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
         return 'offline'
       }
 
-      if (
-        leader === undefined ||
-        options.clock.now() - leader.at > STALE ||
-        leader.channel === 'down'
-      ) {
+      if (leader === undefined || gone(leader) || leader.channel === 'down') {
         return 'connecting'
       }
 

@@ -352,8 +352,14 @@ modeling stage.
   the browser's storage, written on each change of its channel and every two seconds while it
   leads (it says synced only once a read of the outbox, asked in its current leading period and
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
-  (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
-  away. The leading tab's sync channel hears the same network (`browser.ts` hands it to
+  (`onOnlineChange`). The browser may hold back a hidden tab's timers (Chrome, after minutes
+  hidden, to one wake-up a minute), and a hidden leader's two seconds with them, but not the
+  storage events it hears: a tab that finds the record older than three seconds asks for a beat
+  (`perch.sync.ask`, the time it asked), which the leading tab answers by writing its record and
+  reading its outbox again. A record nobody refreshed for six seconds belongs to a leader that went
+  away, unless the tab asked it less than two seconds ago (a tab that opens or comes back into view
+  is not told "connecting" while its ask is on the way); a leader that leaves an ask unanswered
+  for two seconds went away. The leading tab's sync channel hears the same network (`browser.ts` hands it to
   `WebSocketTransport`): once the browser is back online it connects within a second, not after
   its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
   screens' machines and the frame's, from the facts of this browser no account owns, each a key
