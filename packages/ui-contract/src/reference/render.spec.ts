@@ -421,7 +421,7 @@ describe('renderReference', () => {
     ['rule-roles', 'whatever state its flow is in, a final one included'],
     [
       'screen-anchors-name-roles',
-      'an account signing in in another tab takes a link shown to a guest alone away',
+      'An account signing in in another tab hides a link shown to a guest alone',
     ],
     ['rule-clear-keeps', 'while its draft lives'],
     ['rule-clear-keeps', "an entry's edit form closing because another entry is edited or deleted"],
