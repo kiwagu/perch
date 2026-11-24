@@ -418,6 +418,11 @@ describe('renderReference', () => {
     ['platform-values-name-format', 'through a form without `noValidate`'],
     ['manifest-ids-name-value-format', 'through a form without `noValidate`'],
     ['rule-email-format', 'is submitted by no form'],
+    ['rule-roles', 'whatever state its flow is in, a final one included'],
+    [
+      'screen-anchors-name-roles',
+      'an account signing in in another tab takes a link shown to a guest alone away',
+    ],
     ['rule-clear-keeps', 'while its draft lives'],
     ['rule-clear-keeps', "an entry's edit form closing because another entry is edited or deleted"],
     ['screen-anchors-name-binding', 'a secret is never filled from a URL'],
