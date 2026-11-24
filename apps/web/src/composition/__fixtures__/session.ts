@@ -1,4 +1,5 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { expect } from 'vitest'
 
 import { EventBus } from '@workspace/cqrs'
 import {
@@ -26,14 +27,17 @@ import {
 
 import type { CommandsPort } from '../../platform/commands.port'
 import type { AppEvent } from '../../platform/events.port'
+import type { SignInResult } from '../../platform/session.port'
 import { type CommandLogger, createCommandBus } from '../commands'
 import type { GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
+import type { PasskeyCeremony } from '../passkey-ceremony'
 import type { SessionOptions, TransportContext } from '../session'
 import { SessionService } from '../session'
 import { type MemoryStorage, memoryStorage } from '../storage'
 
 import { type FakeGatewayAuth, fakeGatewayAuth } from './gateway-auth'
+import { fakeCeremony } from './passkey-ceremony'
 import { QueryTracker } from './query-tracker'
 
 export interface TestWorldOptions {
@@ -68,6 +72,8 @@ export interface TestWorldOptions {
   readonly memberships?: readonly Membership[]
   /** Signs accounts up and devices in in place of the fake gateway's accounts. */
   readonly auth?: GatewayAuth
+  /** The browser's passkey window; by default one that nobody answers. */
+  readonly ceremony?: PasskeyCeremony
   /**
    * Reads the signed-in identity's memberships after a sign-in; by default every account belongs
    * to `memberships`, as the stub welcomes it.
@@ -94,45 +100,68 @@ export interface BrowserDatabases {
    * the database closes once the last tab has let it go.
    */
   open(identity: IdentityId): ResultAsync<LocalDb, DataError>
+  /**
+   * A tab's connection to the identity's database of the organisation `key`, shared the same way
+   * when the browser shares its organisations' databases; none when each tab opens its own.
+   */
+  readonly openTenant?: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
 }
 
-export function browserDatabases(): BrowserDatabases {
-  const shared = new Map<IdentityId, { readonly local: LocalDb; tabs: number }>()
+/**
+ * The databases of one browser, which its tabs share: each identity's own, and with `tenants`
+ * each organisation's too.
+ */
+export function browserDatabases(options: { readonly tenants?: boolean } = {}): BrowserDatabases {
+  const shared = new Map<string, { readonly local: LocalDb; tabs: number }>()
 
-  return {
-    open(identity) {
-      const held = shared.get(identity)
-      const opening = held
-        ? okAsync(held)
-        : openTestDb().map((local) => {
-            const opened = { local, tabs: 0 }
+  /** A tab's connection to the database named `name`, opened by `open` for its first tab. */
+  const opened = (
+    name: string,
+    open: () => ResultAsync<LocalDb, DataError>,
+  ): ResultAsync<LocalDb, DataError> => {
+    const held = shared.get(name)
+    const opening = held
+      ? okAsync(held)
+      : open().map((local) => {
+          const fresh = { local, tabs: 0 }
 
-            shared.set(identity, opened)
+          shared.set(name, fresh)
 
-            return opened
-          })
+          return fresh
+        })
 
-      return opening.map((opened): LocalDb => {
-        let holding = true
-        const release = async () => {
-          if (!holding) {
-            return
-          }
-
-          holding = false
-          opened.tabs -= 1
-
-          if (opened.tabs === 0) {
-            shared.delete(identity)
-            await opened.local.close()
-          }
+    return opening.map((database): LocalDb => {
+      let holding = true
+      const release = async () => {
+        if (!holding) {
+          return
         }
 
-        opened.tabs += 1
+        holding = false
+        database.tabs -= 1
 
-        return { ...opened.local, close: release, destroy: release }
-      })
-    },
+        if (database.tabs === 0) {
+          shared.delete(name)
+          await database.local.close()
+        }
+      }
+
+      database.tabs += 1
+
+      return { ...database.local, close: release, destroy: release }
+    })
+  }
+
+  return {
+    open: (identity) => opened(identity, () => openTestDb()),
+    ...(options.tenants === true
+      ? {
+          openTenant: (identity: IdentityId, key: string) =>
+            opened(`${identity}/${key}`, () =>
+              openTestDb({ schema: readSchema('tenant'), database: 'tenant' }),
+            ),
+        }
+      : {}),
   }
 }
 
@@ -232,7 +261,9 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   let visibility: Visibility = 'visible'
   const session = new SessionService({
     auth,
-    keepAccountStart: options.keepAccountStart ?? ((user, from) => startsKept.push([user, from])),
+    ceremony: options.ceremony ?? fakeCeremony(),
+    keepAccountStart:
+      options.keepAccountStart ?? ((signIn, user, from) => startsKept.push([signIn, user, from])),
     listMemberships: options.listMemberships ?? (() => okAsync(memberships)),
     openLocal: (identity) =>
       (options.refusedIdentities?.includes(identity)
@@ -254,10 +285,13 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
           },
         }
       }),
-    openTenantLocal: (_identity, key) =>
+    openTenantLocal: (identity, key) =>
       options.refusedTenants?.includes(key)
         ? errAsync(dataError('data:OPEN_FAILED', `the browser would not open ${key}`))
-        : openTestDb({ schema: readSchema('tenant'), database: 'tenant' }).map((local): LocalDb => {
+        : (
+            options.databases?.openTenant?.(identity, key) ??
+            openTestDb({ schema: readSchema('tenant'), database: 'tenant' })
+          ).map((local): LocalDb => {
             tenantsOpened.push(key)
 
             return {
@@ -287,11 +321,15 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
 
       contexts.push(context)
       transports.push(transport)
-      // The browser's WebSocket transport hands memberships to the context and calls `onEnded`
-      // itself; the stub tells its listeners.
+      // The browser's WebSocket transport hands memberships, and a welcome's platform roles, to
+      // the context and calls `onEnded` itself; the stub tells its listeners.
       transport.onMessage((message) => {
         if (message.type === 'welcome' || message.type === 'memberships') {
           context.onMemberships(message.memberships)
+        }
+
+        if (message.type === 'welcome') {
+          context.onRoles(message.roles)
         }
       })
       transport.onEnded(context.onEnded)
@@ -391,6 +429,13 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   }
 }
 
+/** The user a sign-in signed in; the test fails when it signed nobody in. */
+export function signedInUser(result: SignInResult): AuthUser {
+  return result.kind === 'signed-in'
+    ? result.user
+    : expect.unreachable(`the sign-in answered ${result.kind}`)
+}
+
 /** Signs `input` up and opens its verification link on this service's device, as a person does. */
 export function signUpVerified(
   service: Pick<SessionService, 'signUp' | 'verifyEmail'>,
@@ -419,11 +464,15 @@ export interface TestSession {
 
 /**
  * A session with the command bus, as the root wires them, for feature tests: accounts at a
- * gateway without a network, each identity's own embedded database, synced through the stub.
+ * gateway without a network, each identity's own embedded database, synced through the stub; its
+ * browser's passkey window is `options.ceremony`, one that nobody answers by default.
  */
-export async function openTestSession(logger: CommandLogger = silent): Promise<TestSession> {
+export async function openTestSession(
+  logger: CommandLogger = silent,
+  options: Pick<TestWorldOptions, 'ceremony'> = {},
+): Promise<TestSession> {
   const auth = fakeGatewayAuth()
-  const world = await openTestWorld({ logger, auth })
+  const world = await openTestWorld({ logger, auth, ...options })
 
   return {
     session: world.session,

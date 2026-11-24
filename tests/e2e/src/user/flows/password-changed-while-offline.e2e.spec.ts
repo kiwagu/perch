@@ -1,4 +1,7 @@
 // scenario: user/flows/password-changed-while-offline
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   appReady,
@@ -10,21 +13,14 @@ import {
   test,
   toast,
 } from '../../support/fixtures'
-import { SyncNetwork } from '../../support/network'
-
-/**
- * How long a device back online may take to connect again: its reconnects back off up to
- * 30 seconds.
- */
-const RECONNECT_MS = 35_000
+import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
 
 test.describe('Change the password while another device is offline', { tag: '@full' }, () => {
   test('A device signed out by a change of the password while it was offline learns why when it connects again', async ({
     page,
     freshDevice,
   }) => {
-    // A sign-in waits for the sync channel, and coming back online may wait out a reconnect delay
-    // of up to 30 seconds.
+    // A sign-in waits for the sync channel.
     test.slow()
 
     const data = {
@@ -57,7 +53,7 @@ test.describe('Change the password while another device is offline', { tag: '@fu
     })
 
     await test.step('4. On device A, open [/settings], enter the password into [user.settings.password.current-password-input], the new password into [user.settings.password.new-password-input] and [user.settings.password.password-confirmation-input], and click [user.settings.password.save-button]', async () => {
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await page.getByTestId('user.settings.password.current-password-input').fill(data.password)
       await page.getByTestId('user.settings.password.new-password-input').fill(data.newPassword)
@@ -68,14 +64,14 @@ test.describe('Change the password while another device is offline', { tag: '@fu
       // Expected: After step 4 [app-shell.toast] carries [code:password-changed] on device A, and
       //   device B is still on [/me]
       await expect(toast(page, 'password-changed')).toBeVisible()
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
     await test.step("5. Bring device B's browser back online", async () => {
       await network.goOnline()
       // Expected: After step 5 device B is on [/sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:password-changed-elsewhere]
-      await expectPathname(deviceB, '/sign-in', RECONNECT_MS)
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], BACK_ONLINE_MS)
       await expect(signInNotice(deviceB, 'password-changed-elsewhere')).toBeVisible()
     })
   })

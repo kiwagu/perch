@@ -14,6 +14,9 @@ export const SCREENS_DIR = 'contract/domain/screens'
 /** The contract version and the platform section every screen shares. */
 export const PLATFORM_FILE = 'contract/domain/platform.yaml'
 
+/** The project's language: its contexts, terms and roles. A contract may leave it out. */
+export const TERMS_FILE = 'contract/domain/terms.yaml'
+
 /**
  * The file of a screen, named by the path of its first binding without the leading `/`
  * (`/me` is `me.yaml`, `/org/$org` is `org/$org.yaml`, `/` is `index.yaml`); the frame,
@@ -55,8 +58,35 @@ export function isBusinessFile(path: string): boolean {
 export const SCREEN_SCHEMA_FILE = 'contract/schemas/screen.schema.json'
 export const PLATFORM_SCHEMA_FILE = 'contract/schemas/platform.schema.json'
 export const ACTIVITY_SCHEMA_FILE = 'contract/schemas/activity.schema.json'
+export const TERMS_SCHEMA_FILE = 'contract/schemas/terms.schema.json'
 export const ENTITY_SCHEMA_FILE = 'contract/schemas/x-perch.schema.json'
 export const MANIFEST_SCHEMA_FILE = 'contract/schemas/manifest.schema.json'
 
+/** The reference of every key and rule, generated beside the schemas (`renderReference`). */
+export const REFERENCE_FILE = 'contract/REFERENCE.md'
+
+/**
+ * The prose that explains the contract to a reader, which links into the reference instead of
+ * restating a facet (`referenceLinkProblems` holds each link to an anchor of the reference): the
+ * folder's guide, the rule, the skill, the manifest's instructions, the package's guide and the
+ * vocabulary.
+ */
+export const GUIDE_FILES: readonly string[] = [
+  'contract/README.md',
+  '.cursor/rules/ui-contract.mdc',
+  '.agents/skills/adding-ui-anchors/SKILL.md',
+  'packages/ui-contract/src/manifest/instructions.ts',
+  'packages/ui-contract/README.md',
+  VOCABULARY_FILE,
+]
+
 /** The coverage note: prose around a block `ui-contract coverage --write` fills. */
 export const COVERAGE_FILE = 'contract/COVERAGE.md'
+
+/**
+ * The key `CONTRACT_ROUTES` names a binding by: its screen's id for the first binding (the one
+ * the screen's file is named by), and the id with the binding's path for a further one,
+ * `<id>@<path>`, so a binding added before it moves no key.
+ */
+export const routeKeyOf = (id: string, index: number, path: string): string =>
+  index === 0 ? id : `${id}@${path}`

@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VERSION } from '../anchors'
+
 import { loadModel } from './model'
 import { VOCABULARY_FILE } from './paths'
 import { formatProblem, type Problem } from './problems'
@@ -39,6 +41,7 @@ const KINDS = [
   'page',
   'heading',
   'message',
+  'range',
   'error',
   'toast',
   'badge',
@@ -66,9 +69,14 @@ function readVocabulary(): ReturnType<typeof parseVocabulary> {
 describe('the contract folder of the repository', () => {
   it('has a vocabulary without problems, with the closed list of kinds', () => {
     const { vocabulary, problems } = readVocabulary()
+    const version = loadScreens(ROOT).screens?.version
 
     expect(printed(problems)).toEqual([])
-    expect(vocabulary.version).toBe(1)
+    // The version the engine reads for the contract is the one platform.yaml declares, within its range.
+    expect(version).toBeGreaterThanOrEqual(1)
+    expect(version).toBeLessThanOrEqual(CONTRACT_VERSION)
+    // The vocabulary either states no version, or states the same one.
+    expect(vocabulary.version === undefined || vocabulary.version === version).toBe(true)
     expect(Object.keys(vocabulary.kinds)).toEqual(KINDS)
   })
   it('has the screens of the application without problems, sorted by their files', () => {

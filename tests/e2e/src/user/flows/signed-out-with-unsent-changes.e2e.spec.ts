@@ -1,14 +1,12 @@
 // scenario: user/flows/signed-out-with-unsent-changes
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, signIn, signInNotice, test, toast } from '../../support/fixtures'
-import { SyncNetwork } from '../../support/network'
+import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
+import { atRoute } from '../../support/routes'
 import { databases, identityDatabase } from '../../support/storage'
-
-/**
- * How long a device back online may take to connect again: its reconnects back off up to
- * 30 seconds, and the gateway's refusal of its signed-out session follows.
- */
-const RECONNECT_MS = 35_000
 
 test.describe('Sign a device out from another one while it holds changes not sent yet', {
   tag: '@full',
@@ -18,9 +16,6 @@ test.describe('Sign a device out from another one while it holds changes not sen
     signedIn,
     secondDevice,
   }) => {
-    // Coming back online may wait out a reconnect delay of up to 30 seconds.
-    test.slow()
-
     const data = { unsentName: generate.newName() }
     // Device A's sync socket goes through the test from its next load, so step 3 can drop it.
     const network = await SyncNetwork.attach(page)
@@ -29,7 +24,7 @@ test.describe('Sign a device out from another one while it holds changes not sen
       await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
         // The `signedIn` fixture has signed device A up through the sign-in page and its mail;
         // the page loads again, its sync socket now routed through the test.
-        await page.goto('/me')
+        await page.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(page)
         await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
           timeout: 10_000,
@@ -47,7 +42,7 @@ test.describe('Sign a device out from another one while it holds changes not sen
         const b = await secondDevice.signIn()
 
         await b.getByTestId('app-shell.nav.devices-link').click()
-        await expect(b).toHaveURL(/\/devices$/)
+        await expect(b).toHaveURL(atRoute(CONTRACT_ROUTES.device))
 
         return b
       })
@@ -79,7 +74,7 @@ test.describe('Sign a device out from another one while it holds changes not sen
 
     await test.step('5. On device B, open [/me]', async () => {
       await deviceB.getByTestId('app-shell.nav.profile-link').click()
-      await expect(deviceB).toHaveURL(/\/me$/)
+      await expect(deviceB).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       // Expected: After step 5 device B shows the name, not the unsent name: the change has not
       //   reached the server
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(signedIn.name)
@@ -90,7 +85,9 @@ test.describe('Sign a device out from another one while it holds changes not sen
       // Expected: After step 6 device A is on [/sign-in], where [user.sign-in.notice-message]
       //   carries [code:resend-after-sign-in], and its browser keeps the local database of the
       //   account
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: RECONNECT_MS })
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), {
+        timeout: BACK_ONLINE_MS,
+      })
       await expect(signInNotice(page, 'resend-after-sign-in')).toBeVisible()
       expect(await databases(page), "device A's database of the account").toContain(database)
     })

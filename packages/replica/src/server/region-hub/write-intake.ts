@@ -34,7 +34,7 @@ export function takeInWrite(
   }
 
   return log.accept(plan, 'server').map((head) => {
-    // In a buffer of their own, as a message holds them (as `exportFrom` in the hub does).
+    // In a buffer of their own, as a message holds them (as `exportFrom` does).
     const bytes = new Uint8Array(plan.bytes)
 
     doc.import(bytes)

@@ -10,10 +10,13 @@ the application's composition root, never by this package.
 ## Key exports
 
 - `registry`: kinds `identity` (`idn`), `profile` (`prf`), `tenant` (`tnt`), `membership`
-  (`mbr`), `device_session` (`dvs`) and `note` (`nte`).
-- `IdentityId`, `ProfileId`, `TenantId`, `MembershipId`, `DeviceSessionId`, `NoteId`, `EntityKind`: branded id types.
-- `identityIdFactory`, `profileIdFactory`, `tenantIdFactory`, `membershipIdFactory`,
-  `device_sessionIdFactory`, `noteIdFactory`: `create()`, `is()`, `assert()`.
+  (`mbr`), `device_session` (`dvs`), `note` (`nte`), `settings` (`stg`), `account` (`acc`),
+  `verification` (`vrf`), `invitation` (`inv`), `two_factor` (`tfa`) and `passkey` (`pkey`).
+- `IdentityId`, `ProfileId`, `TenantId`, `MembershipId`, `DeviceSessionId`, `NoteId`,
+  `SettingsId`, `AccountId`, `VerificationId`, `InvitationId`, `TwoFactorId`, `PasskeyId`,
+  `EntityKind`: branded id types.
+- `<kind>IdFactory` for every kind (`identityIdFactory`, `two_factorIdFactory`, …): `create()`,
+  `is()`, `assert()`.
 - `idSchemas`: Zod schemas per kind.
 
 ## Commands

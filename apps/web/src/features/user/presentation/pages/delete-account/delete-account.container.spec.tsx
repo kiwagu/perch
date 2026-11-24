@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
@@ -82,8 +83,9 @@ function open(at: string, opening: Opening = {}) {
     declarations: { Delete: DeleteAccountContainer },
     routes: [
       {
-        path: '/delete-account',
+        path: CONTRACT_ROUTES['user.delete-account'],
         page: 'Delete',
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
     ],
@@ -128,7 +130,9 @@ const refused = (code: 'data:LINK_INVALID' | 'data:LAST_ADMIN') => () =>
 
 describe('DeleteAccountContainer', () => {
   it("asks the frame first, then deletes with the address's token, and tells a guest where to sign in", async () => {
-    const { deleteAccount, asked } = open('/delete-account?token=the-token')
+    const { deleteAccount, asked } = open(
+      `${CONTRACT_ROUTES['user.delete-account']}?token=the-token`,
+    )
 
     await press()
 
@@ -145,7 +149,10 @@ describe('DeleteAccountContainer', () => {
   })
 
   it('deletes nothing when the user stays', async () => {
-    const { deleteAccount, asked } = open('/delete-account?token=the-token', { confirmed: false })
+    const { deleteAccount, asked } = open(
+      `${CONTRACT_ROUTES['user.delete-account']}?token=the-token`,
+      { confirmed: false },
+    )
 
     await press()
 
@@ -156,7 +163,10 @@ describe('DeleteAccountContainer', () => {
   })
 
   it('keeps its message once its own deletion signed this device out, and offers the sign-in then', async () => {
-    const { session } = open('/delete-account?token=the-token', { signedIn: ann, signsOut: true })
+    const { session } = open(`${CONTRACT_ROUTES['user.delete-account']}?token=the-token`, {
+      signedIn: ann,
+      signsOut: true,
+    })
 
     await screen.findByTestId(BUTTON)
     expect(screen.queryByTestId('user.delete-account.sign-in-link')).toBeNull()
@@ -173,7 +183,9 @@ describe('DeleteAccountContainer', () => {
   })
 
   it('keeps another account signed in here as it was, with the message and no link to sign in', async () => {
-    const { session } = open('/delete-account?token=bobs', { signedIn: bob })
+    const { session } = open(`${CONTRACT_ROUTES['user.delete-account']}?token=bobs`, {
+      signedIn: bob,
+    })
 
     await press()
 
@@ -183,7 +195,9 @@ describe('DeleteAccountContainer', () => {
   })
 
   it('takes the button away for a link that does not work', async () => {
-    open('/delete-account?token=used', { answers: [refused('data:LINK_INVALID')] })
+    open(`${CONTRACT_ROUTES['user.delete-account']}?token=used`, {
+      answers: [refused('data:LINK_INVALID')],
+    })
 
     await press()
 
@@ -197,7 +211,7 @@ describe('DeleteAccountContainer', () => {
   })
 
   it('says the last admin must remove the other members, then deletes on a second press', async () => {
-    const { deleteAccount } = open('/delete-account?token=the-token', {
+    const { deleteAccount } = open(`${CONTRACT_ROUTES['user.delete-account']}?token=the-token`, {
       answers: [refused('data:LAST_ADMIN'), () => okAsync(undefined)],
     })
 
@@ -217,7 +231,7 @@ describe('DeleteAccountContainer', () => {
   })
 
   it('asks the session with an empty token when the address names none', async () => {
-    const { deleteAccount } = open('/delete-account', {
+    const { deleteAccount } = open(CONTRACT_ROUTES['user.delete-account'], {
       answers: [refused('data:LINK_INVALID')],
     })
 

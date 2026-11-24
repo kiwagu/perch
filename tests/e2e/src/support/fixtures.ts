@@ -1,11 +1,13 @@
 import { test as base, expect, type Page, type TestStepInfo } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './browsers'
 import { CLIENT_ADDRESS_HEADER, clientAddressOf } from './client-address'
 import { generate } from './data'
 import { openDeclaredMail } from './mail-contract'
+import { mailbox } from './mailbox'
 
 export { expect }
 
@@ -119,20 +121,22 @@ export const checkYourMail = (page: Page) =>
  * when the page shows its error instead.
  */
 export async function signIn(page: Page, account: SeedAccount): Promise<void> {
-  await page.goto('/sign-in')
+  await page.goto(CONTRACT_ROUTES['user.sign-in'])
   await appReady(page)
   await page.getByTestId('user.sign-in.email-input').fill(account.email)
   await page.getByTestId('user.sign-in.password-input').fill(account.password)
   await page.getByTestId('user.sign-in.submit-button').click()
 
+  // The page runs this function by itself: the route goes in as its argument.
   const outcome = await page.waitForFunction(
-    () =>
-      window.location.pathname === '/me' ||
+    (profile) =>
+      window.location.pathname === profile ||
       document.querySelector('[data-testid="user.sign-in.error"]')?.getAttribute('data-code'),
+    CONTRACT_ROUTES['user.profile'],
   )
 
   expect(await outcome.jsonValue(), 'the sign-in page answered with its error code').toBe(true)
-  await page.waitForURL('**/me')
+  await page.waitForURL(`**${CONTRACT_ROUTES['user.profile']}`)
 }
 
 /**
@@ -141,21 +145,34 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
  */
 export async function signOut(page: Page): Promise<void> {
   await page.getByTestId('user.profile.sign-out-button').click()
-  await expectPathname(page, '/sign-in', 15_000)
+  await expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 15_000)
 }
 
 /** A fresh account to sign up with, under a name of its own. */
 const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate.name() })
 
 /**
- * Opens the sign-in page, switches it to sign-up and submits `account`, its password typed twice;
+ * Opens the sign-in page, chooses `locale` in the frame's language select when it is not the
+ * browser's (`en`), switches the page to sign-up and submits `account`, its password typed twice;
  * waits until the page asks to check the mail, the sign-up's mail on its way and nothing signed in.
- * The gateway answers a sign-up no sooner than its floor (800 ms), by when an assertion looks only
+ * A guest's language lives in the open page only, so it is chosen on the same load that signs up.
+ * The gateway answers a sign-up no sooner than its floor (1050 ms), by when an assertion looks only
  * every 500 ms, so the page is read every 50 ms instead: the message is seen as it shows.
  */
-export async function startSignUp(page: Page, account: SeedAccount): Promise<void> {
-  await page.goto('/sign-in')
+export async function startSignUp(page: Page, account: SeedAccount, locale = 'en'): Promise<void> {
+  await page.goto(CONTRACT_ROUTES['user.sign-in'])
   await appReady(page)
+
+  if (locale !== 'en') {
+    const select = page.getByTestId('app-shell.locale-select')
+
+    await select.click()
+    await page
+      .locator(`[data-testid="app-shell.locale-select.option"][data-value="${locale}"]`)
+      .click()
+    await expect(select).toHaveAttribute('data-value', locale)
+  }
+
   await page.getByTestId('user.sign-in.toggle-button').click()
   await page.getByTestId('user.sign-in.email-input').fill(account.email)
   await page.getByTestId('user.sign-in.password-input').fill(account.password)
@@ -172,18 +189,29 @@ export async function startSignUp(page: Page, account: SeedAccount): Promise<voi
 
 /**
  * Signs `account` (a fresh one by default) up through the sign-in page in the app's language
- * `locale` (the browser's, `en`, unless the test chose another), then opens the link of the mail
+ * `locale` (the browser's, `en`, unless the test chooses another there), then opens the link of the mail
  * the sign-up declares, held to its declaration, in the same page, which signs it in; returns it
- * on `/me`.
+ * on `/me`. The mail is the account's email's first after the ones it already holds, counted
+ * before the sign-up: an email invited before it signs up holds the invitation first.
  */
 export async function signUp(
   page: Page,
   account = freshAccount(),
   locale = 'en',
 ): Promise<SeedAccount> {
-  await startSignUp(page, account)
-  await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } })
-  await expectPathname(page, '/me')
+  const seen = await mailbox.count(account.email)
+
+  await startSignUp(page, account, locale)
+  await openDeclaredMail(
+    page,
+    'sign-up',
+    {
+      params: { email: account.email, locale },
+      account: { email: account.email, language: locale },
+    },
+    seen,
+  )
+  await expectPathname(page, CONTRACT_ROUTES['user.profile'])
 
   return account
 }

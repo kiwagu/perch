@@ -21,8 +21,12 @@
 
 import { spawnSync } from 'node:child_process'
 
-/** The addresses the run reaches on the host: the front the browser opens, the mailbox the tests read. */
-const ADDRESSES = ['E2E_BASE_URL', 'MAILBOX_URL'] as const
+/**
+ * The addresses the run reaches on the host: the front the browser opens, the mailbox the tests
+ * read, and the stand's database, where the host's operator command a test runs sets an account's
+ * platform role. Forwarding a port changes no interface the browser sees.
+ */
+const ADDRESSES = ['E2E_BASE_URL', 'MAILBOX_URL', 'SURREAL_URL'] as const
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1'])
 

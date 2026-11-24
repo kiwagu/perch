@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { partOf, withDerivedParams } from './form-params'
+import { withDerivedParams } from './form-params'
 
 const FILE = 'contract/domain/screens/sign-in.yaml'
 const SIGN_IN = 'platform.sign-in'
@@ -34,13 +34,6 @@ const derived = (anchors: Record<string, unknown>) =>
 
 const bindingOf = (result: { value: unknown }, anchor: string) =>
   (result.value as { anchors: Record<string, { binding: unknown }> }).anchors[anchor]?.binding
-
-describe('partOf', () => {
-  it('is the anchor without its last segment', () => {
-    expect(partOf('user.settings.password.save-button')).toBe('user.settings.password')
-    expect(partOf('user.sign-in.submit-button')).toBe('user.sign-in')
-  })
-})
 
 describe('withDerivedParams', () => {
   it('gives a button the union of the params the fields of its part pass for its action', () => {

@@ -6,7 +6,7 @@
  * - A transition may be its target alone, as XState itself allows: `onDone: idle`.
  * - An effect may be written by its name: `show: <anchor>` (the anchor shows one of the codes
  *   it declares), `show: { <anchor>: [codes] }` (one of these), `clear: <anchor>`,
- *   `navigate: <path>` or `navigate: { to, search }`.
+ *   `read: <anchor>`, `navigate: <path>` or `navigate: { to, search }`.
  * - A region may be a pattern, a shape two regions or more of the screens share, named by
  *   what it does: `draft`. A region that fits no pattern is written in full.
  * - The region of a button bound to one action is derived from its binding: a flow that
@@ -16,7 +16,9 @@
  *   action shows: on a branch a guard by failure code guards, one of that guard's codes; on a
  *   later branch, one of those the code-guarded branches before it leave.
  * - An invoke, or a region written `by` its button, may say `toast: false`: the success of its
- *   action shows no derived toast.
+ *   action shows no derived toast; or `read: false`: the action changes nothing a list of the
+ *   screen shows, so nothing reads after it. One branch of an invoke's `onDone` or `onError`
+ *   may say `read: false` instead: nothing reads after that outcome, where another does.
  */
 
 import { z } from '@workspace/zod'
@@ -25,8 +27,9 @@ import { anchorSchema, codeSchema } from '../../../names.schema'
 import { DESCRIPTION_PURPOSES } from '../../description-purposes'
 import { routePathSchema } from '../binding'
 
-import { flowSchemaOf, toastOptOutSchema } from './build'
+import { flowSchemaOf, readOptOutSchema, toastOptOutSchema } from './build'
 import { effectSchema, navigateParamsSchema } from './effects'
+import { authoredGuardSchema } from './guards'
 import { flowTargetSchema, guardNameSchema, modelEventNameSchema } from './names'
 import { transitionSchemaOf, transitionsSchemaOf } from './transitions'
 
@@ -58,6 +61,14 @@ export const clearShortSchema = z
   })
   .describe('`clear: <anchor>`: a field is emptied, or the anchor stops showing its code.')
 
+export const readShortSchema = z
+  .strictObject({
+    read: anchorSchema.describe(
+      "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again.",
+    ),
+  })
+  .describe('`read: <anchor>`: the list reads its source again.')
+
 export const navigateShortSchema = z
   .strictObject({
     navigate: z
@@ -67,7 +78,14 @@ export const navigateShortSchema = z
   .describe('`navigate: <path>`: the app moves to that binding.')
 
 export const authoredEffectSchema = z
-  .union([effectSchema, showAllSchema, showSomeSchema, clearShortSchema, navigateShortSchema])
+  .union([
+    effectSchema,
+    showAllSchema,
+    showSomeSchema,
+    clearShortSchema,
+    readShortSchema,
+    navigateShortSchema,
+  ])
   .describe('An effect, in full (`{ type, params }`) or by its name (`show: <anchor>`).')
   .meta({ id: 'authoredEffect' })
 
@@ -84,13 +102,13 @@ const authoredTransitionsSchema = transitionsSchemaOf(authoredTransitionSchema)
 export const controlRegionSchema = z
   .strictObject({
     by: anchorSchema.describe(
-      'The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`.',
+      "The screen's own button bound to one action, whose region this is: the loader writes `idle` and `running`; its `description`, `onDone` and `onError` go here. See the rule `button-region`.",
     ),
     description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     onDone: authoredTransitionsSchema
       .exactOptional()
       .describe(
-        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.',
+        'What follows success; absent or untargeted, `idle`. From version 5 the loader first clears a declared `<part>.error` unless the branch shows it; never write that clear. See the rule `area-request`.',
       ),
     onError: authoredTransitionsSchema
       .exactOptional()
@@ -98,6 +116,7 @@ export const controlRegionSchema = z
         'What follows when the action fails; absent, back to `idle` with the error of the part (`<part>.error`) showing the codes of the failure; a transition without a target goes back to `idle` too.',
       ),
     toast: toastOptOutSchema.exactOptional(),
+    read: readOptOutSchema.exactOptional(),
   })
   .describe(
     'The region of a button bound to one action, with the outcomes the screen decides: the rest comes from its binding.',
@@ -108,7 +127,7 @@ export const draftPatternSchema = z
     pattern: z
       .literal('draft')
       .describe(
-        'A control that follows a stored value or holds what was typed: in `following` it shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the stored value becoming it.',
+        'A control that follows a stored value or holds what was typed, when two regions or more share it. Its states, `following` and `edited`, list no `meta.renders`. See the rule `flow-shorter-forms`.',
       ),
     description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     input: anchorSchema.describe('The control typed into.'),
@@ -122,7 +141,9 @@ export const draftPatternSchema = z
 export const authoredFlowSchema = flowSchemaOf({
   transition: authoredTransitionSchema,
   effect: authoredEffectSchema,
+  guard: authoredGuardSchema,
   toastOptOut: true,
+  renderSets: true,
   region: (parts) =>
     z
       .union([draftPatternSchema, controlRegionSchema, parts.region])
@@ -135,5 +156,5 @@ export const authoredFlowSchema = flowSchemaOf({
       'The regions written, by name: two or more once the loader adds the region of each button bound to one action that the flow handles nowhere.',
   },
   description:
-    'The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.',
+    'The flow of the screen: an XState v5 machine config in a shorter form (targets, named effects, regions by pattern or button) that the loader expands. See the rule `flow-shorter-forms`.',
 })

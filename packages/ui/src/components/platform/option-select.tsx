@@ -14,15 +14,20 @@ export interface Option<Value extends string> {
 
 export interface OptionSelectProps<Value extends string> {
   readonly label: string
-  readonly value: Value
+  /** The chosen option; none shows the placeholder, and the anchor carries no value. */
+  readonly value: Value | undefined
+  /** What the trigger shows while no option is chosen. */
+  readonly placeholder?: string
   readonly options: readonly Option<Value>[]
   readonly onChange: (value: Value) => void
   /** The trigger's anchor, carrying the chosen value as `data-value`; each option carries `<testId>.option` with its value as `data-value`. */
   readonly testId?: string
   /** Takes no choice: the trigger cannot be opened. */
   readonly disabled?: boolean
-  /** False for a choice that applies at once, as the contract derives for it. */
+  /** False for a choice that applies at once; its facts' say (by `testId`) when left out. */
   readonly holdsInput?: boolean
+  /** False for a choice whose border takes no color by its state; its facts' say (by `testId`), else its form's, when left out. */
+  readonly marksState?: boolean
 }
 
 /** A labelled choice between a few options; the trigger shows the chosen label from the first render. */
@@ -32,9 +37,11 @@ export function OptionSelect<Value extends string>(props: OptionSelectProps<Valu
   return (
     <Select
       items={props.options.map((option) => ({ value: option.value, label: option.label }))}
-      value={props.value}
+      value={props.value ?? null}
       disabled={props.disabled}
       holdsInput={props.holdsInput}
+      marksState={props.marksState}
+      anchor={props.testId}
       onValueChange={(value) => {
         if (value !== null) {
           props.onChange(value as Value)
@@ -47,7 +54,7 @@ export function OptionSelect<Value extends string>(props: OptionSelectProps<Valu
         data-value={props.value}
         className="min-h-11 text-base"
       >
-        <SelectValue />
+        <SelectValue placeholder={props.placeholder} />
       </SelectTrigger>
       <SelectContent>
         {props.options.map((option) => (

@@ -1,4 +1,7 @@
 // scenario: user/flows/reset-signs-out-everywhere
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, signInNotice, signUp, test } from '../../support/fixtures'
 import { askForReset, enterNewPassword, openResetMail } from '../../support/password-reset'
@@ -47,7 +50,7 @@ test.describe('Set a new password while another device is signed in', { tag: '@f
 
     // Expected: Device A is signed out: its URL is [/sign-in] and [user.sign-in.notice-message]
     //   carries [code:password-changed-elsewhere]
-    await expectPathname(page, '/sign-in', 10_000)
+    await expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 10_000)
     await expect(signInNotice(page, 'password-changed-elsewhere')).toBeVisible()
     await expect(page.getByTestId('app-shell.nav')).toHaveCount(0)
   })

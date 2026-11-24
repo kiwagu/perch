@@ -5,9 +5,12 @@
  * with an example link on each binding, the platform section and the activities verbatim,
  * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
  * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
- * the kind, meaning and values of the part it marks, the composites of the vocabulary, and the
- * model document. An anchor the screen file leaves undescribed carries the description the
- * engine says of it.
+ * the kind, meaning and values of the part it marks, the composites and the field states of the
+ * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the
+ * description the engine says of it, and a text field the value it takes. The platform's values
+ * and the model document are those the contract loads, each length resolved, and from version 6
+ * the contract section names the default length they took. Last, the text of each rule of the
+ * engine that the manifest or its schema names (`rulesOf`).
  */
 
 import {
@@ -15,19 +18,26 @@ import {
   ANCHOR_PATTERN,
   kindOf,
   PAGE_HELPER,
+  TEXT_FIELD_KINDS,
   VISIBILITY_BUTTON,
   VISIBILITY_VALUES,
 } from '../anchors'
+import { fieldStatesOf } from '../check'
 import {
   type Activity,
   CONFIRM_RULE_ROW,
+  DEFAULTS_EDITION,
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
   failuresOf,
+  fieldValueOf,
+  invariantActions,
   type Model,
+  type ResolvedValue,
   type Screen,
   type ScreensFile,
+  type Terms,
   TOAST_RULE_ROW,
   type Vocabulary,
 } from '../files'
@@ -36,9 +46,16 @@ import type { Scenario } from '../scenarios'
 
 import { instructionsOf } from './instructions'
 import type { Manifest, Product } from './manifest.types'
+import { rulesOf } from './rules'
 
 /** The app state in which a test may start. */
 const READY = 'ready'
+
+type WrittenValue = NonNullable<Manifest['ids'][string]['value']>
+
+/** A value as the manifest writes it: its enum a list of its own. */
+const writtenValue = ({ enum: values, ...rest }: ResolvedValue): WrittenValue =>
+  values === undefined ? rest : { ...rest, enum: [...values] }
 
 export interface ManifestInput {
   readonly vocabulary: Vocabulary
@@ -46,6 +63,8 @@ export interface ManifestInput {
   readonly model: Model
   readonly activities: Activity[]
   readonly scenarios: Scenario[]
+  /** The terms file, when the contract writes one. */
+  readonly terms?: Terms | undefined
   readonly product: Product
   /** When the manifest is built; now by default. */
   readonly now?: Date
@@ -60,31 +79,38 @@ const mapValues = <T>(
 const located = ({ where, meaning }: { where: string; meaning: string }): string =>
   `${where}: ${meaning}`
 
-function idsOf(screens: readonly Screen[]): Manifest['ids'] {
+function idsOf(screens: ScreensFile, vocabulary: Vocabulary, model: Model): Manifest['ids'] {
   return Object.fromEntries(
-    screens.flatMap((screen) =>
-      Object.entries(screen.anchors).map(
-        ([
-          anchor,
-          {
-            kind,
-            binding,
-            codes,
-            ranked,
-            fields,
-            dataId,
-            dataValue,
-            states,
-            derived,
-            roles,
-            own,
-            holdsInput,
-            secret,
-            asks,
-            composite,
-            derivedFrom,
-          },
-        ]) => [
+    screens.screens.flatMap((screen) =>
+      Object.entries(screen.anchors).map(([anchor, def]) => {
+        const {
+          kind,
+          binding,
+          codes,
+          ranked,
+          fields,
+          dataId,
+          dataValue,
+          states,
+          derived,
+          roles,
+          own,
+          with: withEntries,
+          without,
+          holdsInput,
+          marksState,
+          secret,
+          asks,
+          leaves,
+          composite,
+          derivedFrom,
+        } = def
+        const fieldStates = fieldStatesOf(def, vocabulary)
+        const value = TEXT_FIELD_KINDS.has(kind)
+          ? fieldValueOf(anchor, screen, screens.platform, model)
+          : undefined
+
+        return [
           anchor,
           {
             kind,
@@ -99,14 +125,20 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             ...(derived === undefined ? {} : { derived }),
             ...(roles === undefined ? {} : { roles }),
             ...(own === undefined ? {} : { own }),
+            ...(withEntries === undefined ? {} : { with: withEntries }),
+            ...(without === undefined ? {} : { without }),
             ...(holdsInput === undefined ? {} : { holdsInput }),
+            ...(marksState === undefined ? {} : { marksState }),
             ...(secret === undefined ? {} : { secret }),
             ...(asks === undefined ? {} : { asks }),
+            ...(leaves === undefined ? {} : { leaves }),
             ...(composite === undefined ? {} : { composite }),
             ...(derivedFrom === undefined ? {} : { derivedFrom }),
+            ...(fieldStates.length === 0 ? {} : { fieldStates: [...fieldStates] }),
+            ...(value === undefined ? {} : { value: writtenValue(value) }),
           },
-        ],
-      ),
+        ]
+      }),
     ),
   )
 }
@@ -153,9 +185,33 @@ const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =
     ]),
   )
 
+/** The platform as the manifest carries it: each invariant with the actions that name it. */
+function platformOf(platform: ScreensFile['platform']): Manifest['platform'] {
+  const { invariants, ...rest } = platform
+
+  if (invariants === undefined) {
+    return rest
+  }
+
+  const actions = invariantActions(platform)
+
+  return {
+    ...rest,
+    invariants: Object.fromEntries(
+      Object.entries(invariants).map(([name, invariant]) => [
+        name,
+        { ...invariant, actions: [...(actions[name] ?? [])] },
+      ]),
+    ),
+  }
+}
+
 function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['contract'] {
+  const { defaults } = screens.platform
+
   return {
     version: screens.version,
+    ...(screens.version < DEFAULTS_EDITION || defaults === undefined ? {} : { defaults }),
     idAttribute: ANCHOR_ATTRIBUTES.anchor,
     idPattern: ANCHOR_PATTERN.source,
     kinds: vocabulary.kinds,
@@ -195,6 +251,7 @@ function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['con
     screenNames: vocabulary.screenNames,
     reserved: Object.keys(vocabulary.reserved),
     composites: vocabulary.composites,
+    fieldStates: vocabulary.fieldStates,
     pageHelper: PAGE_HELPER,
     instructions: instructionsOf(vocabulary, screens.platform, READY),
   }
@@ -206,25 +263,29 @@ export function buildManifest({
   model,
   activities,
   scenarios,
+  terms,
   product,
   now = new Date(),
 }: ManifestInput): Manifest {
-  return {
+  const document = {
     $schema: './manifest.schema.json',
-    manifestVersion: 1,
+    manifestVersion: 1 as const,
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
+    ...(terms === undefined ? {} : { terms }),
     screens: screensOf(screens.screens, {
       screens: screens.screens,
       codes: vocabulary.codes,
-      failureOf: failuresOf(model, screens.platform.actions),
+      failureOf: failuresOf(model, screens.platform.actions, screens.version),
     }),
     routeParams: routeParamsOf(screens.screens),
-    ids: idsOf(screens.screens),
-    platform: screens.platform,
+    ids: idsOf(screens, vocabulary, model),
+    platform: platformOf(screens.platform),
     activities,
     scenarios,
     model: model.document,
   }
+
+  return { ...document, rules: rulesOf(document) }
 }

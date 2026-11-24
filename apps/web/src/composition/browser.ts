@@ -12,23 +12,31 @@ import { deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
-import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
+import type { DeviceNetwork } from '@workspace/replica/sync'
+import { lockName, syncHints } from '@workspace/replica/sync'
 
 import type { Theme } from '../platform/theme'
 
+import { accountsApi } from './accounts-api'
+import { browserClipboard } from './browser-clipboard'
 import { openOneAtATime } from './database-open-lock'
 import { deviceLabel } from './device-label'
 import { devicesApi } from './devices-api'
 import { warmEngines } from './engine-warm'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
+import { invitationsApi } from './invitations-api'
 import { organisationsApi } from './organisations-api'
+import { browserPasskeyCeremony } from './passkey-ceremony'
+import { passkeysApi } from './passkeys-api'
 import { type AppStart, type BootFailure, createAppRoot } from './root'
 import { servedBuild } from './served-build'
 import type { VisibilitySource } from './session'
 import { siteStorage } from './site-storage'
 import { spaceCode } from './space-code'
 import { browserStorage } from './storage'
+import { syncTransport } from './sync-transport'
+import { twoFactorApi } from './two-factor-api'
 import build from 'virtual:perch-build'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
@@ -110,6 +118,20 @@ export function bootBrowser(
   // Undefined in a page that is not a secure context: such a page does not sync, and says so.
   const locks: LockManager | undefined = navigator.locks
   const visibility = documentVisibility(document)
+  // The browser's network: the sync status reads it in every tab, and the leading tab's channel
+  // hears it come back and brings a waiting reconnect forward to within a second.
+  const network: DeviceNetwork = {
+    online: () => navigator.onLine,
+    onOnlineChange: (listener) => {
+      window.addEventListener('online', listener)
+      window.addEventListener('offline', listener)
+
+      return () => {
+        window.removeEventListener('online', listener)
+        window.removeEventListener('offline', listener)
+      }
+    },
+  }
 
   showSync({ leader: false, channel: 'down' })
 
@@ -141,30 +163,26 @@ export function bootBrowser(
       gatewayAuth: gatewayAuth(`${origin}/backend`),
       deviceLabel: deviceLabel(navigator),
       theme,
-      online: () => navigator.onLine,
-      onOnlineChange: (listener) => {
-        window.addEventListener('online', listener)
-        window.addEventListener('offline', listener)
-
-        return () => {
-          window.removeEventListener('online', listener)
-          window.removeEventListener('offline', listener)
-        }
-      },
+      online: network.online,
+      onOnlineChange: network.onOnlineChange,
       organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
       devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
-      transport: (context) =>
-        new WebSocketTransport({
-          url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
-          device: context.device,
-          credentials: context.credentials,
-          onMemberships: context.onMemberships,
-          onEnded: context.onEnded,
-          clock: systemClock,
-        }),
+      invitationsApi: (deps) => invitationsApi(`${origin}/backend`, deps),
+      twoFactorApi: (deps) => twoFactorApi(`${origin}/backend`, deps),
+      passkeysApi: (deps) => passkeysApi(`${origin}/backend`, deps, browserPasskeyCeremony),
+      passkeyCeremony: browserPasskeyCeremony,
+      accountsApi: (deps) => accountsApi(`${origin}/backend`, deps),
+      // Undefined in a page that is not a secure context: a copy then fails and says so.
+      clipboard: browserClipboard(navigator.clipboard),
+      transport: syncTransport({
+        url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
+        clock: systemClock,
+        network,
+      }),
       locks,
       hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
       clock: systemClock,
+      steady: () => performance.now(),
       storage: browserStorage(store.value, window),
       visibility,
       servedBuild: servedBuild({

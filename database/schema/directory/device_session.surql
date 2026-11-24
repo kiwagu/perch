@@ -40,25 +40,63 @@ DEFINE FIELD OVERWRITE last_seen_at ON device_session TYPE datetime
 -- after those instants, so only this mark tells the write the session must stay ended. NONE
 -- while the session is live, and once it merely expired.
 DEFINE FIELD OVERWRITE ended_at ON device_session TYPE option<datetime>;
--- Why another device or the account's own change signed this one out, set with `ended_at` by an
--- ending that found the session live and never changed afterwards: `revoked` (signed out from
--- another device, or every device at once), `password-changed` (the account's password changed,
--- on another device or through a reset link), `device-limit` (a sign-in on another device went
--- past the account's limit of devices, this one seen least recently). The device hears it at its
--- next hello, also after it was offline when its session ended. NONE while the session is live,
--- for an ending of the device's own (its sign-out, a new sign-in of the device) and for one that
--- merely expired.
+-- Why another device or the account's own change signed this one out, set with `ended_at` and
+-- never changed afterwards, by an ending that found the session live, or by a ban, which ends
+-- every session of the account not ended yet with its reason, an expired one too: `revoked`
+-- (signed out from another device, or every device at once), `password-changed` (the account's
+-- password changed, on another device or through a reset link), `device-limit` (a sign-in on
+-- another device went past the account's limit of devices, this one seen least recently),
+-- `banned` (an operator banned the account). The device hears it at its next hello, also after
+-- it was offline when its session ended. NONE while the session is live, for an ending of the
+-- device's own (its sign-out, a new sign-in of the device), for one that merely expired, and for
+-- an expired session any other ending marked ended.
 DEFINE FIELD OVERWRITE ended_reason ON device_session TYPE option<string>
   ASSERT $value = NONE
-  OR $value IN ['revoked', 'password-changed', 'device-limit'];
--- Whether the session waits for its admission against the account's limit of devices: true from
--- the moment a sign-in by email and password writes it until the gateway admits it, and the
--- session is handed to its device only then; a sign-in asked about the limit deletes it. While it
--- waits, no admission of another sign-in counts it, no list of devices shows it and the device's
--- earlier session stays live; one whose admission failed stays so, never handed out. Every other
--- session is admitted as it is written.
+  OR $value IN ['revoked', 'password-changed', 'device-limit', 'banned'];
+-- Whether the session waits for its admission: true from the moment a sign-in by email and
+-- password, or the first verification of an email, writes it until the gateway admits it (a
+-- sign-in's against the account's limit of devices, each against the account's ban), and the
+-- session is handed to its device only then; a sign-in asked about the limit deletes it, and an
+-- account found banned ends it. While it waits, no admission of another sign-in counts it, no list
+-- of devices shows it, no caller reads it as a session and the device's earlier session stays
+-- live; one whose admission failed stays so, never handed out. Every other session is admitted as
+-- it is written.
 DEFINE FIELD OVERWRITE pending ON device_session TYPE bool DEFAULT false;
+-- Who acted as the account in this session, as Better Auth's admin plugin keeps it: the plugin's
+-- impersonation is out of reach (its endpoints are switched off), so it stays NONE.
+DEFINE FIELD OVERWRITE impersonated_by ON device_session TYPE option<string>;
 
 DEFINE INDEX OVERWRITE device_session_token ON device_session FIELDS token
   UNIQUE;
 DEFINE INDEX OVERWRITE device_session_identity_device ON device_session FIELDS identity, device;
+
+-- The devices identity $identity (its key) is signed in on at $now, with device $device among
+-- them: each device with a live session admitted (not `pending`) once, with the moment it was seen
+-- last, and $device itself, signed in or not (seen at NONE when it is not). A sign-in on $device
+-- would bring the account past its limit of devices when they are more than that limit: the
+-- admission of a sign-in judges it so with the device of its new session
+-- (`device-sessions-admit.surql` of the gateway), and the code step of a sign-in before its code is
+-- checked (`device-sessions-limit.surql`), so both count the devices alike: a session still
+-- waiting for its admission takes no place, and a device signed in already takes no new one. It
+-- carries no PERMISSIONS clause, which the SurrealQL formatter of the commit hook would move before
+-- the parameters, where it does not parse; it reads only `device_session`, closed to every record
+-- user, so a record user calling it reads no session.
+DEFINE FUNCTION OVERWRITE fn::devices_signed_in_with($identity: string, $device: string, $now: datetime) {
+  LET $live = (
+    SELECT
+      device,
+      time::max(last_seen_at) AS seen_at
+    FROM device_session
+    WHERE
+      identity = $identity
+      AND ended_at = NONE
+      AND expires_at > $now
+      AND pending = false
+    GROUP BY device
+  );
+  RETURN IF $device IN $live.device {
+    $live;
+  } ELSE {
+    array::append($live, { device: $device, seen_at: NONE });
+  };
+};

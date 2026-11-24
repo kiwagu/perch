@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern'
+
 import type { DataError } from '@workspace/data'
 import {
   CLOSE,
@@ -7,6 +9,7 @@ import {
   type Membership,
   type ServerMessage,
   serverMessage,
+  type TenantRole,
 } from '@workspace/replica/protocol'
 
 import type { ConnectionState } from './connected-device'
@@ -14,34 +17,29 @@ import type { SocketLike, SyncConnectionDeps } from './deps'
 import { DeviceSeen } from './device-seen'
 import { ConnectionHello } from './hello'
 import type { ConnectionHost } from './host'
-import { answerFailed, REASON, SERVER_ERROR, SUPERSEDED } from './reasons'
+import { answerFailed, type EndCode, REASON, SERVER_ERROR, SUPERSEDED } from './reasons'
 import { RegionChanges } from './region-changes'
 import { RegionSubscriptions } from './region-subscriptions'
 import { DeviceRequests } from './requests'
 
-/** The reason a socket closed by the registry with `code` is given. */
-function endReason(code: number): string {
-  if (code === CLOSE.signedOut) {
-    return REASON.signedOut
-  }
-
-  if (code === CLOSE.passwordChanged) {
-    return REASON.passwordChanged
-  }
-
-  if (code === CLOSE.deviceLimit) {
-    return REASON.deviceLimit
-  }
-
-  return code === SUPERSEDED ? REASON.superseded : REASON.revoked
+/** The reason a socket closed by the registry with `code` is given: every code says its own. */
+function endReason(code: EndCode): string {
+  return match(code)
+    .with(CLOSE.signedOut, () => REASON.signedOut)
+    .with(CLOSE.revoked, () => REASON.revoked)
+    .with(CLOSE.passwordChanged, () => REASON.passwordChanged)
+    .with(CLOSE.deviceLimit, () => REASON.deviceLimit)
+    .with(CLOSE.banned, () => REASON.banned)
+    .with(SUPERSEDED, () => REASON.superseded)
+    .exhaustive()
 }
 
 /**
  * One device's WebSocket to the gateway. The device says hello with its session token first,
  * within the hello time; once its session is read it is welcomed with its identity's private
  * region, the region of each organisation the identity belongs to (one whose database cannot be
- * read is left out until the next hello) and those memberships, and may subscribe, pull, push,
- * probe and compact in those regions only, each handed to the region
+ * read is left out until the next hello), those memberships and the account's platform roles,
+ * and may subscribe, pull, push, probe and compact in those regions only, each handed to the region
  * hub, which answers the device itself and checks its batches against the identity. Messages
  * are handled one at a time, in the order they came. A change of the identity's memberships
  * does not wait for them: the device leaves the regions it may no longer name at once, so a
@@ -139,12 +137,23 @@ export class SyncConnection {
   }
 
   /**
+   * The identity's role in the organisation of `region` is now `role`: at once, whatever message
+   * is being handled, the device's pushes there are judged by it, those already queued included,
+   * and so are the ones of a subscription it makes later. Nothing is sent: the memberships
+   * follow. Resolves once that holds; while the hello is under way it applies right after the
+   * welcome, in the order of the changes told. Never rejects.
+   */
+  rerole(region: string, role: TenantRole): Promise<void> {
+    return this.#changes.rerole(region, role)
+  }
+
+  /**
    * The device was signed out, from another device or over a socket of its own, or a new
    * sign-in of the device took its session over (`SUPERSEDED`): the socket closes with `code` at
    * once, whatever message is being handled and also while the hello is under way, before its
    * welcome. Resolves once it closed. Never rejects.
    */
-  end(code: number): Promise<void> {
+  end(code: EndCode): Promise<void> {
     this.#close(code, endReason(code))
 
     return Promise.resolve()

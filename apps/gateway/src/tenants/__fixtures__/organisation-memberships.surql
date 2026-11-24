@@ -1,0 +1,56 @@
+-- A directory of three organisations and who belongs to them: ann and bob administer acme and
+-- cat is its member; bob administers beta and cat is its member; cat administers gamma.
+CREATE identity:ann SET
+  email = 'ann@example.test',
+  name = 'Ann',
+  locale = 'en';
+CREATE identity:bob SET
+  email = 'bob@example.test',
+  name = 'Bob',
+  locale = 'en';
+CREATE identity:cat SET
+  email = 'cat@example.test',
+  name = 'Cat',
+  locale = 'en';
+CREATE tenant:acme SET
+  key = 'acme',
+  name = 'Acme',
+  database = 't_acme',
+  status = 'ready',
+  created_by = identity:ann;
+CREATE tenant:beta SET
+  key = 'beta',
+  name = 'Beta',
+  database = 't_beta',
+  status = 'ready',
+  created_by = identity:bob;
+CREATE tenant:gamma SET
+  key = 'gamma',
+  name = 'Gamma',
+  database = 't_gamma',
+  status = 'ready',
+  created_by = identity:cat;
+CREATE membership SET
+  identity = identity:ann,
+  tenant = tenant:acme,
+  role = 'admin';
+CREATE membership SET
+  identity = identity:bob,
+  tenant = tenant:acme,
+  role = 'admin';
+CREATE membership SET
+  identity = identity:cat,
+  tenant = tenant:acme,
+  role = 'member';
+CREATE membership SET
+  identity = identity:bob,
+  tenant = tenant:beta,
+  role = 'admin';
+CREATE membership SET
+  identity = identity:cat,
+  tenant = tenant:beta,
+  role = 'member';
+CREATE membership SET
+  identity = identity:cat,
+  tenant = tenant:gamma,
+  role = 'admin';

@@ -1,4 +1,7 @@
 // scenario: user/base/change-email
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { askToChangeEmail, openChangeEmailMail } from '../../support/email-change'
 import { expect, expectPathname, notice, signOut, signUp, test } from '../../support/fixtures'
@@ -35,7 +38,7 @@ test.describe('Change the email in the settings', { tag: '@smoke' }, () => {
       // Expected: After step 3 the link opens [/confirm-email], [user.confirm-email.message]
       //   carries [code:email-changed], and [notice:confirm-email.email-changed] reaches the
       //   email, naming neither the new email nor any part of it
-      await expectPathname(page, '/confirm-email')
+      await expectPathname(page, CONTRACT_ROUTES['user.confirm-email'])
       await expect(page.getByTestId('user.confirm-email.message')).toHaveAttribute(
         'data-code',
         'email-changed',
@@ -52,7 +55,7 @@ test.describe('Change the email in the settings', { tag: '@smoke' }, () => {
       await page.getByTestId('user.confirm-email.profile-link').click()
       // Expected: After step 4 the URL is [/me] and [user.profile.email-input] holds the new
       //   email
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await expect(page.getByTestId('user.profile.email-input')).toHaveValue(data.newEmail, {
         timeout: 10_000,
       })
@@ -66,7 +69,7 @@ test.describe('Change the email in the settings', { tag: '@smoke' }, () => {
       // Expected: After step 5 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

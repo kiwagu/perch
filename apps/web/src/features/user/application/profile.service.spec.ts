@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AuthUser } from '@workspace/data'
 import { type ProfileId, profileIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import {
   openTestSession,
@@ -83,10 +84,13 @@ describe('ProfileService', () => {
     expect((await service.read({ identity: me.id }))._unsafeUnwrap()[0]?.name).toBe('Ann')
   })
 
-  it('refuses a bio longer than 2000 characters with the domain reason and keeps the old one', async () => {
+  it('refuses a bio longer than the limit with the domain reason and keeps the old one', async () => {
     expect((await service.updateBio({ id: profileId, bio: 'Hello' })).isOk()).toBe(true)
 
-    const result = await service.updateBio({ id: profileId, bio: 'x'.repeat(2001) })
+    const result = await service.updateBio({
+      id: profileId,
+      bio: 'x'.repeat(CONTRACT_VALUES['profile.bio'].maxLength + 1),
+    })
 
     expect(result._unsafeUnwrapErr().code).toBe('profile:BIO_TOO_LONG')
     expect((await session.flush()).isOk()).toBe(true)

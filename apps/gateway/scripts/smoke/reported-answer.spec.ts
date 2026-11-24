@@ -14,6 +14,18 @@ describe('reported', () => {
     expect(reported({ status: 202, body: undefined })).toBe('202 with no body')
   })
 
+  it('names the codes of the invitations and the role changes', () => {
+    for (const [status, code] of [
+      [400, 'email-invalid'],
+      [403, 'other-account'],
+      [404, 'no-such-member'],
+      [409, 'last-admin'],
+      [410, 'invitation-gone'],
+    ] as const) {
+      expect(reported({ status, body: { code } })).toBe(`${status} ${code}`)
+    }
+  })
+
   it('prints nothing of a session, an email or a code it does not list', () => {
     const answers = [
       {

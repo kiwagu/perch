@@ -1,4 +1,7 @@
 // scenario: user/flows/reset-in-second-tab
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   appReady,
@@ -62,7 +65,7 @@ test.describe('Set a new password in a second tab while the first waits for the 
         )
         .then(() =>
           Promise.all([
-            expectPathname(page, '/sign-in', 5_000),
+            expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 5_000),
             expect(page.getByTestId('user.sign-in.email-input')).toHaveValue(data.email, {
               timeout: 5_000,
             }),
@@ -89,7 +92,7 @@ test.describe('Set a new password in a second tab while the first waits for the 
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

@@ -1,11 +1,11 @@
-import { keepsPasswordRules } from '@workspace/kernel'
+import { CONTRACT_VALUES, keepsPasswordRules } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
+import { until } from '../../floor'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { bearerCaller } from '../bearer-caller'
 
-import { until } from './floor'
 import type { AuthMountDeps } from './mount'
 import { afterPasswordChange } from './password-changed'
 import { badRequest, internal, refused } from './requests'
@@ -19,8 +19,11 @@ import { badRequest, internal, refused } from './requests'
  */
 export const RESET_REQUEST_FLOOR_MS = 800
 
-const requestBody = z.object({ email: z.string().min(1).max(320) })
-const resetBody = z.object({ token: z.string().min(1).max(4096), password: z.string() })
+const requestBody = z.object({ email: z.string().min(1).max(CONTRACT_VALUES.email.maxLength) })
+const resetBody = z.object({
+  token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength),
+  password: z.string(),
+})
 
 /**
  * Asks for a reset mail to the email of the body (`{ email }`). One of the client address's mails

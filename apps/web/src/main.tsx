@@ -7,7 +7,9 @@ import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { serviceWorkerReload } from './composition/service-worker'
@@ -25,10 +27,11 @@ import {
 } from './features/app-shell/presentation/shell/shell-frame'
 import { ShellView } from './features/app-shell/presentation/shell/shell-view'
 import { useSignedIn } from './features/app-shell/presentation/shell/signed-in'
-import { useSignedOutUnrouted } from './features/app-shell/presentation/shell/signed-out-unrouted'
+import { useSignedOut } from './features/app-shell/presentation/shell/signed-out'
 import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
+import { FIELD_FACTS } from './platform/field-facts.gen'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { browserInstall, InstallContext, useDeviceInstall } from './platform/install'
 import { NoticeProvider } from './platform/notices'
@@ -39,6 +42,7 @@ import { rendersIn } from './platform/screen-renders'
 import { ServicesProvider } from './platform/services'
 import { SettingsWritesContext } from './platform/settings-writes'
 import { useSettledReport } from './platform/settled-report'
+import { storesValue } from './platform/stored-fields'
 import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
@@ -66,7 +70,7 @@ function Layout() {
   return (
     <NoticeProvider texts={NOTICE_TEXTS}>
       <ToastProvider texts={TOAST_TEXTS}>
-        <UnsavedInputScope>
+        <UnsavedInputScope stores={storesValue}>
           <LeaveGuard>
             <ConfirmGuard>
               <ShellContainer>
@@ -237,9 +241,13 @@ function App(props: { readonly reload: () => void }) {
 
   // The states with no screen: the start goes on, stopped or failed, or the data did not open.
   const unrouted: (typeof STATUS)[keyof typeof STATUS] | undefined =
-    STATUS[state.value as keyof typeof STATUS]
+    typeof state.value === 'string' && Object.hasOwn(STATUS, state.value)
+      ? STATUS[state.value as keyof typeof STATUS]
+      : undefined
 
-  useSignedOutUnrouted(started?.services.session, actor, unrouted !== undefined, shownAccount)
+  // A sign-out of the account the frame shows reaches its flow from the session while no screen
+  // renders; the shell's container hears it once one does.
+  useSignedOut(started?.services.session, actor, unrouted !== undefined, shownAccount)
   // A sign-in on this device reaches the frame's flow in every state.
   useSignedIn(started?.services.session, actor, unrouted !== undefined)
 
@@ -248,17 +256,15 @@ function App(props: { readonly reload: () => void }) {
       <ShellView
         status={unrouted ?? 'opening'}
         renders={rendersIn(made.machine.config, state.value)}
-        signedIn={false}
+        held={heldRoles(false)}
         activePath={window.location.pathname}
-        canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
+        can={(event) => state.can(event)}
         onLocaleChange={(locale) => send({ type: 'app-shell.locale-select', locale })}
         theme={device.theme}
-        canChooseTheme={state.can({ type: 'app-shell.theme-select', theme: 'light' })}
         onThemeChange={(theme) => send({ type: 'app-shell.theme-select', theme })}
         onSignOutHere={
           signOutHere ? () => send({ type: 'app-shell.sign-out-here-button' }) : undefined
         }
-        signingOutHere={!state.can({ type: 'app-shell.sign-out-here-button' })}
       />
     )
   }
@@ -298,7 +304,9 @@ if (root) {
             en={englishCatalog}
             loadEs={loadSpanishCatalog}
           >
-            <App reload={reload} />
+            <FieldFactsProvider facts={FIELD_FACTS}>
+              <App reload={reload} />
+            </FieldFactsProvider>
           </AppI18n>
         </InstallContext.Provider>
       </ThemeContext.Provider>

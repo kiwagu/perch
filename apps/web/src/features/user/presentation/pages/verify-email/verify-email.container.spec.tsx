@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
@@ -26,7 +27,7 @@ type AuthUser = NonNullable<ReturnType<SessionPort['current']>>
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
-const signedIn: EmailVerified = { kind: 'signed-in', user: ann, name: 'Ann', locale: 'en' }
+const signedIn: EmailVerified = { kind: 'signed-in', user: ann }
 
 const verifiedBefore: EmailVerified = { kind: 'verified-before' }
 
@@ -34,7 +35,7 @@ type Exchange = ReturnType<SessionPort['verifyEmail']>
 
 /**
  * A verification service over a session that answers each exchange of a token in turn, the last
- * answer again for any later one, and counts them; the accounts it starts are counted too.
+ * answer again for any later one, and counts them.
  */
 function verifying(answers: readonly (() => Exchange)[]) {
   const exchange = vi.fn((_token: string): Exchange => {
@@ -43,19 +44,9 @@ function verifying(answers: readonly (() => Exchange)[]) {
     return answer ? answer() : expect.unreachable('an answer')
   })
   const resend = vi.fn((_email: string) => okAsync(undefined))
-  const started: string[] = []
-  const service = new VerifyEmailService(
-    { verifyEmail: exchange, resendVerification: resend },
-    {
-      start: (user) => {
-        started.push(user.id)
+  const service = new VerifyEmailService({ verifyEmail: exchange, resendVerification: resend })
 
-        return okAsync(undefined)
-      },
-    },
-  )
-
-  return { service, exchange, resend, started }
+  return { service, exchange, resend }
 }
 
 /** The notice the frame shows, by its code. */
@@ -66,7 +57,10 @@ function CurrentNotice() {
 }
 
 /** The verify page at `path`, inside StrictMode as in development, with the frame's notice. */
-function renderPage(service: VerifyEmailService, path = '/verify-email?token=the-token') {
+function renderPage(
+  service: VerifyEmailService,
+  path = `${CONTRACT_ROUTES['user.verify-email']}?token=the-token`,
+) {
   const TestModule = defineModule({
     id: 'test',
     providers: [{ provide: VERIFY_EMAIL_SERVICE, useFactory: () => service }],
@@ -77,13 +71,22 @@ function renderPage(service: VerifyEmailService, path = '/verify-email?token=the
     },
     routes: [
       {
-        path: '/verify-email',
+        path: CONTRACT_ROUTES['user.verify-email'],
         page: 'VerifyEmail',
         guard: 'guest',
+        roles: [CONTRACT_ROLES.guest],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
-      { path: '/me', page: 'Me' },
-      { path: '/sign-in', page: 'SignIn' },
+      {
+        path: CONTRACT_ROUTES['user.profile'],
+        page: 'Me',
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+      },
+      {
+        path: CONTRACT_ROUTES['user.sign-in'],
+        page: 'SignIn',
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+      },
     ],
   })
   const { session } = fakeSession()
@@ -115,19 +118,18 @@ const noticeCode = () => document.querySelector('p[data-code]')?.getAttribute('d
 
 describe('VerifyEmailContainer', () => {
   it('exchanges the token of the address once, though StrictMode starts its machine again, and lands on the profile with the welcome', async () => {
-    const { service, exchange, started } = verifying([() => okAsync(signedIn)])
+    const { service, exchange } = verifying([() => okAsync(signedIn)])
     const { router } = renderPage(service)
 
     await screen.findByText('profile')
 
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
     expect(noticeCode()).toBe('welcome')
     expect(exchange).toHaveBeenCalledExactlyOnceWith('the-token')
-    expect(started).toEqual([ann.id])
   })
 
   it('asks afresh when the page is opened again with the same token, after a visit that ended', async () => {
-    const { service, exchange, started } = verifying([
+    const { service, exchange } = verifying([
       () => okAsync(signedIn),
       () => okAsync(verifiedBefore),
     ])
@@ -142,10 +144,9 @@ describe('VerifyEmailContainer', () => {
 
     expect(message.getAttribute('data-code')).toBe('verified-before')
     expect(screen.getByTestId('user.verify-email.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(exchange).toHaveBeenCalledTimes(2)
-    expect(started).toEqual([ann.id])
   })
 
   it('keeps no failed exchange: opened again, the page asks again and shows the new answer', async () => {
@@ -174,13 +175,13 @@ describe('VerifyEmailContainer', () => {
       () => okAsync(verifiedBefore),
       () => errAsync({ code: 'data:LINK_INVALID', message: 'the gateway refused the link' }),
     ])
-    const { router } = renderPage(service, '/verify-email?token=first')
+    const { router } = renderPage(service, `${CONTRACT_ROUTES['user.verify-email']}?token=first`)
 
     expect((await screen.findByTestId('user.verify-email.message')).getAttribute('data-code')).toBe(
       'verified-before',
     )
 
-    act(() => router.history.push('/verify-email?token=second'))
+    act(() => router.history.push(`${CONTRACT_ROUTES['user.verify-email']}?token=second`))
 
     expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
       'link-invalid',
@@ -223,12 +224,28 @@ describe('VerifyEmailContainer', () => {
     )
   })
 
+  it('says the link of a banned account verified the email and signed nothing in: no form, no welcome, no move', async () => {
+    const { service } = verifying([
+      () => errAsync({ code: 'data:ACCOUNT_BANNED', message: 'the account is banned' }),
+    ])
+    const { router } = renderPage(service)
+
+    expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
+      'account-banned',
+    )
+    expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.verify-email'])
+    expect(noticeCode()).toBeUndefined()
+  })
+
   it('exchanges an empty token when the address carries none', async () => {
     const { service, exchange } = verifying([
       () => errAsync({ code: 'data:LINK_INVALID', message: 'the link carries no token' }),
     ])
 
-    renderPage(service, '/verify-email')
+    renderPage(service, CONTRACT_ROUTES['user.verify-email'])
 
     expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
       'link-invalid',

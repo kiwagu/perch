@@ -8,7 +8,14 @@ import {
 } from '../../support/account-deletion'
 import { generate } from '../../support/data'
 import { appReady, expect, signUp, test } from '../../support/fixtures'
-import { createOrganisation, inviteMember } from '../../support/organisation'
+import { mailbox } from '../../support/mailbox'
+import {
+  acceptOnOrg,
+  createOrganisation,
+  expectInvitationMail,
+  expectMembers,
+  inviteEmail,
+} from '../../support/organisation'
 
 test.describe("Delete an account that is a member of another account's organisation", {
   tag: '@full',
@@ -36,22 +43,24 @@ test.describe("Delete an account that is a member of another account's organisat
         return account
       })
 
-    const deviceB =
+    const { deviceB, seen } =
       await test.step('2. On device B, sign up as user B, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input], click [organisation.create.submit-button], and invite user A with [organisation.invite.email-input] and [organisation.invite.submit-button]', async () => {
         const b = await anotherAccount.signUp()
 
         await b.getByTestId('app-shell.nav.organisation-link').click()
         await createOrganisation(b, data)
-        await inviteMember(b, userA.email)
 
-        return b
+        // User A's mails before the invitation: its sign-up's, which the invitation follows.
+        const mails = await mailbox.count(userA.email)
+
+        await inviteEmail(b, userA.email)
+
+        return { deviceB: b, seen: mails }
       })
 
-    await test.step('3. On device A, open [/org], wait for [organisation.page.heading] to show the organisation name, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]', async () => {
-      await page.getByTestId('app-shell.nav.organisation-link').click()
-      await expect(page.getByTestId('organisation.page.heading')).toHaveText(data.name, {
-        timeout: 10_000,
-      })
+    await test.step("3. On device A, open [/org], click [organisation.received.accept-button] on the organisation's [organisation.received.item], wait for [organisation.page.heading] to show the organisation name, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]", async () => {
+      // Accepts, then waits for the heading to show the organisation name.
+      await acceptOnOrg(page, data.name)
       await page.getByTestId('organisation.notes.new-textarea').fill(data.noteByA)
       await page.getByTestId('organisation.notes.add-button').click()
       // Expected: Within 5 seconds of step 3 [organisation.notes.list] on device B holds the note
@@ -63,9 +72,22 @@ test.describe("Delete an account that is a member of another account's organisat
 
     await test.step("4. On device A, open [/settings], enter user A's password into [user.settings.deletion.password-input], click [user.settings.deletion.send-button], open the link of its [mail:request-account-deletion], click [user.delete-account.delete-button] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await openSettings(page)
+
+      // The invitation mail is read, held to its declaration, before the mails are counted: the
+      // deletion's is the one after them.
+      await expectInvitationMail(
+        {
+          email: userA.email,
+          inviter: { email: userB.email, language: 'en' },
+          recipientLanguage: 'en',
+        },
+        seen,
+      )
+
+      const mails = await mailbox.count(userA.email)
+
       await askToDeleteAccount(page, userA.password)
-      // User A's second mail, after the sign-up's.
-      await openDeletionMail(page, userA.email, 1)
+      await openDeletionMail(page, userA.email, mails)
       await deleteAccount(page)
       // Expected: After step 4 [user.delete-account.message] carries [code:account-deleted] on
       //   device A
@@ -84,9 +106,7 @@ test.describe("Delete an account that is a member of another account's organisat
 
     // Expected: After step 5 [organisation.members.list] on device B holds only user B's
     //   [organisation.members.item], and [organisation.notes.list] still holds the note by A
-    await expect(
-      deviceB.getByTestId('organisation.members.list').getByTestId('organisation.members.item'),
-    ).toHaveText([userB.email])
+    await expectMembers(deviceB, [userB.email])
     await expect(
       deviceB.getByTestId('organisation.notes.list').getByTestId('organisation.notes.text-cell'),
     ).toHaveText([data.noteByA])

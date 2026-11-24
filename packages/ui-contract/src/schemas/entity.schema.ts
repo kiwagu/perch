@@ -9,6 +9,7 @@ import { z } from '@workspace/zod'
 import { roleSchema } from '../names.schema'
 
 import { DESCRIPTION_PURPOSES } from './description-purposes'
+import { platformActionNameSchema } from './screens-schema'
 
 const fieldNameSchema = z.string().regex(/^[a-z][a-z0-9_]*$/)
 
@@ -39,6 +40,11 @@ const actionSchema = z
     params: z
       .record(z.string(), z.string())
       .describe('Per parameter, the field it sets (`$id` for a new id).'),
+    changes: z
+      .array(platformActionNameSchema)
+      .describe(
+        'Required: the list, section or table `source` actions its success changes in its context; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`.',
+      ),
   })
   .describe('One action on the entity.')
 

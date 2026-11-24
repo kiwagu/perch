@@ -6,6 +6,7 @@ import { z } from '@workspace/zod'
 
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
+import { CREDENTIAL_CHECKS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
@@ -17,13 +18,16 @@ import {
   signUpOn,
 } from '../__fixtures__/auth-instance'
 import identityRefuseStatement from '../__fixtures__/identity-refuse.surql'
+import { ADMIN_PATHS } from '../admin-paths'
 
 import {
   ANN,
+  acceptedSignIn,
   fakeConnections,
   mountedOnFakeAuth,
   noAccounts,
   noSessions,
+  ORIGIN,
   printedDuring,
   STAND_IN_ACCOUNT,
   signedInAnswer,
@@ -117,10 +121,16 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
     auth: opened.auth,
     sessions: noSessions,
     ...accountServicesOf(opened),
+    challenges: noAccounts.challenges,
+    twoFactor: noAccounts.twoFactor,
+    passkeys: noAccounts.passkeys,
+    passkeyChallenges: noAccounts.passkeyChallenges,
+    publicUrl: ORIGIN,
     deletions: noAccounts.deletions,
     departure: noAccounts.departure,
     teardown: noAccounts.teardown,
     profiles: noAccounts.profiles,
+    startingLanguage: noAccounts.startingLanguage,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,
@@ -279,6 +289,33 @@ describe('authHandler', () => {
     expect(received).toHaveLength(0)
   })
 
+  it("answers 404 to every endpoint of Better Auth's admin plugin, by GET and by POST, without reaching it", async () => {
+    const { route, received } = mountedOnFakeAuth(signedInAnswer)
+    const answers: unknown[] = []
+
+    for (const path of ADMIN_PATHS) {
+      for (const method of ['GET', 'POST']) {
+        const response = await route(
+          new Request(`http://gateway.test/auth${path}`, {
+            method,
+            headers: { 'content-type': 'application/json', 'x-perch-device': 'laptop' },
+            ...(method === 'POST' ? { body: JSON.stringify({ userId: STAND_IN_ACCOUNT }) } : {}),
+          }),
+          FROM,
+        )
+
+        answers.push({ path, method, status: response?.status, body: await response?.json() })
+      }
+    }
+
+    expect(answers).toEqual(
+      ADMIN_PATHS.flatMap((path) =>
+        ['GET', 'POST'].map((method) => ({ path, method, ...notFound })),
+      ),
+    )
+    expect(received).toHaveLength(0)
+  })
+
   it('answers 405 with Allow to another method on the paths it serves', async () => {
     const { route, received } = mountedOnFakeAuth(status(200))
 
@@ -357,7 +394,10 @@ describe('authHandler', () => {
 
     expect(refused?.status).toBe(429)
     expect(await refused?.json()).toEqual({ code: 'rate-limited' })
-    expect(refused?.headers.get('Retry-After')).toBe('10')
+    // What is left of the address's window once the sign-ups' floor passed, in whole seconds.
+    expect(refused?.headers.get('Retry-After')).toBe(
+      String(Math.ceil((CREDENTIAL_CHECKS.windowMs - SIGN_UP_FLOOR_MS) / 1000)),
+    )
     expect(received).toHaveLength(20)
     // Bob's refused sign-in took none of his email's ten places.
     expect(await signIns(route, 'bob@example.test', 11)).toEqual([...times(10, 401), 429])
@@ -404,9 +444,13 @@ describe('authHandler', () => {
     expect(received).toHaveLength(20)
   })
 
-  it("clears an email's failed sign-ins once Better Auth answers 403: the password was right, the email is not verified", async () => {
+  it("clears an email's failed sign-ins once Better Auth answers 403 EMAIL_NOT_VERIFIED: the password was right, the email is not verified", async () => {
     let answer = 401
-    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() =>
+      answer === 403
+        ? Response.json({ code: 'EMAIL_NOT_VERIFIED' }, { status: 403 })
+        : new Response(null, { status: answer }),
+    )
 
     await signIns(route, 'ann@example.test', 9)
     answer = 403
@@ -430,6 +474,30 @@ describe('authHandler', () => {
     expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
     expect(received).toHaveLength(34)
   })
+
+  it.each([
+    [
+      'a 403 coded INVALID_ORIGIN',
+      () => Response.json({ code: 'INVALID_ORIGIN' }, { status: 403 }),
+    ],
+    ['a 403 that names no code', status(403)],
+  ])(
+    "keeps an email's failed sign-ins through %s, which Better Auth answers before it checks the password, and gives the place back",
+    async (_, refusal) => {
+      let answer = status(401)
+      const { route, received } = mountedOnFakeAuth(() => answer())
+
+      expect(await signIns(route, 'ann@example.test', 9)).toEqual(times(9, 401))
+      answer = refusal
+      // The refusals count nothing and keep no place: twelve in a row reach Better Auth.
+      expect(await signIns(route, 'ann@example.test', 12)).toEqual(times(12, 403))
+      answer = status(401)
+
+      // The nine failures stand: the tenth spends them.
+      expect(await signIns(route, 'ann@example.test', 2)).toEqual([401, 429])
+      expect(received).toHaveLength(22)
+    },
+  )
 
   it('gives the place of a sign-in whose handler threw back, and lets the throw through', async () => {
     let fail = true
@@ -511,10 +579,13 @@ describe('authHandler', () => {
     expect(await signIns(route, 'decoy@example.test', 10)).toEqual([...times(9, 401), 429])
   })
 
-  it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
-    const body = JSON.stringify({ token: 'raw-token', user: { id: STAND_IN_ACCOUNT } })
+  it("strips every Set-Cookie and every other header of Better Auth's answer from a sign-in's, its body by the allowlist", async () => {
+    const body = JSON.stringify(acceptedSignIn())
     const { route, clock } = mountedOnFakeAuth(() => {
-      const headers = new Headers({ 'content-type': 'application/json' })
+      const headers = new Headers({
+        'content-type': 'application/json',
+        'set-auth-token': 'raw-token.signature',
+      })
 
       headers.append('Set-Cookie', 'better-auth.session_token=signed; Path=/; HttpOnly')
       headers.append('Set-Cookie', 'better-auth.session_data=cached; Path=/; HttpOnly')
@@ -526,7 +597,9 @@ describe('authHandler', () => {
     expect(response?.status).toBe(200)
     expect(response?.headers.getSetCookie()).toEqual([])
     expect(response?.headers.has('set-cookie')).toBe(false)
-    expect(response?.headers.get('content-type')).toBe('application/json')
+    // The signed token stays with the gateway: the device signs in by the raw token of the body.
+    expect(response?.headers.get('set-auth-token')).toBeNull()
+    expect(response?.headers.get('content-type')).toMatch(/^application\/json\b/)
     expect(await response?.text()).toBe(body)
 
     // A sign-up answers the mount's own 202: nothing of Better Auth's answer, its cookies included.
@@ -660,10 +733,7 @@ describe('authHandler', () => {
     const closing = new Promise<void>((resolve) => {
       release = resolve
     })
-    const { route, closes } = mountedOnFakeAuth(
-      () => Response.json({ token: 'raw-token', user: { id: ann } }),
-      closing,
-    )
+    const { route, closes } = mountedOnFakeAuth(() => Response.json(acceptedSignIn(ann)), closing)
     let answered = false
     const answer = route(signIn('ann@example.test'), FROM).then((response) => {
       answered = true
@@ -677,7 +747,7 @@ describe('authHandler', () => {
     release()
 
     expect((await answer)?.status).toBe(200)
-    expect(await (await answer)?.json()).toEqual({ token: 'raw-token', user: { id: ann } })
+    expect(await (await answer)?.json()).toEqual(acceptedSignIn(ann))
   })
 
   it('closes no socket for a sign-up Better Auth accepted: it signs nothing in', async () => {
@@ -705,11 +775,13 @@ describe('authHandler', () => {
     expect(refused?.status).toBe(401)
     expect(await refused?.json()).toEqual({ code: 'INVALID_EMAIL_OR_PASSWORD' })
 
-    // An acceptance that names no session of an account cannot be held to one: it fails.
+    // An acceptance that names no session of an account cannot be held to one: it fails, and so
+    // does one that names the account without its email, its name or whether it is verified.
     for (const answer of [
       () => new Response('not json', { status: 200 }),
       () => Response.json({ token: 'raw-token' }),
       () => Response.json({ token: 'raw-token', user: { id: 'not-an-identity' } }),
+      () => Response.json({ token: 'raw-token', user: { id: ann } }),
     ]) {
       const { route, closes } = mountedOnFakeAuth(answer)
       const response = await route(signIn('ann@example.test'), FROM)
@@ -721,9 +793,7 @@ describe('authHandler', () => {
 
     // A sign-in that names no device: Better Auth refuses it, and a stand-in that does not closes
     // nothing all the same.
-    const { route, closes } = mountedOnFakeAuth(() =>
-      Response.json({ token: 'raw-token', user: { id: ann } }),
-    )
+    const { route, closes } = mountedOnFakeAuth(() => Response.json(acceptedSignIn(ann)))
     const unnamed = new Request('http://gateway.test/auth/sign-in/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -813,7 +883,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     expect(printed).not.toMatch(MARKED)
   })
 
-  it('answers a sign-in whose session cannot be created 500 internal, and logs its code alone', async () => {
+  it('answers a sign-in whose session the directory did not take 500 internal, and logs its code alone', async () => {
     const { send, logs, failure } = await failing()
 
     failure.pattern = /\bINSERT\s+INTO\s+`?device_session`?/
@@ -822,19 +892,27 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     )
 
     expect(result).toEqual({ status: 500, text: '{"code":"internal"}', cookies: [] })
-    expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
+    expect(logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKED)
     expect(printed).not.toMatch(MARKED)
   })
 
   it("answers a sign-up whose identity the directory refuses with Better Auth's code, and logs its code alone", async () => {
-    const { local, send, logs } = await overBetterAuth()
+    const { local, send, logs, clock } = await overBetterAuth()
 
     await local.db.query(identityRefuseStatement)
 
-    const { result, printed } = await printedDuring(() =>
-      send('POST', '/auth/sign-up/email', 'laptop', { body: { name: 'Ann', ...credentials } }),
-    )
+    const { result, printed } = await printedDuring(async () => {
+      const answer = send('POST', '/auth/sign-up/email', 'laptop', {
+        body: { name: 'Ann', ...credentials },
+      })
+
+      // The refusal came after the starting language was looked up: it waits for the floor.
+      await vi.waitFor(() => expect(clock.pending()).toBe(1))
+      await clock.advance(SIGN_UP_FLOOR_MS)
+
+      return answer
+    })
 
     expect(result.status).toBe(422)
     expect(JSON.parse(result.text)).toEqual({ code: 'FAILED_TO_CREATE_USER' })

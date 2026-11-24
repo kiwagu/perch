@@ -65,7 +65,7 @@ function eventOf(machine: Machine, path: string, event: string): AnyEventObject 
 }
 
 const isEffect = ({ type }: { readonly type: string }): boolean =>
-  type === 'show' || type === 'clear' || type === 'navigate'
+  type === 'show' || type === 'clear' || type === 'read' || type === 'navigate'
 
 /** The state of the root a configuration is in: its name, or the key of a parallel one. */
 const rootOf = (value: StateValue): string =>

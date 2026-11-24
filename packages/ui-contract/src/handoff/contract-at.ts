@@ -1,9 +1,9 @@
 /**
- * The contract at a git ref, for the hand-over diff: the contract files, the screen files, the
- * activities and the scenarios as that commit holds them, loaded as the check loads them.
+ * The contract at a git ref, for the hand-over diff: the contract files, the terms file when the
+ * commit has one, the screen files, the activities and the scenarios as that commit holds them,
+ * loaded as the check loads them.
  */
 
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -17,21 +17,19 @@ import {
   PLATFORM_FILE,
   SCENARIOS_DIR,
   SCREENS_DIR,
+  TERMS_FILE,
   VOCABULARY_FILE,
 } from '../files'
 
+import { git } from './git'
+
 const FILES = [VOCABULARY_FILE, PLATFORM_FILE, MODEL_FILE] as const
+
+/** The contract files a ref may leave out: copied when it has them. */
+const OPTIONAL_FILES = [TERMS_FILE] as const
 
 /** The folders whose every file belongs to the contract, at any depth. */
 const FOLDERS = [SCREENS_DIR, ACTIVITIES_DIR, SCENARIOS_DIR] as const
-
-const git = (root: string, args: readonly string[]): string =>
-  execFileSync('git', args, {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
 
 /** Writes `file` as it is at `ref` into the folder `temp`. */
 function copyAt(root: string, ref: string, file: string, temp: string): void {
@@ -67,7 +65,15 @@ export function contractAt(ref: string, root: string): Contract | { missing: tru
 
   try {
     const folders = FOLDERS.map((dir) => `${dir}/`)
-    const listed = git(root, ['ls-tree', '-r', '--name-only', ref, '--', ...folders])
+    const listed = git(root, [
+      'ls-tree',
+      '-r',
+      '--name-only',
+      ref,
+      '--',
+      ...folders,
+      ...OPTIONAL_FILES,
+    ])
       .split('\n')
       .filter((file) => file !== '')
 

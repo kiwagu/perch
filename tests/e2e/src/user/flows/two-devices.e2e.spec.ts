@@ -1,4 +1,7 @@
 // scenario: user/flows/two-devices
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test, toast } from '../../support/fixtures'
 
@@ -15,7 +18,7 @@ test.describe('Keep one account in step on two devices', { tag: '@full' }, () =>
     }
 
     await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toBeVisible()
     })

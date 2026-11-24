@@ -25,7 +25,7 @@ export function ForgotPasswordContainer() {
     () => createForgotPasswordMachine({ request: (asked) => session.requestPasswordReset(asked) }),
     [session],
   )
-  const { state, submit } = useScreenMachine('user.forgot-password', machine, {
+  const { state, submit, can } = useScreenMachine('user.forgot-password', machine, {
     'user.forgot-password.email-input': email,
   })
 
@@ -36,7 +36,7 @@ export function ForgotPasswordContainer() {
       message={state.context.message}
       sentTo={state.context.sentTo}
       error={state.context.error}
-      canSend={state.can({ type: SEND, email: '' })}
+      can={can}
       onSend={(typed) => submit({ type: SEND, email: typed })}
       link={RouterLink}
     />

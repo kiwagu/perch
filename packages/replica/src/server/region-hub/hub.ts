@@ -1,4 +1,4 @@
-import { type LoroDoc, VersionVector } from 'loro-crdt'
+import { VersionVector } from 'loro-crdt'
 import { errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
@@ -13,10 +13,13 @@ import type { FieldValue, RecordWrite } from '../record-write'
 import type { RegionDatabases } from '../region-databases'
 import { storedHeads } from '../stored-heads'
 
+import { changeActor } from './actor-change'
 import { type BatchIntake, takeInBatch } from './batch-intake'
 import { type CompactionIntake, takeInCompaction } from './compaction-intake'
+import { exportFrom } from './export-from'
 import { HeldRegions } from './held-regions'
 import { type Actor, deliver, type Subscriber } from './subscription'
+import { takeInSubscription } from './subscription-intake'
 import { takeInWrite } from './write-intake'
 
 export type { Actor, FieldValue, RecordWrite, Subscriber }
@@ -45,17 +48,6 @@ const decodeVersion = Result.fromThrowable(
     message: 'the version vector does not decode',
   }),
 )
-
-/**
- * What the document holds after `from`, or all of it as a snapshot without a version. Loro
- * types its bytes over any buffer while a message holds them in an ArrayBuffer of their own,
- * so they are copied into one.
- */
-function exportFrom(doc: LoroDoc, from: VersionVector | null): Uint8Array<ArrayBuffer> {
-  return new Uint8Array(
-    from ? doc.export({ mode: 'update', from }) : doc.export({ mode: 'snapshot' }),
-  )
-}
 
 /**
  * The server's copy of every region a device subscribes to: the region's log and its
@@ -96,8 +88,8 @@ export class RegionHub {
    * Subscribes a device to a region, loading the region first when the hub does not hold it,
    * and answers with what the device lacks: the updates after `vv`, or a full snapshot when
    * it has no version. From then on the device receives every batch the others push, and the
-   * batches it pushes are checked against `actor`: the identity id of the device and its ability.
-   * Once the hub is closed any subscription is answered with an internal error, before anything
+   * batches it pushes are checked against `actor`, the identity id of the device and its ability,
+   * until `changeActor` names another. Once the hub is closed any subscription is answered with an internal error, before anything
    * else; a private region is subscribed only by its own identity, `forbidden-region` for any
    * other. Neither holds the region.
    */
@@ -132,32 +124,22 @@ export class RegionHub {
     }
 
     const state = this.#held.get(region.id) ?? this.#held.hold(region)
-    const subscription = { subscriber, actor }
 
     state.unload?.()
     state.unload = undefined
-    state.joining.set(subscriber.id, subscription)
+    state.joining.set(subscriber.id, { subscriber, actor })
 
     return this.#held.answer(state, subscriber, () =>
       this.#held
         .load(state)
-        .andThen(({ log, doc }) => {
-          // A device that left while its subscription waited is not answered.
-          if (!state.joining.delete(subscriber.id) && !state.subscribers.has(subscriber.id)) {
-            return okAsync(undefined)
-          }
-
-          state.subscribers.set(subscriber.id, subscription)
-          this.#send(subscriber, {
-            type: 'updates',
-            region: region.id,
-            bytes: exportFrom(doc, from.value),
-            head: log.head(),
-            snapshot: from.value === null,
-          })
-
-          return okAsync(undefined)
-        })
+        .andThen((loaded) =>
+          takeInSubscription(
+            this.#intake,
+            { regionId: region.id, subscriber, from: from.value },
+            state,
+            loaded,
+          ),
+        )
         .mapErr((error) => {
           // A device whose region could not be loaded is not subscribed.
           state.joining.delete(subscriber.id)
@@ -179,6 +161,20 @@ export class RegionHub {
     state.joining.delete(subscriberId)
     state.subscribers.delete(subscriberId)
     this.#held.unloadWhenIdle(state)
+  }
+
+  /**
+   * Judges the batches of a device subscribed to a region by `actor` from now on, at once: a
+   * subscription still waiting for its answer takes it too, and is answered as `actor`. A batch
+   * already queued in the region is judged by the actor the hub holds when it takes the batch in.
+   * A region the hub does not hold, or a device that did not subscribe to it, changes nothing.
+   */
+  changeActor(regionId: string, subscriberId: string, actor: Actor): void {
+    const state = this.#held.get(regionId)
+
+    if (state) {
+      changeActor(state, subscriberId, actor)
+    }
   }
 
   /** Answers a subscribed device with the updates the region holds after `vv`. */

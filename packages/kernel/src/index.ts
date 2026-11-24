@@ -8,6 +8,8 @@ export {
   NO_ABILITY,
   OWNER_ABILITY,
   ownerKeyOf,
+  PLATFORM_ROLES,
+  type PlatformRole,
   type Scope,
   type TableAbilities,
   TENANT_ROLES,
@@ -21,6 +23,8 @@ export {
   type EventMeta,
   type InvalidEventPayload,
 } from './base-event'
+export { CONTRACT_ROLES, CONTRACT_ROUTES } from './contract-terms.gen'
+export { CONTRACT_VALUES } from './contract-values.gen'
 export { Entity } from './entity'
 export { ExceptionBase } from './exception'
 export {

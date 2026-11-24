@@ -1,14 +1,15 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: organisation
 title: Organisation
-description: "The organisations the account belongs to: creating one, choosing the current one, its members and invitations for an administrator, and the notes every member shares."
+description: "The organisations the account belongs to and the invitations to it: creating one, choosing the current one, its members and invitations for an admin, the notes every member shares."
 flag: null
 bindings: [ { path: /org, guard: authenticated, roles: [ identity, member, admin ], history: push } ]
 entry: [ organisation.page.status, organisation.page.heading, organisation.notes.section, organisation.create.form ]
 anchors:
   organisation.page.status:
     kind: status
-    description: Says the account is a member of no organisation (empty), or that it has memberships none of whose databases opened on this device (error); not rendered while an organisation is current.
+    description: Says the account is a member of no organisation (empty), or that it has memberships none of whose databases opened on this device (error).
+    without: [ organisation.page.heading ]
     roles: [ identity ]
     states: [ empty, error ]
   organisation.page.heading:
@@ -28,11 +29,9 @@ anchors:
       params:
         key: organisation.page.current-select
     roles: [ member, admin ]
-    dataValue: true
-    derived: [ option ]
   organisation.create.toggle-button:
     kind: button
-    description: Opens or closes the create form; shown with a current organisation.
+    description: Opens or closes the create form.
     roles: [ member, admin ]
   organisation.create.form:
     kind: form
@@ -68,7 +67,7 @@ anchors:
       direction: asc
   organisation.notes.list:
     kind: list
-    description: The notes, oldest first; rendered when there is at least one.
+    description: The notes, oldest first.
     roles: [ member, admin ]
   organisation.notes.empty-message:
     kind: message
@@ -91,12 +90,12 @@ anchors:
     roles: [ member, admin ]
   organisation.notes.edit-button:
     kind: button
-    description: Opens the edit form of the note in its item; a member sees it on its own notes, an administrator on every note.
+    description: Opens the edit form of the note in its item; a member sees it on its own notes, an admin on every note.
     roles: [ member, admin ]
     own: true
   organisation.notes.delete-button:
     kind: button
-    description: Deletes the note; shown where the rules allow, as the edit button.
+    description: Deletes the note.
     binding:
       action: note.deleteNote
       params:
@@ -125,6 +124,9 @@ anchors:
   organisation.notes.error:
     kind: error
     description: Why the last change of a note failed, under the new note.
+    fields:
+      text-required: form
+      text-too-long: form
     roles: [ member, admin ]
   organisation.notes.add-button:
     kind: button
@@ -136,18 +138,27 @@ anchors:
     roles: [ member, admin ]
   organisation.members.list:
     kind: list
-    description: The members of the current organisation; rendered once they are read.
+    description: The members of the current organisation.
     roles: [ admin ]
     source:
       platform: organisations.members
   organisation.members.item:
     kind: item
-    description: One member, shown by its email.
+    description: One member, shown by its email and its role.
     roles: [ admin ]
     dataId: identity
+  organisation.members.role-select:
+    kind: select
+    description: The member's role; another choice changes it at once, an admin's own included while another admin stays.
+    binding:
+      action: platform.organisations.set-role
+      params:
+        identity: organisation.members.item
+        role: organisation.members.role-select
+    roles: [ admin ]
   organisation.members.remove-button:
     kind: button
-    description: Removes the member; not on the administrator's own row.
+    description: Removes the member; not on the admin's own row.
     binding:
       action: platform.organisations.remove
       params:
@@ -155,38 +166,137 @@ anchors:
     roles: [ admin ]
   organisation.invite.form:
     kind: form
-    description: Invites an existing account by email, under the members.
+    description: Invites an email by a mailed link, under the members.
     roles: [ admin ]
   organisation.invite.email-input:
     kind: input
-    description: The email of the account to invite (type email).
+    description: The email to invite, with an account or without one.
     binding:
       action: platform.organisations.invite
       params:
         email: organisation.invite.email-input
     roles: [ admin ]
+  organisation.invite.role-select:
+    kind: select
+    description: The role the invited account takes when it accepts; member until another is chosen.
+    binding:
+      action: platform.organisations.invite
+      params:
+        role: organisation.invite.role-select
+    roles: [ admin ]
   organisation.invite.error:
     kind: error
-    description: Why the last invitation, removal or read of the members failed.
+    description: Why the last invitation, copy of a link, revoke, change of a role, removal, or read of the members or the invitations failed.
     roles: [ admin ]
   organisation.invite.submit-button:
     kind: button
-    description: Invites the account and empties the field.
+    description: Sends the invitation to the email.
     binding: { action: platform.organisations.invite }
     roles: [ admin ]
+  organisation.sent.list:
+    kind: list
+    description: The invitations not accepted yet, the newest first.
+    roles: [ admin ]
+    source:
+      platform: organisations.invitations
+  organisation.sent.item:
+    kind: item
+    description: One invitation, shown by its email and its role.
+    roles: [ admin ]
+    dataId: invitation
+  organisation.sent.email-cell:
+    kind: cell
+    description: The email the invitation is for.
+    roles: [ admin ]
+  organisation.sent.role-badge:
+    kind: badge
+    description: The role the invitation gives.
+    roles: [ admin ]
+    dataValue: true
+  organisation.sent.copy-button:
+    kind: button
+    description: Puts the invitation's link on the clipboard, to send it another way.
+    binding:
+      action: platform.organisations.copy-invitation
+      params:
+        invitation: organisation.sent.item
+    roles: [ admin ]
+  organisation.sent.revoke-button:
+    kind: button
+    description: Revokes the invitation; its link stops working.
+    binding:
+      action: platform.organisations.revoke-invitation
+      params:
+        invitation: organisation.sent.item
+    roles: [ admin ]
+  organisation.settings.locale-select:
+    kind: select
+    description: "The organisation's default language, which an account its invitation creates starts in; none until an admin chooses one, and a member's own language always wins."
+    binding:
+      - model: organisation_settings.locale
+      - action: organisation_settings.updateLocale
+        params:
+          locale: organisation.settings.locale-select
+    roles: [ admin ]
+  organisation.settings.clear-button:
+    kind: button
+    description: Removes the organisation's default language; shown while it has one.
+    binding: { action: organisation_settings.clearLocale }
+    roles: [ admin ]
+  organisation.settings.error:
+    kind: error
+    description: Why the last change or removal of the default language failed, under its select.
+    roles: [ admin ]
+  organisation.received.list:
+    kind: list
+    description: The invitations to the account's email, the newest first.
+    source:
+      platform: invitations.mine
+  organisation.received.item:
+    kind: item
+    description: One invitation, shown by its organisation and its role.
+    dataId: invitation
+  organisation.received.name-cell:
+    kind: cell
+    description: The name of the organisation the invitation is to.
+  organisation.received.role-badge:
+    kind: badge
+    description: The role the account takes when it accepts.
+    dataValue: true
+  organisation.received.accept-button:
+    kind: button
+    description: Makes the account a member with the role shown.
+    binding:
+      action: platform.invitations.accept
+      params:
+        invitation: organisation.received.item
+  organisation.received.decline-button:
+    kind: button
+    description: Declines the invitation; it leaves the list.
+    binding:
+      action: platform.invitations.decline
+      params:
+        invitation: organisation.received.item
+  organisation.received.error:
+    kind: error
+    description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list.
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
-  ready: The heading, the role badge, the select with two memberships or more, the notes with the new note form, the members with the invite form for an administrator, and the toggle of the create form.
-  empty: "organisation.page.status in empty: no membership; the create form below it."
-  error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the create form below it."
+  ready: The heading, the role badge, the select with two memberships or more, the notes, for an admin the members, the invitations sent and the default language, the account's invitations, the create toggle.
+  empty: "organisation.page.status in empty: no membership; the invitations for the account, if any, and the create form below it."
+  error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the invitations for the account, if any, and the create form."
 flow:
   id: organisation
-  description: The page's independent areas are the regions of viewing; choosing another organisation, or creating one, starts them all afresh.
+  description: The page's independent areas are the regions of viewing; choosing another organisation, creating one or accepting an invitation starts them all afresh.
   initial: viewing
+  meta:
+    guards:
+      ownDemotion: the account changed its own role to member
+      defaultsHeld: the organisation's settings are on this device
   states:
     viewing:
       type: parallel
-      description: The current organisation with its notes and, for an administrator, its members; without a membership, the create form.
+      description: The current organisation with its notes and, for an admin, its members; without a membership, the create form.
       on:
         organisation.page.current-select: selecting
       states:
@@ -212,7 +322,10 @@ flow:
                 input: { key: organisation.create.key-input, name: organisation.create.name-input }
                 onDone:
                   target: "#organisation.viewing"
-                  description: The caller is the administrator of the new organisation, which becomes current; every area starts afresh and the form is closed.
+                  description: The caller is the admin of the new organisation, which becomes current; every area starts afresh and the form is closed.
+                  actions:
+                    - clear: organisation.create.key-input
+                    - clear: organisation.create.name-input
                 onError:
                   target: open
                   description: The form stays open with what was typed.
@@ -241,26 +354,162 @@ flow:
               invoke:
                 src: note.updateNote
                 input: { id: organisation.notes.item, text: organisation.notes.edit-textarea }
-                onDone: idle
+                onDone:
+                  target: idle
+                  actions:
+                    - clear: organisation.notes.error
                 onError: editing
             deleting:
               invoke:
                 src: note.deleteNote
                 input: { id: organisation.notes.item }
-                onDone: idle
+                onDone:
+                  target: idle
+                  actions:
+                    - clear: organisation.notes.error
                 onError: idle
         invite:
           by: organisation.invite.submit-button
           onDone:
-            description: The account is a member; the members are read again, and the account's own devices learn the membership without a reload.
+            description: The invitation is mailed; the email empties and the role is member again.
+            actions:
+              - clear: organisation.invite.email-input
+              - clear: organisation.invite.role-select
+              - read: organisation.sent.list
         members:
           by: organisation.members.remove-button
           onDone:
-            description: The members are read again; the removed member's devices lose the organisation without a reload.
+            description: The removed member's devices lose the organisation without a reload.
+            actions:
+              - clear: organisation.invite.error
+              - read: organisation.members.list
           onError:
             description: The removal has no error of its own; it shows under the invitation.
             actions:
               - show: organisation.invite.error
+        member-roles:
+          description: The members' roles; one changes at a time, the one chosen last.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.members.role-select: changing
+            changing:
+              invoke:
+                src: platform.organisations.set-role
+                input: { identity: organisation.members.item, role: organisation.members.role-select }
+                onDone:
+                  - target: idle
+                    guard: ownDemotion
+                    read: false
+                    description: The account is a member now, so the members list goes.
+                    actions:
+                      - clear: organisation.invite.error
+                  - target: idle
+                    description: The member's devices show the new role without a reload.
+                    actions:
+                      - clear: organisation.invite.error
+                      - read: organisation.members.list
+                onError:
+                  target: idle
+                  description: The select shows the role the member still has, and the error shows under the invitation.
+                  actions:
+                    - show: organisation.invite.error
+        sent-copy:
+          by: organisation.sent.copy-button
+          read: false
+          onDone:
+            actions:
+              - clear: organisation.invite.error
+          onError:
+            actions:
+              - show: organisation.invite.error
+        sent-revoke:
+          by: organisation.sent.revoke-button
+          onDone:
+            actions:
+              - clear: organisation.invite.error
+              - read: organisation.sent.list
+          onError:
+            actions:
+              - show: organisation.invite.error
+        received:
+          description: The invitations for the account; accepting one makes its organisation current and starts every area afresh.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.received.accept-button: accepting
+            accepting:
+              invoke:
+                src: platform.invitations.accept
+                input: { invitation: organisation.received.item }
+                onDone:
+                  target: "#organisation.viewing"
+                  description: The account is a member with the invitation's role, and that organisation is current.
+                  actions:
+                    - read: organisation.received.list
+                onError:
+                  target: idle
+                  description: One gone meanwhile leaves the list.
+                  actions:
+                    - show: organisation.received.error
+                    - read: organisation.received.list
+        received-decline:
+          by: organisation.received.decline-button
+          onDone:
+            description: The invitation leaves the list.
+            actions:
+              - read: organisation.received.list
+          onError:
+            description: One gone meanwhile leaves the list.
+            actions:
+              - show: organisation.received.error
+              - read: organisation.received.list
+        default-language:
+          description: The organisation's default language, for an admin.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.settings.locale-select:
+                  target: storing
+                  guard: defaultsHeld
+                organisation.settings.clear-button: clearing
+            storing:
+              invoke:
+                src: organisation_settings.updateLocale
+                input: { locale: organisation.settings.locale-select }
+                toast: false
+                onDone:
+                  target: idle
+                  description: This device holds the chosen language; once the server has it, it is the organisation's default that sign-up reads for an account its invitation creates.
+                  actions:
+                    - clear: organisation.settings.error
+                onError:
+                  target: idle
+                  description: This device could not store it; a refusal by the server comes later, as the frame's notice that a change was undone.
+                  actions:
+                    - show: organisation.settings.error
+            clearing:
+              invoke:
+                src: organisation_settings.clearLocale
+                toast: false
+                onDone:
+                  target: idle
+                  description: The organisation has no default language on this device; once the server has it, sign-up reads none for an account the organisation's invitation creates.
+                  actions:
+                    - clear: organisation.settings.error
+                onError:
+                  target: idle
+                  actions:
+                    - show: organisation.settings.error
+        notes-add:
+          by: organisation.notes.add-button
+          onDone:
+            description: The note is written; the new note's field empties.
+            actions:
+              - clear: organisation.notes.new-textarea
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:
@@ -283,7 +532,18 @@ wireframe: |-
   - button "Add note"
   - heading "Members" [level=2]
   - list:
-    - listitem: /.+@.+/
-  - textbox "Email of an existing account"
+    - listitem:
+      - text: /.+@.+/
+      - combobox "Role"
+  - textbox "Email"
+  - combobox "Role"
   - button "Invite"
+  - heading "Invitations" [level=2]
+  - list:
+    - listitem:
+      - text: /.+@.+/
+      - text: Member
+      - button "Copy link"
+      - button "Revoke"
+  - combobox "Default language"
   - button "New organisation"

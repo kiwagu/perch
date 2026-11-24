@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { hashPassword, verifyPassword } from './password-hash'
+import { NO_ACCOUNTS_PASSWORD } from './password-length'
 
 describe('password hashing', () => {
   it('hashes with argon2id and verifies the hash', async () => {
@@ -18,5 +19,26 @@ describe('password hashing', () => {
       '$argon2id$v=19$m=19456,t=2,p=1$1ztTzdwoQX7nUaCi8TWdaQ$IFM4dYMm37DaAuvjyl5cHtOWHOxD20TjNUm6Q2Rldt4'
 
     expect(await verifyPassword({ password: 'pass-word-1', hash: surreal })).toBe(true)
+  })
+
+  it('never verifies the stand-in password, not even against a hash made of it', async () => {
+    const ofStandIn = await hashPassword(NO_ACCOUNTS_PASSWORD)
+    const ofAnother = await hashPassword('pass-word-1')
+
+    expect(await verifyPassword({ password: NO_ACCOUNTS_PASSWORD, hash: ofStandIn })).toBe(false)
+    expect(await verifyPassword({ password: NO_ACCOUNTS_PASSWORD, hash: ofAnother })).toBe(false)
+  })
+
+  it('still runs the argon2 verify for the stand-in, to time it as a wrong password', async () => {
+    const hash = await hashPassword('pass-word-1')
+    const verify = vi.spyOn(Bun.password, 'verify')
+
+    try {
+      await verifyPassword({ password: NO_ACCOUNTS_PASSWORD, hash })
+
+      expect(verify).toHaveBeenCalledWith(NO_ACCOUNTS_PASSWORD, hash)
+    } finally {
+      verify.mockRestore()
+    }
   })
 })

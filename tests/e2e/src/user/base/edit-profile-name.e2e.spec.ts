@@ -1,4 +1,7 @@
 // scenario: user/base/edit-profile-name
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test, toast } from '../../support/fixtures'
 
@@ -12,7 +15,7 @@ test.describe('Rename yourself on the profile page', { tag: '@smoke' }, () => {
     }
 
     await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toHaveText(signedIn.name)
     })

@@ -12,13 +12,17 @@ import { type AuthUser, type DataError, dataError, openLocalDb } from '@workspac
 import { nodeEngines } from '@workspace/data/engines/node'
 import { readSchema } from '@workspace/data/schema-files'
 import { systemClock } from '@workspace/replica'
-import { type LockManagerLike, syncHints, WebSocketTransport } from '@workspace/replica/sync'
+import { type LockManagerLike, syncHints } from '@workspace/replica/sync'
 
 import {
   NOTES_SERVICE,
   type NotesService,
 } from '../../features/organisation/application/notes.service'
 import { OrganisationModule } from '../../features/organisation/organisation.module'
+import {
+  ACCOUNT_START_SERVICE,
+  type AccountStartService,
+} from '../../features/user/application/account-start.service'
 import {
   PROFILE_SERVICE,
   type ProfileService,
@@ -28,15 +32,23 @@ import {
   type SettingsService,
 } from '../../features/user/application/settings/settings.service'
 import { UserModule } from '../../features/user/user.module'
+import { INVITATIONS } from '../../platform/invitations.port'
+import { accountsApi } from '../accounts-api'
 import type { CommandLogger } from '../commands'
 import { devicesApi } from '../devices-api'
 import { type Fetcher, gatewayAuth } from '../gateway-auth'
+import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
+import type { PasskeyCeremony } from '../passkey-ceremony'
+import { passkeysApi } from '../passkeys-api'
 import { type AppServices, createAppRoot } from '../root'
-import { memoryStorage } from '../storage'
+import { type KeyValueStorage, memoryStorage, savedSession } from '../storage'
+import { syncTransport } from '../sync-transport'
+import { twoFactorApi } from '../two-factor-api'
 
 import { ensureAccount, readAccount } from './accounts'
-import { ensureMember, ensureOrganisation, readOrganisation } from './organisations'
+import { ensureInvited, ensureJoined, ensureOrganisation, readOrganisation } from './organisations'
+import { seedSession } from './session'
 import type {
   ClientOptions,
   Inbox,
@@ -44,6 +56,7 @@ import type {
   SeedDevice,
   SeedError,
   SeedOrganisationDevice,
+  SeedStarts,
 } from './types'
 
 /** How long the client waits, each time, for the gateway to answer and acknowledge. */
@@ -56,12 +69,24 @@ const soleDevice: LockManagerLike = {
   request: (_name, _options, callback) => callback(),
 }
 
+/** A seed client has no browser window: a passkey is neither made nor picked in a process. */
+const noAuthenticator: PasskeyCeremony = {
+  register: () => errAsync(dataError('data:AUTH_FAILED', 'a seed client has no passkey window')),
+  authenticate: () =>
+    errAsync(dataError('data:AUTH_FAILED', 'a seed client has no passkey window')),
+}
+
 /** The gateway's sync WebSocket under its address: `http(s)://…` becomes `ws(s)://…/sync`. */
 function gatewaySyncUrl(gatewayUrl: string): string {
   return `${gatewayUrl.replace(/^http/, 'ws')}/sync`
 }
 
-function seedClient(services: AppServices, failures: DataError[], inbox: Inbox): SeedClient {
+function seedClient(
+  services: AppServices,
+  failures: DataError[],
+  inbox: Inbox,
+  storage: KeyValueStorage,
+): SeedClient {
   const scope = services.container.child()
 
   for (const provider of UserModule.providers) {
@@ -129,11 +154,14 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
       .andThen(signIn)
       .andThen((user) => settle().map(() => user))
 
+  const session = seedSession(services.session)
   const device: SeedDevice & SeedOrganisationDevice = {
-    session: services.session,
+    session,
     organisations: services.organisations,
+    invitations: services.container.get(INVITATIONS),
     profiles,
     settings,
+    starts: seedStarts(services.container.get(ACCOUNT_START_SERVICE), storage),
     notes,
     inbox,
     enter,
@@ -141,9 +169,10 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
   }
 
   return {
-    signIn: (input) => enter(() => services.session.signIn(input)),
+    signIn: (input) => enter(() => session.signIn(input)),
     ensureOrganisation: (input) => ensureOrganisation(device, input),
-    ensureMember: (key, email) => ensureMember(device, key, email),
+    ensureInvited: (key, email) => ensureInvited(device, key, email),
+    ensureJoined: (invitation) => ensureJoined(device, invitation),
     readOrganisation: (key, input) => readOrganisation(device, key, input),
     ensureAccount: (input) => ensureAccount(device, input),
     readAccount: (input) => readAccount(device, input),
@@ -163,6 +192,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
   // The space reports asynchronously (the projector, the sync engine); a seed fails on the first report.
   const failures: DataError[] = []
   const fetcher: Fetcher = options.fetcher ?? fetch
+  const storage = memoryStorage()
 
   const start = createAppRoot({
     openLocal: () =>
@@ -193,22 +223,25 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     onOnlineChange: () => () => {},
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
-    transport: (context) =>
-      new WebSocketTransport({
-        url: gatewaySyncUrl(options.gatewayUrl),
-        device: context.device,
-        credentials: context.credentials,
-        onMemberships: context.onMemberships,
-        onEnded: context.onEnded,
-        clock: systemClock,
-      }),
+    invitationsApi: (deps) => invitationsApi(options.gatewayUrl, { ...deps, fetcher }),
+    accountsApi: (deps) => accountsApi(options.gatewayUrl, { ...deps, fetcher }),
+    twoFactorApi: (deps) => twoFactorApi(options.gatewayUrl, { ...deps, fetcher }),
+    passkeysApi: (deps) => passkeysApi(options.gatewayUrl, { ...deps, fetcher }, noAuthenticator),
+    passkeyCeremony: noAuthenticator,
+    transport: syncTransport({ url: gatewaySyncUrl(options.gatewayUrl), clock: systemClock }),
     locks: soleDevice,
     hints: () => syncHints(undefined),
     clock: systemClock,
-    storage: memoryStorage(),
+    steady: () => performance.now(),
+    storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     // A seed client shows no frame to offer a newer build in.
     servedBuild: { watch: () => () => {} },
+    // Nor does it copy an invitation's link: it accepts the invitation itself.
+    clipboard: {
+      write: () =>
+        errAsync({ code: 'clipboard:UNAVAILABLE', message: 'a seed client has no clipboard' }),
+    },
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},
@@ -216,5 +249,19 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
 
   return start.opened
     .mapErr(({ error }) => error)
-    .map(() => seedClient(start.services, failures, options.inbox))
+    .map(() => seedClient(start.services, failures, options.inbox, storage))
+}
+
+/** The starts of `service`, keeping a start under the sign-in current in `storage`. */
+function seedStarts(service: AccountStartService, storage: KeyValueStorage): SeedStarts {
+  return {
+    keepAfterPull: (user, from) => {
+      const signIn = savedSession(storage)?.signIn
+
+      return signIn === undefined
+        ? err(dataError('data:AUTH_FAILED', 'nobody is signed in on the seed client'))
+        : service.keepAfterPull(signIn, user, from)
+    },
+    resumeAfterPull: (user) => service.resumeAfterPull(user),
+  }
 }

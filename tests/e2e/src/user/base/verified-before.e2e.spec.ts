@@ -1,7 +1,11 @@
 // scenario: user/base/verified-before
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, startSignUp, test } from '../../support/fixtures'
 import { openDeclaredMail, openMailLink } from '../../support/mail-contract'
+import { atRoute } from '../../support/routes'
 
 test.describe('Open a verification link a second time', { tag: '@smoke' }, () => {
   test('A link opened again says the email is verified and signs nothing in', async ({ page }) => {
@@ -16,9 +20,10 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
 
         const opened = await openDeclaredMail(page, 'sign-up', {
           params: { email: data.email, locale: 'en' },
+          account: { email: data.email, language: 'en' },
         })
 
-        await expectPathname(page, '/me')
+        await expectPathname(page, CONTRACT_ROUTES['user.profile'])
         await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
 
         return opened
@@ -26,7 +31,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
 
     await test.step('2. Click [user.profile.sign-out-button] and wait for [/sign-in]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     })
 
     await test.step('3. Open the link of the same [mail:sign-up] again', async () => {
@@ -37,14 +42,14 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
         'data-code',
         'verified-before',
       )
-      await expectPathname(page, '/verify-email')
+      await expectPathname(page, CONTRACT_ROUTES['user.verify-email'])
       await expect(page.getByTestId('user.verify-email.sign-in-link')).toBeVisible()
     })
 
     await test.step('4. Click [user.verify-email.sign-in-link]', async () => {
       await page.getByTestId('user.verify-email.sign-in-link').click()
       // Expected: After step 4 the URL is [/sign-in]
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
     })
   })
 })

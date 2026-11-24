@@ -2,6 +2,7 @@ import { okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { Container } from '@workspace/di'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { fakeSession } from '../../platform/__fixtures__/session'
 import { DEVICES, type DevicesPort } from '../../platform/devices.port'
@@ -32,7 +33,12 @@ describe('DeviceModule', () => {
 
   it('routes signed-in users to the devices page', () => {
     expect(DeviceModule.routes).toEqual([
-      { path: '/devices', page: 'DevicesPage', guard: 'authenticated' },
+      {
+        path: CONTRACT_ROUTES.device,
+        page: 'DevicesPage',
+        guard: 'authenticated',
+        roles: [CONTRACT_ROLES.identity],
+      },
     ])
     expect(Object.keys(DeviceModule.declarations)).toEqual(['DevicesPage'])
   })

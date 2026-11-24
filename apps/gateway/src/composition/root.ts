@@ -22,17 +22,31 @@ import { AccountDeletions, EmailChanges, ResetLinks } from '../auth/account-link
 import { AccountMails } from '../auth/account-mails'
 import { AccountPasswords } from '../auth/account-passwords'
 import { AccountTeardown } from '../auth/account-teardown'
-import type { AccountDepartures } from '../auth/auth-handler'
+import {
+  type AccountDepartures,
+  type PasskeyChallenges,
+  passkeyChallenges,
+  type TwoFactorChallenges,
+  twoFactorChallenges,
+} from '../auth/auth-handler'
 import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
+import { PasskeyRows } from '../auth/passkey-rows'
 import { ProfileEmails } from '../auth/profile-emails'
+import { accountChoicePolicy } from '../auth/second-factor-policy.account-choice'
+import type { SecondFactorPolicy } from '../auth/second-factor-policy.port'
+import { STARTING_LANGUAGE_BUDGET_MS, type StartingLanguage } from '../auth/starting-language.port'
+import { TwoFactorRows } from '../auth/two-factor-rows'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
+import { AccountBans, AccountDirectory, ProfileNames } from '../console'
 import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
 import { AccountDeparture } from '../tenants/account-departure'
+import { InvitationMails, invitationLink, PendingInvitations } from '../tenants/invitations'
+import { InvitedLanguage } from '../tenants/invited-language'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
@@ -49,6 +63,22 @@ export interface GatewayRoot {
   readonly deviceSessions: DeviceSessions
   /** The reset, the change and the check of a password, through Better Auth on the server. */
   readonly passwords: AccountPasswords
+  /**
+   * Better Auth's two-factor challenges: the cookie a password step's challenge comes in, the
+   * account a challenge belongs to, the end of one.
+   */
+  readonly challenges: TwoFactorChallenges
+  /**
+   * The second factor of accounts in the directory, as the settings read, confirm and turn it off
+   * without rotating the caller's session, and as a sign-in's code step reads it.
+   */
+  readonly twoFactorRows: TwoFactorRows
+  /** Whether an account may turn its second factor on, and whether it must keep it on. */
+  readonly secondFactorPolicy: SecondFactorPolicy
+  /** The passkeys of accounts in the directory: listed, removed, their account read by credential. */
+  readonly passkeyRows: PasskeyRows
+  /** Better Auth's passkey challenges: the cookie a passkey ceremony's challenge comes in. */
+  readonly passkeyChallenges: PasskeyChallenges
   /** The reset links Better Auth keeps: read by token, ended for an account. */
   readonly resets: ResetLinks
   /** The pending changes of accounts' emails, their links, and the change itself. */
@@ -68,6 +98,12 @@ export interface GatewayRoot {
   readonly mails: AccountMails
   /** The profile's email, which follows the account's into its private region through the hub. */
   readonly profiles: ProfileEmails
+  /** The platform's accounts as the operators' console reads them: a page found, one account. */
+  readonly accountDirectory: AccountDirectory
+  /** The bans the operators' console sets, ending the account's sessions, and lifts. */
+  readonly accountBans: AccountBans
+  /** The name the operators' console gives an account's profile, through its private region. */
+  readonly profileNames: ProfileNames
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -93,9 +129,17 @@ export interface GatewayRoot {
   readonly limits: RequestLimits
   /**
    * One account's work runs one turn at a time in this process: its sign-ups, verifications and
-   * reset requests by its email in lower case, its resets and changes by its identity's key.
+   * reset requests by its email in lower case, its resets and changes, and the operators' actions
+   * on it, by its identity's key.
    */
   readonly accountTurns: KeyedTurns<string>
+  /** The front's public origin, which the gateway's own calls of Better Auth's endpoints name. */
+  readonly publicUrl: string
+  /**
+   * The language an account an invitation creates starts in: the inviting organisation's default,
+   * read from the directory's invitations and the organisation's database within its budget.
+   */
+  readonly startingLanguage: StartingLanguage
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -133,6 +177,7 @@ export function createGatewayRoot(
   const tenantsLog = createLogger('tenant-databases')
   const connectionsLog = createLogger('connections')
   const authLog = createLogger('auth')
+  const organisationsLog = createLogger('organisations')
   const credentials = options.credentials
     ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
     : {}
@@ -170,19 +215,41 @@ export function createGatewayRoot(
       onFailure: (error) => connectionsLog.error({ code: error.code }, error.message),
     })
     // A removal takes the organisation's region from the removed identity's connections before
-    // anything else can fail; every change of memberships resolves once its devices were told.
+    // anything else can fail, and a role change has them push as the new role right after the
+    // directory's write; every change of memberships resolves once its devices were told, or
+    // once a telling that failed is left to the re-tells (on the gateway's clock, logged as the
+    // organisations' own). An invitation's link and its mail carry the same address of the front.
+    const invitationLinkTo = (token: string) => invitationLink(options.publicUrl, token)
+    const invitationMails = new InvitationMails({
+      mail: options.mail,
+      directory: local,
+      link: invitationLinkTo,
+      log: organisationsLog,
+    })
     const organisations = new Organisations({
       directory: local,
       databases,
       revoke: (identity, region) => connections.revoke(identity, region),
+      rerole: (identity, region, role) => connections.rerole(identity, region, role),
       hub,
+      invitations: {
+        pending: new PendingInvitations({
+          directory: local,
+          secret: options.authSecret,
+          clock: options.clock,
+        }),
+        mailer: invitationMails,
+        link: invitationLinkTo,
+      },
+      retell: { clock: options.clock, random: Math.random, log: organisationsLog },
     })
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
     const departure = new AccountDeparture({ directory: local, databases, hub })
 
-    // One account's work, one turn at a time: the auth mount's and the profile's email's.
+    // One account's work, one turn at a time: the auth mount's, the profile's email's and the
+    // operators' console's.
     const accountTurns = new KeyedTurns<string>()
 
     // Better Auth serves its routes under the path of its public URL only, so the server hands it
@@ -208,6 +275,11 @@ export function createGatewayRoot(
       }),
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
       passwords: new AccountPasswords({ auth, directory: local, clock: options.clock }),
+      challenges: twoFactorChallenges(auth, local),
+      twoFactorRows: new TwoFactorRows(local),
+      secondFactorPolicy: accountChoicePolicy,
+      passkeyRows: new PasskeyRows(local),
+      passkeyChallenges: passkeyChallenges(auth),
       resets: new ResetLinks(local),
       emailChanges: new EmailChanges({
         directory: local,
@@ -231,6 +303,9 @@ export function createGatewayRoot(
         log: authLog,
       }),
       profiles: new ProfileEmails({ directory: local, hub, log: authLog, turns: accountTurns }),
+      accountDirectory: new AccountDirectory(local),
+      accountBans: new AccountBans({ directory: local, clock: options.clock }),
+      profileNames: new ProfileNames({ directory: local, hub }),
       organisations,
       databases,
       hub,
@@ -239,8 +314,21 @@ export function createGatewayRoot(
       local,
       limits: new RequestLimits({ clock: options.clock }),
       accountTurns,
+      publicUrl: options.publicUrl,
+      startingLanguage: new InvitedLanguage({
+        directory: local,
+        databases,
+        clock: options.clock,
+        log: authLog,
+        budgetMs: STARTING_LANGUAGE_BUDGET_MS,
+      }),
       clock: options.clock,
       close: async () => {
+        // The re-tells stop first, the one running awaited, before anything they read or tell
+        // through closes; then an invitation mail reads its recipient's language from the
+        // directory before it closes.
+        await organisations.close()
+        await invitationMails.languagesRead()
         await hub.close()
         await databases.close()
         await local.close()

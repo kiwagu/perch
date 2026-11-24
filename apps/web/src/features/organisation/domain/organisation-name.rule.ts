@@ -1,14 +1,14 @@
 import type { Result } from 'neverthrow'
 
-import { applyRules, type DomainRule, type RuleViolation } from '@workspace/kernel'
+import { applyRules, CONTRACT_VALUES, type DomainRule, type RuleViolation } from '@workspace/kernel'
 
-import { ORGANISATION_NAME_MAX } from './organisation.entity'
+import { textLength } from '../../../platform/text-length'
 
 const nameRules: readonly DomainRule<string>[] = [
   { code: 'organisation:NAME_REQUIRED', isSatisfiedBy: (name) => name.length > 0 },
   {
     code: 'organisation:NAME_TOO_LONG',
-    isSatisfiedBy: (name) => name.length <= ORGANISATION_NAME_MAX,
+    isSatisfiedBy: (name) => textLength(name) <= CONTRACT_VALUES['organisation-name'].maxLength,
   },
 ]
 

@@ -91,7 +91,7 @@ export function takeInBatch(
   return log
     .accept(plan, batchWriter(actor.id, doc, fork))
     .andThen((head) => {
-      // In a buffer of their own, as a message holds them (as `exportFrom` in the hub does).
+      // In a buffer of their own, as a message holds them (as `exportFrom` does).
       const bytes = new Uint8Array(plan.bytes)
 
       doc.import(bytes)

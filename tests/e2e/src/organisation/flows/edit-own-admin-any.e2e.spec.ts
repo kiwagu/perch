@@ -1,12 +1,16 @@
 // scenario: organisation/flows/edit-own-admin-any
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, pageLoads, signUp, test } from '../../support/fixtures'
-import { createOrganisation, inviteMember, noteItem } from '../../support/organisation'
+import { acceptOnOrg, createOrganisation, inviteEmail, noteItem } from '../../support/organisation'
+import { atRoute } from '../../support/routes'
 
-test.describe('Edit only your own notes; an administrator edits any', {
+test.describe('Edit only your own notes; an admin edits any', {
   tag: '@full',
 }, () => {
-  test('A member changes only its own notes, an administrator any, and both see every change', async ({
+  test('A member changes only its own notes, an admin any, and both see every change', async ({
     page,
     anotherAccount,
   }, testInfo) => {
@@ -44,7 +48,7 @@ test.describe('Edit only your own notes; an administrator edits any', {
       })
 
     await test.step('3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]', async () => {
-      await inviteMember(page, userB.email)
+      await inviteEmail(page, userB.email)
     })
 
     await test.step('4. On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]', async () => {
@@ -55,9 +59,9 @@ test.describe('Edit only your own notes; an administrator edits any', {
       ).toHaveText([data.noteByA])
     })
 
-    await test.step('5. On device B, open [/org]', async () => {
-      await deviceB.getByTestId('app-shell.nav.organisation-link').click()
-      await expect(deviceB).toHaveURL(/\/org$/)
+    await test.step("5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+      await acceptOnOrg(deviceB, data.name)
+      await expect(deviceB).toHaveURL(atRoute(CONTRACT_ROUTES.organisation))
       await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name, {
         timeout: 10_000,
       })

@@ -1,5 +1,9 @@
 // scenario: not-found/base/unknown-address
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, signUp, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 
 test.describe('Open an address no page has', { tag: '@smoke' }, () => {
   test('A guest and then a signed-in account open an address no page has, and each gets its own way back', async ({
@@ -24,7 +28,7 @@ test.describe('Open an address no page has', { tag: '@smoke' }, () => {
     await test.step('2. Click [not-found.page.sign-in-link]', async () => {
       await page.getByTestId('not-found.page.sign-in-link').click()
       // Expected: After step 2 the URL is [/sign-in]
-      await expect(page).toHaveURL(/\/sign-in$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']))
     })
 
     await test.step('3. Sign up, open the link of [mail:sign-up] and wait for [/me], then open the unknown address again', async () => {
@@ -41,7 +45,7 @@ test.describe('Open an address no page has', { tag: '@smoke' }, () => {
     await test.step('4. Click [not-found.page.profile-link]', async () => {
       await page.getByTestId('not-found.page.profile-link').click()
       // Expected: After step 4 the URL is [/me]
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
     })
   })
 })

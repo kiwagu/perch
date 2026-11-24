@@ -26,7 +26,10 @@ export interface SyncConnectionDeps {
    * change ended it.
    */
   readonly devices: Pick<DeviceSessions, 'seen' | 'byToken'>
-  readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
+  readonly hub: Pick<
+    RegionHub,
+    'subscribe' | 'unsubscribe' | 'changeActor' | 'pull' | 'push' | 'heads' | 'compact'
+  >
   readonly organisations: Pick<Organisations, 'membershipsOf'>
   /**
    * Brings the profile's email in step with the account's once a device of the account said hello

@@ -2,6 +2,8 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
@@ -22,7 +24,7 @@ function renderView(props: Partial<DeleteAccountViewProps> = {}, locale: 'en' | 
     <DeleteAccountView
       guest
       renders={only('user.delete-account.delete-button')}
-      canDelete
+      can={() => true}
       {...handlers}
       {...props}
     />,
@@ -57,10 +59,18 @@ describe('DeleteAccountView', () => {
     expect(screen.queryByTestId('user.delete-account.sign-in-link')).toBeNull()
   })
 
-  it('holds the button while the flow does not take it', () => {
-    renderView({ canDelete: false })
+  it('holds the button while the flow does not take its event', () => {
+    renderView({ can: () => false })
 
     expect((screen.getByTestId(BUTTON) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('asks the flow about the event of its own button', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ can })
+
+    expect(can).toHaveBeenCalledWith({ type: BUTTON })
   })
 
   it('says the account is gone beside the link to sign in, with the button gone', () => {
@@ -71,7 +81,7 @@ describe('DeleteAccountView', () => {
     expect(message.getAttribute('data-code')).toBe('account-deleted')
     expect(message.textContent).toContain('every device of it is signed out')
     expect(screen.getByTestId('user.delete-account.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(screen.queryByTestId(BUTTON)).toBeNull()
   })
@@ -116,11 +126,11 @@ describe('DeleteAccountView', () => {
     expect((screen.getByTestId(BUTTON) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('tells the last admin to remove the other members, then press again', () => {
+  it('tells the last admin to make another member an administrator or remove the others, then press again', () => {
     renderView({ error: 'data:LAST_ADMIN' })
 
     expect(screen.getByTestId('user.delete-account.error').textContent).toBe(
-      'This account is the only admin of an organisation that has other members. Remove them first, then press again.',
+      'This account is the only admin of an organisation that has other members. Make another member an administrator, or remove the others, then press again.',
     )
   })
 

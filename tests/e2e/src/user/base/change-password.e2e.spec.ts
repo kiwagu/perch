@@ -1,4 +1,7 @@
 // scenario: user/base/change-password
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   expect,
@@ -75,7 +78,7 @@ test.describe('Change the password in the settings', { tag: '@smoke' }, () => {
 
     await test.step('4. Click [app-shell.nav.profile-link], click [user.profile.sign-out-button], enter the email and the new password into [user.sign-in.email-input] and [user.sign-in.password-input], and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await signOut(page)
       await page.getByTestId('user.sign-in.email-input').fill(data.email)
       await page.getByTestId('user.sign-in.password-input').fill(data.newPassword)
@@ -83,7 +86,7 @@ test.describe('Change the password in the settings', { tag: '@smoke' }, () => {
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

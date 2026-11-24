@@ -10,6 +10,7 @@ actions:
     result: this device signs out
     codes:
       - failed
+    changes: []
 reserved:
   - sample.status
 status:

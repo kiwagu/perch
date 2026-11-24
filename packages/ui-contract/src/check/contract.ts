@@ -1,12 +1,20 @@
 /**
  * The contract as the check reads it, the contract files, the activities and the scenarios,
  * and the lookups its rules share: the declared anchors, the refs of an anchor's binding and
- * what each names in the model, a field of the model, a known anchor (declared, or a declared
- * base with a suffix it lists in `derived`), the states and choice values of the vocabulary,
+ * what each names in the model, a field of the model, a known anchor (declared, a declared
+ * base with a suffix it lists in `derived`, or a paged list's size options), the states and
+ * choice values of the vocabulary,
  * and a problem located in a screen's file, the platform file or another file at a line.
  */
 
-import { baseOf, testIdFor, VISIBILITY_BUTTON, VISIBILITY_VALUES } from '../anchors'
+import {
+  baseOf,
+  isSizeOption,
+  sizeOptionOf,
+  testIdFor,
+  VISIBILITY_BUTTON,
+  VISIBILITY_VALUES,
+} from '../anchors'
 import {
   type Activity,
   type AnchorDef,
@@ -19,6 +27,7 @@ import {
   type Problem,
   type Screen,
   type ScreensFile,
+  type Terms,
   TOAST_RULE_ROW,
   type Vocabulary,
   type WrittenDescription,
@@ -42,6 +51,14 @@ export interface Contract {
    * (`readDescriptions`): never one the engine derives or the loader fills in.
    */
   readonly descriptions: readonly WrittenDescription[]
+  /**
+   * The project's language, `contract/domain/terms.yaml`, when the contract writes it: its roles
+   * are then the vocabulary's `roles` (the loader fills them in), and its terms name the synonyms
+   * the texts never use.
+   */
+  readonly terms: Terms | undefined
+  /** The line of each key and item of the terms file. */
+  readonly termsLines: Lines
 }
 
 export interface DeclaredAnchor {
@@ -61,9 +78,6 @@ export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
       at: ['screens', index, 'anchors', anchor],
     })),
   )
-
-/** The two answers of a question the frame asks: going on, and staying. */
-export const ANSWERS = ['confirm-button', 'cancel-button'] as const
 
 /** The refs of an anchor's binding, one or a list, each at its path under the anchor. */
 export function bindingRefsOf(
@@ -157,16 +171,44 @@ export const locate =
 export const inFile = (file: string, message: string, line?: number): Problem =>
   line === undefined ? { file, message } : { file, line, message }
 
+/** The paged lists of the screens with the page sizes of their actions, by the list's anchor. */
+export function pagedListsOf(screens: ScreensFile): Map<string, readonly number[]> {
+  return new Map(
+    declaredAnchors(screens).flatMap(({ anchor, def: { source } }) => {
+      const paged =
+        source !== undefined && 'platform' in source && source.paged === true
+          ? own(screens.platform.actions, source.platform)?.paged
+          : undefined
+
+      return paged === undefined ? [] : [[anchor, paged.sizes] as const]
+    }),
+  )
+}
+
+/**
+ * The options of each paged list's size select, `<list>.size-select.option`, with the values
+ * they carry: the page sizes of the list's action, each as its `data-value`.
+ */
+export const pageSizeOptionsOf = (screens: ScreensFile): Map<string, string[]> =>
+  new Map(
+    [...pagedListsOf(screens)].map(([list, sizes]) => [
+      sizeOptionOf(list),
+      sizes.map((size) => String(size)),
+    ]),
+  )
+
 /**
  * Whether an anchor is declared, or derived from a declared base with a suffix that base
- * lists in `derived`: a suffix of the vocabulary alone names no element the base renders.
+ * lists in `derived` (a suffix of the vocabulary alone names no element the base renders), or
+ * an option of a paged list's size select (`isSizeOption`, as the browser tells it).
  */
 export function knownAnchors(contract: Contract): (anchor: string) => boolean {
   const defs = new Map(declaredAnchors(contract.screens).map(({ anchor, def }) => [anchor, def]))
   const suffixes = Object.keys(contract.vocabulary.suffixes)
+  const paged = new Set(pagedListsOf(contract.screens).keys())
 
   return (anchor) => {
-    if (defs.has(anchor)) {
+    if (defs.has(anchor) || isSizeOption(anchor, paged)) {
       return true
     }
 
@@ -212,12 +254,13 @@ export const codesOf = (vocabulary: Vocabulary, screens: ScreensFile): Set<strin
     ...screens.questions.map(({ code }) => code),
   ])
 
-/** Every state of the vocabulary: app, container and row states. */
+/** Every state of the vocabulary: app, container, row and field states. */
 export const statesOf = (vocabulary: Vocabulary): Set<string> =>
   new Set([
     ...Object.keys(vocabulary.appStates),
     ...Object.keys(vocabulary.containerStates),
     ...Object.keys(vocabulary.rowStates),
+    ...Object.keys(vocabulary.fieldStates),
   ])
 
 /** A choice value written as a pattern (`^[a-z]+$`) stands for every value it matches. */
@@ -240,14 +283,18 @@ export const isChoiceValue = (vocabulary: Vocabulary, value: string): boolean =>
   Object.values(vocabulary.choiceValues).some((rows) => isValueOf(rows, value))
 
 /**
- * Whether `value` is a `data-value` of the contract: a choice value, or, once an input renders a
- * visibility-button, one of the values its suffix defines (`show`, `hide`).
+ * Whether `value` is a `data-value` of the contract: a choice value, once an input renders a
+ * visibility-button one of the values its suffix defines (`show`, `hide`), or a page size of a
+ * paged list.
  */
 export function contractValues(contract: Contract): (value: string) => boolean {
   const visibility = visibilityButtonsOf(contract.screens).size > 0
+  const sizes = new Set([...pageSizeOptionsOf(contract.screens).values()].flat())
 
   return (value) =>
-    isChoiceValue(contract.vocabulary, value) || (visibility && has(VISIBILITY_VALUES, value))
+    isChoiceValue(contract.vocabulary, value) ||
+    (visibility && has(VISIBILITY_VALUES, value)) ||
+    sizes.has(value)
 }
 
 /** The paths of every binding of every screen. */

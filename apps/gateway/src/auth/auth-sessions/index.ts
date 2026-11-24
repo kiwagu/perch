@@ -3,8 +3,10 @@
 export {
   type SessionRevoke,
   type SignInAdmission,
+  type SignInJudgment,
   type SignOutEnding,
   toEndedDevices,
+  type VerifiedAdmission,
 } from './endings'
 export type { SessionCaller, SessionRead } from './read'
 export { AuthSessions, type AuthSessionsOptions } from './sessions'

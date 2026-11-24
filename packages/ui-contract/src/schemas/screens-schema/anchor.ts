@@ -5,13 +5,15 @@ import { z } from '@workspace/zod'
 import {
   baseAnchorSchema,
   codeSchema,
+  errorFieldSchema,
   kebabNameSchema,
   roleSchema,
   stateSchema,
 } from '../../names.schema'
 import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
-import { actionParamsSchema } from './params'
+import { actionParamsSchema, sourceParamsSchema } from './params'
+import { withoutSchema, withSchema } from './with'
 
 const PLATFORM_ACTION = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/
 
@@ -60,7 +62,7 @@ export const bindingRefSchema = z
           .describe('The name of a search parameter every route of the screen declares.'),
       })
       .describe(
-        'The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`.',
+        'A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`.',
       ),
   ])
   .describe(
@@ -77,7 +79,9 @@ export const anchorBindingSchema = z
         'Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which.',
       ),
   ])
-  .describe('What the anchor is bound to: one binding, or several in a non-empty list.')
+  .describe(
+    'What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.',
+  )
 
 export const sourceSchema = z
   .union([
@@ -90,16 +94,29 @@ export const sourceSchema = z
         order: z.string().optional().describe('The field the entries are ordered by.'),
         direction: z.enum(['asc', 'desc']).optional().describe('The order direction.'),
       })
-      .describe('The entries come from an entity of the model.'),
+      .describe(
+        'The entries come from an entity of the model: the anchor follows the stored data as it changes, here or on another device, and is never read.',
+      ),
     z
       .strictObject({
         platform: platformActionNameSchema.describe(
           'The platform action whose result the anchor lists.',
         ),
+        params: sourceParamsSchema.optional(),
+        paged: z
+          .literal(true)
+          .optional()
+          .describe(
+            "The list is a page of the action's entries: its page and size are the route's search parameters, and its parts are derived, never written. See the rule `paged-list`.",
+          ),
       })
-      .describe('The entries come from a platform action.'),
+      .describe(
+        'The entries come from a platform action, read when the anchor starts to render, while it renders when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`.',
+      ),
   ])
-  .describe('Where the entries of a list, a section or a table come from.')
+  .describe(
+    "Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one.",
+  )
 
 /** The question a control asks before its destructive action runs, derived by the loader. */
 export const asksSchema = z
@@ -108,7 +125,24 @@ export const asksSchema = z
     code: codeSchema.describe('The code it asks with: what the action destroys.'),
   })
   .describe(
-    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform).",
+    "Derived: the control asks the frame's confirmation before its destructive action runs. A screen file never writes it. See the rule `destructive-question`.",
+  )
+
+/** The question a control asks before its flow moves to another screen, derived by the loader. */
+export const leavesSchema = z
+  .strictObject({
+    dialog: z
+      .string()
+      .describe("The frame's dialog that asks whether to leave and lose what was typed."),
+    loses: z
+      .array(baseAnchorSchema)
+      .min(1)
+      .describe(
+        'The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input.',
+      ),
+  })
+  .describe(
+    "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does.",
   )
 
 /** Where a derived anchor of a composite comes from, written by the loader only. */
@@ -131,63 +165,98 @@ export const anchorDefSchema = z
     roles: z
       .array(roleSchema)
       .optional()
-      .describe('The roles that see the element; absent: every role of the screen.'),
-    own: z.boolean().optional().describe('Shown to a member only on the entries the member owns.'),
+      .describe(
+        "Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.",
+      ),
+    own: z
+      .boolean()
+      .optional()
+      .describe(
+        'Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. See the rule `own-entries`.',
+      ),
     holdsInput: z
       .boolean()
       .optional()
       .describe(
-        'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.',
+        'True when what is typed stays in the field until an action takes it or a flow clears it, so a leave with it typed loses it; false when it holds none. See the rule `field-holds-input`.',
+      ),
+    marksState: z
+      .literal(false)
+      .optional()
+      .describe(
+        '`false`: an `input`, `textarea` or `select` that holds input shows no state colour, its `data-state` still kept. Left out, it shows it. See the rules `state-colour` and `check-sources`.',
       ),
     secret: z
       .literal(true)
       .optional()
       .describe(
-        'A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.',
+        "A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.",
       ),
-    codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    with: withSchema.optional(),
+    without: withoutSchema.optional(),
+    codes: z
+      .array(codeSchema)
+      .optional()
+      .describe(
+        'The data-code values the element carries. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code.',
+      ),
     ranked: z
       .literal(true)
       .optional()
       .describe(
-        'A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.',
+        'A message whose codes are in rank order: of the codes raised before it shows, it shows the first. Only on a message of two codes or more, each listed once. See the rule `ranked-message`.',
       ),
     fields: z
-      .record(codeSchema, baseAnchorSchema)
+      .record(codeSchema, errorFieldSchema)
       .optional()
       .describe(
-        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+        "An error's codes, each with the field it concerns, which it shows under and marks invalid, or `form`; a code left out concerns the form. See the rules `error-placement` and `error-codes-and-fields`.",
       ),
     dataId: z
       .string()
       .optional()
-      .describe('What the data-id of the element holds: the id of the entity it shows.'),
+      .describe(
+        'What the `data-id` of the element holds: the id of the entity it shows, on an `item` or a `row`. A `data-id` is data, not contract: no check reads its value. See the rule `attributes`.',
+      ),
     dataValue: z
       .boolean()
       .optional()
-      .describe('The element carries a data-value from the choice values.'),
-    states: z.array(stateSchema).optional().describe('The data-state values the element takes.'),
+      .describe(
+        "It or its options carry a `data-value`, a choice's stable key, not its label. From version 4 the loader sets it on a select; a screen file omits it there. See the rules `attributes` and `kind-parts`.",
+      ),
+    states: z
+      .array(stateSchema)
+      .optional()
+      .describe(
+        'The `data-state` values it takes: an app, container or row state. Not the field states of an `input`, `textarea` or `select`: `ids` lists those. See the rules `attributes` and `field-states-carried`.',
+      ),
     derived: z
       .array(kebabNameSchema)
       .optional()
       .describe(
-        'The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.',
+        "The derived suffixes it renders; a screen file omits a paged list's parts and, from version 4, a kind's own: the loader lists them. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
       ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
+    leaves: leavesSchema.optional(),
     composite: kebabNameSchema
       .optional()
       .describe(
-        'The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.',
+        'The platform composite the field opts into, declared once in `platform.yaml`; the loader derives its list and items. Only a secret `input` opts in. See the rule `composite-of-the-platform`.',
       ),
     derivedFrom: derivedFromSchema.optional(),
+    confirms: baseAnchorSchema
+      .optional()
+      .describe(
+        'Written on an unbound secret input: names the other secret input of its screen, one that opts into a composite, whose password it repeats. See the rule `password-pair`.',
+      ),
   })
   .describe('One declared anchor.')
 
 /**
  * One declared anchor as a screen file writes it: an error may leave its codes and fields out,
  * and the loader derives them from the actions its part binds; a field may leave `holdsInput`
- * out, and the loader derives it from its kind and its bindings; a control never writes `asks`,
+ * out, and the loader derives it from its kind, its bindings and its flow; a control never writes `asks`,
  * which the loader derives from its action, and may ban it with `confirm: false`; no anchor writes
  * `derivedFrom`, which the loader writes on the anchors it derives from a composite.
  */
@@ -197,26 +266,26 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .array(codeSchema)
       .optional()
       .describe(
-        'The data-code values the element carries. An error that leaves them out carries the codes of the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`), each once, `failed` last.',
+        '`data-code` values on a `message`, `error`, `toast` or `dialog`: vocabulary or derived toast codes; tests assert them, not words. An error may leave them out. See the rule `error-codes-and-fields`.',
       ),
     fields: z
-      .record(codeSchema, baseAnchorSchema)
+      .record(codeSchema, errorFieldSchema)
       .optional()
       .describe(
-        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form. Left out, each code a field of the model gives goes to the control the binding passes for that field, unless two bindings pass two controls.",
+        'Each error code with its field or `form`. From version 3 written entries override the derived code by code; before, they replace them all. See the rules `error-codes-and-fields` and `error-placement`.',
       ),
     holdsInput: z
       .boolean()
       .optional()
       .describe(
-        'Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.',
+        'Whether typed text stays in the field until an action takes it or a `clear` empties it. Left out, it is derived: false where its own change alone applies it at once. See the rule `field-holds-input`.',
       ),
     confirm: z
       .literal(false)
       .optional()
       .describe(
-        "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
+        '`false`: no question before its destructive action. Left out, a control bound to one asks if the frame has a confirmation; refused on others. See the rule `destructive-question`.',
       ),
   })
-  .omit({ asks: true, derivedFrom: true })
+  .omit({ asks: true, leaves: true, derivedFrom: true })
   .describe('One declared anchor, as a screen file writes it.')

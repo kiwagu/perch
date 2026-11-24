@@ -7,6 +7,8 @@
 -- accounts created go too: their memberships, their databases `t_<key>` and their rows in
 -- the directory; the accounts' memberships in organisations of others are deleted too (the
 -- seed removes their member rows in those organisations' databases first, database by database).
+-- The pending invitations of those organisations go too, to any address, and so do the ones to
+-- the accounts' own addresses, from whatever organisation.
 LET $accounts = SELECT VALUE id
 FROM identity
 WHERE
@@ -29,6 +31,20 @@ FOR $account IN $accounts {
 };
 LET $tenants = SELECT VALUE id FROM tenant WHERE created_by IN $accounts;
 DELETE membership WHERE tenant IN $tenants;
+-- Organisation by organisation: the unique index of an invitation starts with the organisation,
+-- and `tenant IN $tenants` deletes nothing on it (SurrealDB 3.3.4).
+FOR $tenant IN $tenants {
+  DELETE invitation WHERE tenant = $tenant;
+};
+-- Address by address, by equality, as above: an `IN` delete on an indexed field finds nothing
+-- on this SurrealDB. The identities are still there to read the addresses from.
+FOR $address IN (
+  SELECT VALUE email
+  FROM identity
+  WHERE id IN $accounts
+) {
+  DELETE invitation WHERE email = string::lowercase($address);
+};
 -- The databases first, while the `tenant` rows that name them exist.
 FOR $database IN (
   SELECT VALUE database

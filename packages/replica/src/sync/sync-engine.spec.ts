@@ -206,6 +206,22 @@ describe('sync engine', () => {
     expect((await a.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
   })
 
+  it('stops syncing without a report once an operator banned the account, keeping what the device wrote', async () => {
+    const { a, stub } = await twoDevices()
+    const heard: string[] = []
+
+    a.transport.onEnded((reason) => heard.push(`${reason} while ${a.channel()}`))
+    stub.endWith('banned')
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    expect((await a.region.flush()).isOk()).toBe(true)
+
+    expect(heard).toEqual(['banned while up'])
+    expect(a.channel()).toBe('down')
+    expect(a.errors).toEqual([])
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
   it('ends only the named device of the identity when the gateway closes it as revoked', async () => {
     const gateway = await openGateway()
     const a = await openDevice(gateway, { device: 'device-a' })

@@ -64,7 +64,7 @@ describe('activitiesProblems', () => {
     editing.on = { 'sample.save-button': { target: 'gone', guard: 'titleGiven' } }
 
     expect(printed(contract)).toEqual([
-      'contract/domain/activities/thing.yaml:5: roles[1]: "visitor" is not a role of the vocabulary',
+      'contract/domain/activities/thing.yaml:5: roles[1]: "visitor" is not a role of the contract',
       'contract/domain/activities/thing.yaml:19: states.editing.on["sample.save-button"].target: "gone" is not a state of the activity',
       'contract/domain/activities/thing.yaml:18: states.editing.on["sample.save-button"].guard: "titleGiven" is not a guard of meta.guards',
       'contract/domain/activities/thing.yaml:21: states.saved: is not reachable from "editing"',
@@ -81,7 +81,7 @@ describe('activitiesProblems', () => {
     }
 
     expect(printed(contract)).toEqual([
-      `${AT} roles[1]: "visitor" is not a role of the vocabulary`,
+      `${AT} roles[1]: "visitor" is not a role of the contract`,
       `${AT} data["thing.title"].model: no entity "gadget" in the model`,
       `${AT} data.colour.model: entity "thing" has no field "colour"`,
     ])

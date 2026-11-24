@@ -2,7 +2,11 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { renderWithProviders } from '../../../../../test-utils'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
@@ -18,8 +22,8 @@ const only = (anchor: VerifyEmailListed) => (asked: VerifyEmailListed) => asked 
 function renderView(props: Partial<VerifyEmailViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const onResend = vi.fn((_email: string) => Promise.resolve(true))
 
-  renderWithProviders(
-    <VerifyEmailView renders={() => false} canResend={false} onResend={onResend} {...props} />,
+  renderWithFacts(
+    <VerifyEmailView renders={() => false} can={() => false} onResend={onResend} {...props} />,
     { locale, es },
   )
 
@@ -57,7 +61,7 @@ describe('VerifyEmailView', () => {
 
     const link = screen.getByTestId('user.verify-email.sign-in-link')
 
-    expect(link.getAttribute('href')).toBe('/sign-in')
+    expect(link.getAttribute('href')).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(link.textContent).toBe(en['user.verify-email.sign-in'])
     expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
     expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
@@ -71,25 +75,49 @@ describe('VerifyEmailView', () => {
     ['data:OFFLINE', 'failed'],
     ['verify-email:UNKNOWN', 'failed'],
   ] as const)('shows %s as %s, with the form that sends a new link', (error, code) => {
-    renderView({ error, renders: only('user.verify-email.form'), canResend: true })
+    renderView({ error, renders: only('user.verify-email.form'), can: () => true })
 
     const shown = screen.getByTestId('user.verify-email.error')
 
     expect(shown.getAttribute('data-code')).toBe(code)
     expect(shown.textContent).toBe(en[`user.verify-email.error.${code}`])
     expect(screen.getByTestId('user.verify-email.form').tagName).toBe('FORM')
-    expect(screen.getByTestId('user.verify-email.email-input').getAttribute('type')).toBe('email')
     expect(screen.getByTestId('user.verify-email.resend-button').hasAttribute('disabled')).toBe(
       false,
     )
     expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
   })
 
+  it.each([
+    ['en', en],
+    ['es', es],
+  ] as const)(
+    'says the account is banned in the error, in %s, with no form, no status and no way to sign in',
+    (locale, texts) => {
+      renderView({ error: 'data:ACCOUNT_BANNED' }, locale)
+
+      const shown = screen.getByTestId('user.verify-email.error')
+
+      expect(shown.getAttribute('data-code')).toBe('account-banned')
+      expect(shown.textContent).toBe(texts['user.verify-email.error.account-banned'])
+      expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.message')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    },
+  )
+
+  it('gives the email what the contract says of it', () => {
+    renderView({ renders: only('user.verify-email.form') })
+
+    expect(expectFieldFacts(document.body)).toEqual(['user.verify-email.email-input'])
+  })
+
   it('sends a new link to the email typed', () => {
     const { onResend } = renderView({
       error: 'data:LINK_INVALID',
       renders: only('user.verify-email.form'),
-      canResend: true,
+      can: () => true,
     })
 
     type('user.verify-email.email-input', 'ann@example.test')
@@ -101,11 +129,23 @@ describe('VerifyEmailView', () => {
     )
   })
 
+  it('asks the flow about the resend with the email typed', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ renders: only('user.verify-email.form'), can })
+    type('user.verify-email.email-input', 'ann@example.test')
+
+    expect(can).toHaveBeenLastCalledWith({
+      type: 'user.verify-email.resend-button',
+      email: 'ann@example.test',
+    })
+  })
+
   it('holds the button while it cannot send', () => {
     renderView({
       error: 'data:LINK_INVALID',
       renders: only('user.verify-email.form'),
-      canResend: false,
+      can: () => false,
     })
 
     expect(screen.getByTestId('user.verify-email.resend-button').hasAttribute('disabled')).toBe(
@@ -118,7 +158,7 @@ describe('VerifyEmailView', () => {
       message: 'check-your-mail',
       sentTo: 'ann@example.test',
       renders: only('user.verify-email.form'),
-      canResend: true,
+      can: () => true,
     })
 
     type('user.verify-email.email-input', 'someone-else@example.test')
@@ -134,7 +174,7 @@ describe('VerifyEmailView', () => {
 
   it('speaks the language the app speaks', () => {
     renderView(
-      { error: 'data:LINK_EXPIRED', renders: only('user.verify-email.form'), canResend: true },
+      { error: 'data:LINK_EXPIRED', renders: only('user.verify-email.form'), can: () => true },
       'es',
     )
 
@@ -144,5 +184,24 @@ describe('VerifyEmailView', () => {
     expect(screen.getByTestId('user.verify-email.error').textContent).toBe(
       es['user.verify-email.error.link-expired'],
     )
+  })
+})
+
+describe('the state colour of the fields', () => {
+  it('draws none on the email', () => {
+    renderWithFacts(
+      <UnsavedInputScope>
+        <VerifyEmailView
+          renders={only('user.verify-email.form')}
+          can={() => true}
+          error="data:LINK_INVALID"
+          onResend={() => Promise.resolve(true)}
+        />
+      </UnsavedInputScope>,
+    )
+
+    type('user.verify-email.email-input', 'ann@example.test')
+
+    expectNoStateColour(screen.getByTestId('user.verify-email.email-input'))
   })
 })

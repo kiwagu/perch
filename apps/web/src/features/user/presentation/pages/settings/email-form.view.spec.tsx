@@ -2,15 +2,21 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { renderWithProviders } from '../../../../../test-utils'
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 
 import { EmailFormView, type EmailFormViewProps } from './email-form.view'
 
 function renderView(props: Partial<EmailFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSend: vi.fn(() => Promise.resolve(true)) }
 
-  renderWithProviders(
-    <EmailFormView values={{ email: '', password: '' }} canSend {...handlers} {...props} />,
+  renderWithFacts(
+    <EmailFormView
+      values={{ email: '', password: '' }}
+      can={() => true}
+      {...handlers}
+      {...props}
+    />,
   )
 
   return handlers
@@ -31,6 +37,15 @@ describe('EmailFormView', () => {
     expect(onSend).toHaveBeenCalled()
     expect(input('user.settings.email.password-input').type).toBe('password')
     expect(screen.getByTestId('user.settings.email.password-input.visibility-button')).toBeTruthy()
+  })
+
+  it('gives the email and the password what the contract says of them', () => {
+    renderView()
+
+    expect(expectFieldFacts(document.body)).toEqual([
+      'user.settings.email.email-input',
+      'user.settings.email.password-input',
+    ])
   })
 
   it('asks to open the link of the mail, naming the new email', () => {
@@ -55,12 +70,35 @@ describe('EmailFormView', () => {
     expect(input(field).closest('[data-slot="field"]')?.contains(error)).toBe(true)
   })
 
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'invalid-credentials': 'data:INVALID_CREDENTIALS',
+      'email-invalid': 'data:EMAIL_INVALID',
+    }
+
+    expectEachCodeMarksItsField('user.settings.email.error', (code) =>
+      renderView({ error: failures[code] }),
+    )
+  })
+
   it('says any other refusal above the form', () => {
-    renderView({ error: 'data:OFFLINE', canSend: false })
+    renderView({ error: 'data:OFFLINE', can: () => false })
 
     expect(screen.getByTestId('user.settings.email.error').getAttribute('data-code')).toBe('failed')
     expect(
       (screen.getByTestId('user.settings.email.send-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the send with the email and the password it holds', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ values: { email: 'ann.new@example.test', password: 'Secret-old1' }, can })
+
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.settings.email.send-button',
+      email: 'ann.new@example.test',
+      password: 'Secret-old1',
+    })
   })
 })

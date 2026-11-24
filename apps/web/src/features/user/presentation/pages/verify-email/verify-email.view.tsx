@@ -1,6 +1,7 @@
 import { type ComponentType, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -8,6 +9,7 @@ import { Field, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import type { VerifyEmailEvent } from '../../../application/verify-email.machine'
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
 /** The anchors only some states of the flow render that the page shows or leaves out. */
@@ -28,8 +30,8 @@ export interface VerifyEmailViewProps {
   readonly sentTo?: string | undefined
   /** The code of the failure the error shows: of the link, or of the last resend. */
   readonly error?: string | undefined
-  /** Whether its button can send now. */
-  readonly canResend: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: VerifyEmailEvent) => boolean
   /** Sends a new link to `email`: resolves whether it did. */
   readonly onResend: (email: string) => Promise<boolean>
   readonly link?: ComponentType<PageLinkProps>
@@ -42,6 +44,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
       return { code: 'link-invalid', text: t('user.verify-email.error.link-invalid') }
     case 'data:LINK_EXPIRED':
       return { code: 'link-expired', text: t('user.verify-email.error.link-expired') }
+    case 'data:ACCOUNT_BANNED':
+      return { code: 'account-banned', text: t('user.verify-email.error.account-banned') }
     case 'data:OTHER_ACCOUNT':
       return { code: 'other-account', text: t('user.verify-email.error.other-account') }
     case 'data:RATE_LIMITED':
@@ -83,7 +87,11 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
             </Alert>
           ) : null}
           {props.renders('user.verify-email.sign-in-link') ? (
-            <Link to="/sign-in" className="underline" data-testid="user.verify-email.sign-in-link">
+            <Link
+              to={CONTRACT_ROUTES['user.sign-in']}
+              className="underline"
+              data-testid="user.verify-email.sign-in-link"
+            >
               {t('user.verify-email.sign-in')}
             </Link>
           ) : null}
@@ -103,7 +111,6 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
                     id={emailId}
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    type="email"
                     autoComplete="email"
                     required
                     data-testid="user.verify-email.email-input"
@@ -111,7 +118,7 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
                 </Field>
                 <Button
                   type="submit"
-                  disabled={!props.canResend}
+                  disabled={!props.can({ type: 'user.verify-email.resend-button', email })}
                   data-testid="user.verify-email.resend-button"
                 >
                   {t('user.verify-email.resend')}

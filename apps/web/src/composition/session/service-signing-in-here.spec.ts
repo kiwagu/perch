@@ -4,7 +4,8 @@ import { identityIdFactory } from '@workspace/ids'
 
 import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
-import { type KeptDevice, type MemoryStorage, memoryStorage, saveDevice } from '../storage'
+import { signedInElsewhere } from '../__fixtures__/signed-in'
+import type { KeptDevice } from '../storage'
 
 const ann: KeptDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -32,17 +33,6 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   return opened
 }
 
-/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const other = memoryStorage()
-
-  saveDevice(other, device)
-
-  for (const key of ['perch.session.token', 'perch.session.identity']) {
-    storage.changeElsewhere(key, other.get(key))
-  }
-}
-
 describe("the session's sign-ins of this tab", () => {
   it('says the account it tells of is its own doing while its verification signs it in, and not after', async () => {
     const auth = fakeGatewayAuth()
@@ -64,7 +54,7 @@ describe("the session's sign-ins of this tab", () => {
 
     expect((await tab.session.restore()).isOk()).toBe(true)
     tab.session.subscribe(() => toldHere.push(tab.session.signingInHere()))
-    signInElsewhere(tab.storage, ann)
+    signedInElsewhere(tab.storage, ann)
 
     await vi.waitFor(() => expect(tab.session.current()?.id).toBe(ann.identity.id))
     expect(toldHere).toEqual([false])

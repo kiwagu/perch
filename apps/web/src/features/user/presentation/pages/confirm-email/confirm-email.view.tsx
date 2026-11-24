@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { FieldGroup } from '@workspace/ui/components/ui/field'
@@ -69,7 +70,7 @@ export function ConfirmEmailView(props: ConfirmEmailViewProps) {
           ) : null}
           {props.renders('user.confirm-email.profile-link') ? (
             <Link
-              to="/me"
+              to={CONTRACT_ROUTES['user.profile']}
               className="text-sm underline"
               data-testid="user.confirm-email.profile-link"
             >
@@ -78,7 +79,7 @@ export function ConfirmEmailView(props: ConfirmEmailViewProps) {
           ) : null}
           {props.renders('user.confirm-email.sign-in-link') ? (
             <Link
-              to="/sign-in"
+              to={CONTRACT_ROUTES['user.sign-in']}
               className="text-sm underline"
               data-testid="user.confirm-email.sign-in-link"
             >

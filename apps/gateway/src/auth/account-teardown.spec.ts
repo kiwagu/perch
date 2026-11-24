@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
-import { type IdentityId, idSchemas, profileIdFactory, tenantIdFactory } from '@workspace/ids'
+import {
+  type IdentityId,
+  idSchemas,
+  passkeyIdFactory,
+  profileIdFactory,
+  tenantIdFactory,
+} from '@workspace/ids'
 import { privateRegionId } from '@workspace/replica'
 import { z } from '@workspace/zod'
 
@@ -16,9 +22,12 @@ import {
 } from './__fixtures__/auth-instance'
 import identityDeleteRefuseStatement from './__fixtures__/identity-delete-refuse.surql'
 import membershipRowStatement from './__fixtures__/membership-row.surql'
+import passkeyRowStatement from './__fixtures__/passkey-row.surql'
 import profileRowStatement from './__fixtures__/profile-row.surql'
 import regionRowsStatement from './__fixtures__/region-rows.surql'
+import { passwordStepRequest, secondFactorOn } from './__fixtures__/second-factor'
 import settingsLocaleStatement from './__fixtures__/settings-locale.surql'
+import attemptRowsStatement from './__fixtures__/two-factor-attempt-rows.surql'
 import { AccountTeardown } from './account-teardown'
 
 const closers: Array<() => Promise<void>> = []
@@ -34,8 +43,14 @@ const BOB = 'bob@example.test'
 const FURNISHED = {
   identity: 1,
   account: 1,
-  device_session: 2,
-  verification: 3,
+  // The laptop's first session and the one its confirmation of the second factor replaced it
+  // with, the phone's, and the one a password step wrote and deleted (ended) on the desk.
+  device_session: 4,
+  // A change of its email, a deletion, a reset link, a pending two-factor challenge with the row
+  // counting its codes, and a passkey's registration challenge.
+  verification: 6,
+  two_factor: 1,
+  passkey: 1,
   profile: 1,
   settings: 1,
   membership: 0,
@@ -60,21 +75,45 @@ async function harness() {
 }
 
 /**
- * Signs `email` up under the account's own name `Account name`, and gives it every row an account
- * keeps in the directory: two device sessions, a pending change of its email, a pending deletion,
- * a reset link, a profile under another name, settings in Spanish, and the server's copy of its
- * private region.
+ * An account `furnish` gave every row, and the identifiers of the rows counting the codes of its
+ * pending two-factor challenges, read while those challenges were there: once a challenge's own
+ * row goes, its counting row is still found by its identifier.
  */
-async function furnish(opened: OpenedAuth, email: string): Promise<IdentityId> {
+interface Furnished {
+  readonly identity: IdentityId
+  readonly attempts: readonly string[]
+}
+
+/**
+ * Signs `email` up under the account's own name `Account name`, and gives it every row an account
+ * keeps in the directory: device sessions, a pending change of its email, a pending deletion, a
+ * reset link, its second factor (turned on, with a pending challenge of a password step), a
+ * passkey and a passkey's pending registration, a profile under another name, settings in Spanish,
+ * and the server's copy of its private region.
+ */
+async function furnish(opened: OpenedAuth, email: string): Promise<Furnished> {
   const { auth, local, outbox } = opened
   const { emailChanges, accountDeletions, passwords } = accountServicesOf(opened)
-  const { user } = await signUpOn(auth, email, deviceHeaders('laptop'), { name: 'Account name' })
+  const { token, user } = await signUpOn(auth, email, deviceHeaders('laptop'), {
+    name: 'Account name',
+  })
   const identity = idSchemas.identity.schema.parse(user.id)
 
   await auth.api.signInEmail({
     body: { email, password: 'Pass-word-1' },
     headers: deviceHeaders('phone'),
   })
+
+  const factor = await secondFactorOn(auth, 'laptop', token)
+  const laptop = deviceHeaders('laptop')
+
+  laptop.set('authorization', `Bearer ${factor.token}`)
+  expect((await auth.handler(passwordStepRequest(email, 'Pass-word-1', 'desk'))).status).toBe(200)
+
+  const [attempts] = await local.db.query<[unknown]>(attemptRowsStatement, { identity })
+
+  await auth.api.generatePasskeyRegistrationOptions({ headers: laptop })
+  await local.db.query(passkeyRowStatement, { key: passkeyIdFactory.create(), identity })
   ;(await emailChanges.ask(identity, email, `new.${email}`))._unsafeUnwrap()
   ;(await accountDeletions.ask(identity))._unsafeUnwrap()
 
@@ -91,13 +130,17 @@ async function furnish(opened: OpenedAuth, email: string): Promise<IdentityId> {
   await local.db.query(settingsLocaleStatement, { identity, locale: 'es' })
   await local.db.query(regionRowsStatement, { identity, region: privateRegionId(identity) })
 
-  return identity
+  return { identity, attempts: z.array(z.string()).parse(attempts) }
 }
 
-/** The record ids of `identity`'s rows in the directory, table by table, as text. */
-async function rowsOf(local: LocalDb, identity: IdentityId): Promise<Record<string, string[]>> {
+/** The record ids of the furnished account's rows in the directory, table by table, as text. */
+async function rowsOf(
+  local: LocalDb,
+  { identity, attempts }: Furnished,
+): Promise<Record<string, string[]>> {
   const [rows] = await local.db.query<[unknown]>(accountRowsStatement, {
     identity,
+    attempts,
     region: privateRegionId(identity),
   })
 
@@ -125,7 +168,7 @@ describe('AccountTeardown', () => {
     expect(counts(await rowsOf(local, ann))).toEqual(FURNISHED)
     expect(counts(bobs)).toEqual(FURNISHED)
 
-    expect((await teardown.remove(ann)).isOk()).toBe(true)
+    expect((await teardown.remove(ann.identity)).isOk()).toBe(true)
 
     expect(counts(await rowsOf(local, ann))).toEqual(NONE_LEFT)
     expect(await rowsOf(local, bob)).toEqual(bobs)
@@ -138,8 +181,8 @@ describe('AccountTeardown', () => {
     const bob = await furnish(opened, BOB)
     const bobs = await rowsOf(local, bob)
 
-    expect((await teardown.remove(ann)).isOk()).toBe(true)
-    expect((await teardown.remove(ann)).isOk()).toBe(true)
+    expect((await teardown.remove(ann.identity)).isOk()).toBe(true)
+    expect((await teardown.remove(ann.identity)).isOk()).toBe(true)
 
     expect(counts(await rowsOf(local, ann))).toEqual(NONE_LEFT)
     expect(await rowsOf(local, bob)).toEqual(bobs)
@@ -151,11 +194,11 @@ describe('AccountTeardown', () => {
     const ann = await furnish(opened, ANN)
 
     await local.db.query(membershipRowStatement, {
-      identity: ann,
+      identity: ann.identity,
       tenant: tenantIdFactory.create(),
     })
 
-    expect((await teardown.remove(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect((await teardown.remove(ann.identity))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect(counts(await rowsOf(local, ann))).toEqual({ ...FURNISHED, membership: 1 })
   })
 
@@ -166,7 +209,7 @@ describe('AccountTeardown', () => {
 
     await local.db.query(identityDeleteRefuseStatement)
 
-    expect((await teardown.remove(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect((await teardown.remove(ann.identity))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect(counts(await rowsOf(local, ann))).toEqual(FURNISHED)
   })
 
@@ -174,7 +217,7 @@ describe('AccountTeardown', () => {
     const opened = await harness()
     const ann = await furnish(opened, ANN)
 
-    expect((await opened.teardown.addressee(ann))._unsafeUnwrap()).toEqual({
+    expect((await opened.teardown.addressee(ann.identity))._unsafeUnwrap()).toEqual({
       email: ANN,
       name: 'Account name',
       locale: 'es',
@@ -203,11 +246,13 @@ describe('AccountTeardown', () => {
       }
     })
 
-    expect((await new AccountTeardown(settingsDown).addressee(ann))._unsafeUnwrapErr().code).toBe(
+    expect(
+      (await new AccountTeardown(settingsDown).addressee(ann.identity))._unsafeUnwrapErr().code,
+    ).toBe('data:QUERY_FAILED')
+
+    expect((await teardown.remove(ann.identity)).isOk()).toBe(true)
+    expect((await teardown.addressee(ann.identity))._unsafeUnwrapErr().code).toBe(
       'data:QUERY_FAILED',
     )
-
-    expect((await teardown.remove(ann)).isOk()).toBe(true)
-    expect((await teardown.addressee(ann))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
   })
 })

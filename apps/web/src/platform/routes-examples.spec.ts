@@ -12,6 +12,7 @@
  * contract says it now, or as it had it at the branch's merge base with `main`
  * (`CONTRACT_AHEAD_BASE`) while the route still equals that one (`heldTo` of
  * `__fixtures__/route-bindings.ts`); `bun run check` and `main` hold every binding as it is now.
+ * Each example is read on a router over a device that holds the roles its binding serves.
  */
 
 import { join } from 'node:path'
@@ -19,6 +20,7 @@ import { join } from 'node:path'
 import { trimPathRight } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import {
   type Binding,
   bindingSchema,
@@ -84,12 +86,17 @@ const SampleModule = defineModule({
   id: 'sample',
   declarations: { Page },
   routes: [
-    { path: '/things/$key', page: 'Page' },
-    { path: '/notes/{-$tab}', page: 'Page' },
-    { path: '/files/$', page: 'Page' },
+    { path: '/things/$key', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
+    {
+      path: '/notes/{-$tab}',
+      page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+    },
+    { path: '/files/$', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
     {
       path: '/list',
       page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({
         view: z.enum(['read', 'edit']).default('read'),
         pageSize: z.int().default(10),
@@ -115,7 +122,7 @@ const flat = (properties: Readonly<Record<string, unknown>>) => ({
 })
 
 const sample = (fields: Readonly<Record<string, unknown>>): Binding =>
-  bindingSchema.parse({ roles: ['identity'], ...fields })
+  bindingSchema.parse({ roles: [CONTRACT_ROLES.identity], ...fields })
 
 describe('the example link on the router', () => {
   it('builds a path parameter from its example, encoded as the router encodes it', () => {
@@ -193,6 +200,12 @@ const bindings: readonly (readonly [string, Binding])[] = heldBindings(
 ).map(({ binding }) => [binding.path, binding] as const)
 const router = routerOf(modules)
 
+/**
+ * The application's router over a device that holds the roles a binding serves, which its route
+ * admits: a refused device's search is never read (`router.tsx`).
+ */
+const routerFor = (binding: Binding): AppRouter => routerOf(modules, binding.roles)
+
 describe('the example links of the contract on the router', () => {
   it('read a contract without problems', () => {
     expect(problems.map(formatProblem)).toEqual([])
@@ -207,7 +220,7 @@ describe('the example links of the contract on the router', () => {
   it.skipIf('problem' in AT_BASE).each(bindings)(
     '%s is written and read as its example says',
     (_path, binding) => {
-      exampleCase(router, binding)
+      exampleCase(routerFor(binding), binding)
     },
   )
 })

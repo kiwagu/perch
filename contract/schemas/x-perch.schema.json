@@ -43,7 +43,7 @@
           "propertyNames": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-            "description": "A role of the vocabulary."
+            "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
           },
           "additionalProperties": {
             "type": "object",
@@ -80,10 +80,20 @@
                   "type": "string"
                 },
                 "description": "Per parameter, the field it sets (`$id` for a new id)."
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                  "description": "A platform action: `sign-in`, `organisations.create`."
+                },
+                "description": "Required: the list, section or table `source` actions its success changes in its context; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`."
               }
             },
             "required": [
-              "params"
+              "params",
+              "changes"
             ],
             "additionalProperties": false,
             "description": "One action on the entity."

@@ -85,15 +85,16 @@ describe('the e2e run in a network namespace of its own', () => {
     expect(printed.stdout).toBe("a b|it's|$HOME|*|")
   })
 
-  it('forwards the loopback ports of the front and the mailbox, and no other address of the environment', () => {
+  it("forwards the loopback ports of the front, the mailbox and the stand's database, and no other address of the environment", () => {
     const args = isolatedCommand(['true'], {
       E2E_BASE_URL: 'https://localhost:5493',
       MAILBOX_URL: 'http://127.0.0.1:1090',
       GATEWAY_URL: 'http://127.0.0.1:5191',
       SURREAL_URL: 'http://127.0.0.1:8010',
+      SURREAL_DEV_URL: 'http://127.0.0.1:8000',
     })
 
-    expect(forwarded(args)).toBe('5493,1090')
+    expect(forwarded(args)).toBe('5493,1090,8010')
   })
 
   it("takes a scheme's default port, and forwards a port named twice once", () => {

@@ -14,9 +14,9 @@ run check` and in the pre-commit hook on `main`.
 
 <!-- coverage:start -->
 
-The contract declares 12 screens, 158 anchors and 69 codes.
+The contract declares 15 screens, 259 anchors and 103 codes.
 
-Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 64/65, ignored 2.
+Totals: fields bound 7/16, actions bound 9/12; activities 1, transitions walked 5/8; controls marked 104/105, ignored 2.
 
 ## Model
 
@@ -46,6 +46,16 @@ Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5
 | updateLocale | action | `app-shell.locale-select`, `user.settings.locale-select` |
 | updateTheme | action | `user.settings.theme-select` |
 
+### organisation_settings
+
+| Field or action | Kind | Anchors |
+| --- | --- | --- |
+| id | field | unbound |
+| locale | field | `organisation.settings.locale-select` |
+| createOrganisationSettings | action | unbound |
+| updateLocale | action | `organisation.settings.locale-select` |
+| clearLocale | action | `organisation.settings.clear-button` |
+
 ### note
 
 | Field or action | Kind | Anchors |
@@ -69,12 +79,13 @@ Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
 | app-shell | 10 | 10 | 0 | 100% |
+| console | 16 | 16 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
-| organisation | 14 | 14 | 0 | 100% |
-| user | 32 | 32 | 0 | 100% |
-| ui kit | 4 | 3 | 2 | 75% |
-| all | 65 | 64 | 2 | 98% |
+| organisation | 25 | 25 | 0 | 100% |
+| user | 43 | 43 | 0 | 100% |
+| ui kit | 6 | 5 | 2 | 83% |
+| all | 105 | 104 | 2 | 99% |
 
 ### Unmarked
 
@@ -93,18 +104,21 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| not-found | 3 | 1 |
-| app-shell | 21 | 72 |
-| user.confirm-email | 5 | 4 |
-| user.delete-account | 4 | 5 |
+| not-found | 3 | 3 |
+| app-shell | 22 | 97 |
+| user.confirm-email | 5 | 6 |
+| console.account | 36 | 8 |
+| console.users | 14 | 9 |
+| user.delete-account | 4 | 6 |
 | device | 10 | 6 |
-| user.forgot-password | 6 | 11 |
-| user.profile | 10 | 58 |
-| organisation | 30 | 12 |
-| user.reset-password | 15 | 9 |
-| user.settings | 27 | 23 |
-| user.sign-in | 20 | 47 |
-| user.verify-email | 7 | 6 |
+| user.forgot-password | 6 | 12 |
+| organisation.invitation | 8 | 7 |
+| user.profile | 10 | 80 |
+| organisation | 48 | 23 |
+| user.reset-password | 15 | 10 |
+| user.settings | 47 | 31 |
+| user.sign-in | 24 | 62 |
+| user.verify-email | 7 | 7 |
 
 <!-- coverage:end -->
 

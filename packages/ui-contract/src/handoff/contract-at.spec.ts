@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
+import { MODEL_FILE, PLATFORM_FILE, scenarioFile, TERMS_FILE, VOCABULARY_FILE } from '../files'
 import { fixtureContract } from '../manifest/manifest.fixture'
 import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
@@ -46,6 +46,26 @@ describe('contractAt', () => {
     expect('missing' in contract ? [] : contract.activities.map(({ id }) => id)).toEqual(['thing'])
     expect(contract).toEqual(fixtureContract())
   })
+  it('reads the terms file at a ref that has one, the roles with it', () => {
+    const files = fixtureFiles()
+    const contract = contractAt(
+      'HEAD',
+      history({
+        ...files,
+        [VOCABULARY_FILE]: (files[VOCABULARY_FILE] ?? '').replace(
+          /\n## Roles\n[\s\S]*?(?=\n## )/,
+          '',
+        ),
+        [TERMS_FILE]:
+          'contexts: { sample: { meaning: The sample. } }\nterms: {}\nroles:\n  guest: { meaning: Nobody. }\n  member: { meaning: A member. }\n',
+      }),
+    )
+
+    expect('missing' in contract ? undefined : contract.vocabulary.roles).toEqual({
+      guest: 'Nobody.',
+      member: 'A member.',
+    })
+  })
   it('finds no contract at a commit without the folder', () => {
     expect(contractAt('first', history(fixtureFiles()))).toEqual({ missing: true })
   })
@@ -59,7 +79,7 @@ describe('contractAt', () => {
     const files = fixtureFiles()
     const broken = history({
       ...files,
-      [PLATFORM_FILE]: (files[PLATFORM_FILE] ?? '').replace('version: 1', 'version: 2'),
+      [PLATFORM_FILE]: (files[PLATFORM_FILE] ?? '').replace('version: 1', 'version: 0'),
     })
 
     expect(() => contractAt('HEAD', broken)).toThrow(

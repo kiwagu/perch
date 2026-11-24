@@ -10,6 +10,7 @@ import {
 import type { Clock } from '@workspace/replica'
 import { manualClock } from '@workspace/replica/testing'
 
+import { ban } from './__fixtures__/account-ban'
 import {
   AUTH_SECRET,
   CLOCK_START,
@@ -425,6 +426,35 @@ describe('DeviceSessions', () => {
       expect(row.endedReason).toBeUndefined()
     },
   )
+
+  it('reads the sessions a ban of the account ended, keeping `banned` as why, by token and in its list', async () => {
+    const { auth, local, clock, devices } = await harness()
+    const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const phone = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('phone'),
+    })
+    const ann = identityOf(laptop.user.id)
+
+    await clock.advance(MINUTE_MS)
+
+    const banned = new Date(clock.now())
+
+    await ban(local, ann, banned)
+
+    expect((await devices.byToken(laptop.token))._unsafeUnwrap()).toMatchObject({
+      device: 'laptop',
+      endedAt: banned,
+      endedReason: 'banned',
+    })
+    expect(
+      (await devices.list(ann))._unsafeUnwrap().map((row) => [row.device, row.endedReason]),
+    ).toEqual([
+      ['laptop', 'banned'],
+      ['phone', 'banned'],
+    ])
+    expect((await devices.byToken(phone.token))._unsafeUnwrap()?.endedAt).toEqual(banned)
+  })
 
   it('fails its reads and writes once the directory is closed', async () => {
     const { auth, local, devices } = await harness()

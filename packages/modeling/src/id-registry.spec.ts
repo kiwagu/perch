@@ -5,7 +5,12 @@ import { registry } from '@workspace/ids'
 import { checkIdRegistry } from './id-registry'
 import type { SchemaModel } from './schema-structure'
 
-const table = (idPrefix?: string) => ({ fields: {}, ...(idPrefix ? { idPrefix } : {}) })
+const table = (idPrefix?: string) => ({
+  fields: {},
+  asserts: {},
+  indexes: {},
+  ...(idPrefix ? { idPrefix } : {}),
+})
 
 describe('checkIdRegistry', () => {
   it('accepts a schema whose @id prefixes match the registry both ways', () => {
@@ -18,8 +23,12 @@ describe('checkIdRegistry', () => {
         device_session: table('dvs'),
         note: table('nte'),
         settings: table('stg'),
+        organisation_settings: table('ost'),
         account: table('acc'),
         verification: table('vrf'),
+        invitation: table('inv'),
+        two_factor: table('tfa'),
+        passkey: table('pkey'),
         member: table(),
         _replica_update: table(),
       },
@@ -38,8 +47,12 @@ describe('checkIdRegistry', () => {
         device_session: table('dvs'),
         note: table('nte'),
         settings: table('stg'),
+        organisation_settings: table('ost'),
         account: table('acc'),
         verification: table('vrf'),
+        invitation: table('inv'),
+        two_factor: table('tfa'),
+        passkey: table('pkey'),
         team: table('tem'),
       },
     }
@@ -61,8 +74,12 @@ describe('checkIdRegistry', () => {
       'the id registry declares device_session = dvs but the schema has no table device_session',
       'the id registry declares note = nte but table note has no -- @id nte',
       'the id registry declares settings = stg but the schema has no table settings',
+      'the id registry declares organisation_settings = ost but the schema has no table organisation_settings',
       'the id registry declares account = acc but the schema has no table account',
       'the id registry declares verification = vrf but the schema has no table verification',
+      'the id registry declares invitation = inv but the schema has no table invitation',
+      'the id registry declares two_factor = tfa but the schema has no table two_factor',
+      'the id registry declares passkey = pkey but the schema has no table passkey',
     ])
   })
 })

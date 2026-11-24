@@ -15,12 +15,18 @@ export type DataErrorCode =
   | 'data:REGION_RELOADED'
   | 'data:OTHER_ACCOUNT'
   | 'data:EMAIL_NOT_VERIFIED'
+  | 'data:ACCOUNT_BANNED'
   | 'data:DEVICE_LIMIT'
   | 'data:LINK_INVALID'
   | 'data:LINK_EXPIRED'
   | 'data:PASSWORD_REJECTED'
   | 'data:EMAIL_INVALID'
   | 'data:LAST_ADMIN'
+  | 'data:INVALID_CODE'
+  | 'data:CODE_EXPIRED'
+  | 'data:PASSKEY_UNKNOWN'
+  | 'data:PASSKEY_CANCELLED'
+  | 'data:TWO_FACTOR_CHANGED'
 
 export interface DataError {
   readonly code: DataErrorCode

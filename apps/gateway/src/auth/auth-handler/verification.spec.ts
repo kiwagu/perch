@@ -8,6 +8,7 @@ import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
+import { sessionStates } from '../__fixtures__/account-ban'
 import { AUTH_SECRET, betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import deviceSessionDevicesStatement from '../__fixtures__/device-session-devices.surql'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
@@ -29,8 +30,11 @@ import {
   printedDuring,
   READBACK_FAILURE,
   resendRequest,
+  signUpRequest,
+  verifyRequest as verify,
 } from './__fixtures__/mount'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
+import { SIGN_UP_FLOOR_MS } from './sign-up'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -43,19 +47,6 @@ const RESEND_FLOOR_MS = 500
 
 /** How early a resend may be measured against the floor: a timer's wake and the clock's rounding. */
 const RESEND_FLOOR_SLACK_MS = 10
-
-/** A verification of the link's `token` from `device` (none names no device), as the web sends it. */
-function verify(token: string, device: string | null): Request {
-  const headers = device === null ? new Headers({ origin: ORIGIN }) : deviceHeaders(device)
-
-  headers.set('content-type', 'application/json')
-
-  return new Request('http://gateway.test/auth/verify-email', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ token }),
-  })
-}
 
 /** What the first verification of an account answers. */
 const verifiedAnswer = z.object({
@@ -100,8 +91,26 @@ async function seen(answer: Response | undefined) {
 }
 
 describe('authHandler, the verification of an email', () => {
-  it('signs the device in the first time, closing its sockets first, and answers the account', async () => {
-    const { route, outbox, closes } = await mountedOnRealAuth()
+  it('answers the starting language of an account an organisation invited, which its identity keeps', async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
+    expect(
+      (await pastFloor(mounted.clock, mounted.route(signUpRequest(ANN), FROM), SIGN_UP_FLOOR_MS))
+        ?.status,
+    ).toBe(202)
+
+    const token = linkToken(await mounted.outbox.next(ANN))
+    const answer = await mounted.route(verify(token, 'phone'), FROM)
+    const body = verifiedAnswer.parse(await answer?.json())
+
+    expect(answer?.status).toBe(200)
+    expect(body.user.locale).toBe('es')
+    expect(await mounted.localeOf(ANN)).toBe('es')
+  })
+
+  it('signs the device in the first time, its session admitted and its sockets closed, and answers the account', async () => {
+    const { route, outbox, closes, sessions } = await mountedOnRealAuth()
     const token = await annsLink(outbox)
     const answer = await route(verify(token, 'phone'), FROM)
     const body = verifiedAnswer.parse(await answer?.json())
@@ -109,6 +118,8 @@ describe('authHandler, the verification of an email', () => {
     expect(answer?.status).toBe(200)
     expect(body.token).not.toContain('.')
     expect(body.user).toMatchObject({ email: ANN, name: 'Ann', locale: 'en' })
+    // The token left once the session was admitted: it reads as the device's session.
+    expect((await sessions.read(body.token)).kind).toBe('session')
     expect(closes).toEqual([[body.user.id, 'phone', SUPERSEDED]])
     expect(answer?.headers.get('set-cookie')).toBeNull()
     expect(answer?.headers.get('set-auth-token')).toBeNull()
@@ -176,13 +187,16 @@ describe('authHandler, the verification of an email', () => {
     expect(devices).toHaveLength(1)
   })
 
-  it("closes the device's sockets even when the session cannot be read back", async () => {
-    const { route, outbox, registry, annsId } = await mountedOnRealAuth({ readbackFails: true })
+  it("leaves the device's sockets open, and its new session waiting, when the session cannot be read back", async () => {
+    const { route, outbox, registry, annsId, local } = await mountedOnRealAuth({
+      readbackFails: true,
+    })
     const token = await annsLink(outbox)
+    const ann = await annsId()
     const phone = fakeConnection()
     const before = registry.epoch()
 
-    registry.add(await annsId(), 'phone', phone, before)
+    registry.add(ann, 'phone', phone, before)
 
     const { result: answer, printed } = await printedDuring(() =>
       route(verify(token, 'phone'), FROM),
@@ -190,8 +204,16 @@ describe('authHandler, the verification of an email', () => {
 
     expect(answer?.status).toBe(500)
     expect(await answer?.json()).toEqual({ code: 'internal' })
-    expect(phone.ended).toEqual([SUPERSEDED])
-    expect(registry.epoch()).toBeGreaterThan(before)
+    // Nothing admitted the session, so nothing ended the device's earlier one: its sockets stay.
+    expect(phone.ended).toEqual([])
+    expect(registry.epoch()).toBe(before)
+    expect(
+      (await sessionStates(local, ann)).map(({ device, pending, ended_at }) => [
+        device,
+        pending,
+        ended_at,
+      ]),
+    ).toEqual([['phone', true, undefined]])
     expect(printed).not.toContain(READBACK_FAILURE)
   })
 
@@ -381,6 +403,30 @@ describe('authHandler, the resend of the verification mail', () => {
   })
 })
 
+/**
+ * The answer of `mounted` to `request`, its clock moved past any floor the answer waits on: a
+ * sign-up's refusal waits for the sign-up's floor once its starting language was looked up.
+ */
+async function pastAnyFloor(
+  mounted: ReturnType<typeof mountedOnFakeAuth>,
+  request: Request,
+): Promise<Response | undefined> {
+  let settled = false
+  const answer = mounted.route(request, FROM).finally(() => {
+    settled = true
+  })
+
+  while (!settled) {
+    if (mounted.clock.pending() > 0) {
+      await mounted.clock.advance(SIGN_UP_FLOOR_MS)
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  }
+
+  return answer
+}
+
 describe("authHandler, Better Auth's refusals", () => {
   /** A request of each path the mount serves, each naming Ann. */
   const requests = (): Request[] => [
@@ -412,7 +458,7 @@ describe("authHandler, Better Auth's refusals", () => {
     )
 
     for (const request of requests()) {
-      expect(await seen(await refusal.route(request, FROM))).toEqual({
+      expect(await seen(await pastAnyFloor(refusal, request))).toEqual({
         status: 400,
         headers: [['content-type', 'application/json;charset=utf-8']],
         body: '{"code":"SOME_CODE"}',
@@ -420,7 +466,7 @@ describe("authHandler, Better Auth's refusals", () => {
     }
 
     for (const request of requests()) {
-      expect(await seen(await failure.route(request, FROM))).toEqual({
+      expect(await seen(await pastAnyFloor(failure, request))).toEqual({
         status: 500,
         headers: [['content-type', 'application/json;charset=utf-8']],
         body: '{"code":"internal"}',
@@ -462,7 +508,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
     expect(JSON.stringify(logs)).not.toContain(token.slice(0, 40))
   })
 
-  it('answers a verification whose session cannot be created 500 internal, and logs its code alone', async () => {
+  it('answers a verification whose session the directory did not take 500 internal, and logs its code alone', async () => {
     const failure: { pattern?: RegExp } = {}
     const { route, outbox, logs, closes } = await mountedOnRealAuth({
       directory: (local) =>
@@ -486,7 +532,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
       body: '{"code":"internal"}',
     })
     expect(closes).toEqual([])
-    expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
+    expect(logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKER)
     expect(printed).not.toMatch(MARKER)
     expect(printed).not.toContain(token.slice(0, 40))

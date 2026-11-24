@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 
 export interface NotFoundLinkProps {
@@ -32,11 +33,19 @@ export function NotFoundView(props: NotFoundViewProps) {
       </CardHeader>
       <CardContent>
         {props.signedIn ? (
-          <Link to="/me" className="underline" data-testid="not-found.page.profile-link">
+          <Link
+            to={CONTRACT_ROUTES['user.profile']}
+            className="underline"
+            data-testid="not-found.page.profile-link"
+          >
             {t('not-found.page.profile')}
           </Link>
         ) : (
-          <Link to="/sign-in" className="underline" data-testid="not-found.page.sign-in-link">
+          <Link
+            to={CONTRACT_ROUTES['user.sign-in']}
+            className="underline"
+            data-testid="not-found.page.sign-in-link"
+          >
             {t('not-found.page.sign-in')}
           </Link>
         )}

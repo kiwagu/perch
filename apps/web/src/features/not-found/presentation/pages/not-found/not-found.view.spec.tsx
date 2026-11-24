@@ -2,6 +2,8 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/not-found.es.json'
 
@@ -12,7 +14,9 @@ describe('NotFoundView', () => {
     renderWithProviders(<NotFoundView signedIn={false} />)
 
     expect(screen.getByTestId('not-found.page.heading').textContent).toBe('Page not found')
-    expect(screen.getByTestId('not-found.page.sign-in-link').getAttribute('href')).toBe('/sign-in')
+    expect(screen.getByTestId('not-found.page.sign-in-link').getAttribute('href')).toBe(
+      CONTRACT_ROUTES['user.sign-in'],
+    )
     expect(screen.queryByTestId('not-found.page.profile-link')).toBeNull()
   })
 
@@ -20,7 +24,9 @@ describe('NotFoundView', () => {
     renderWithProviders(<NotFoundView signedIn />, { locale: 'es', es })
 
     expect(screen.getByTestId('not-found.page.heading').textContent).toBe('Página no encontrada')
-    expect(screen.getByTestId('not-found.page.profile-link').getAttribute('href')).toBe('/me')
+    expect(screen.getByTestId('not-found.page.profile-link').getAttribute('href')).toBe(
+      CONTRACT_ROUTES['user.profile'],
+    )
     expect(screen.queryByTestId('not-found.page.sign-in-link')).toBeNull()
   })
 })
