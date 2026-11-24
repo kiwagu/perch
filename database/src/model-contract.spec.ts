@@ -17,8 +17,8 @@
  * the branch, so a business commit that changes a limit does not fail this spec before the
  * implementation emits the values and the parameters again. Likewise, on a branch
  * (`CONTRACT_AHEAD=1`) an entity the model declares now and did not declare at the branch's merge
- * base waits while the schema defines no table of its name (`entities-ahead.ts`), and is held once
- * the table exists; on `main` and in `bun run check` every entity is held.
+ * base waits while the schema lacks the table the model names for it (`entities-ahead.ts`), and is
+ * held once that table exists; on `main` and in `bun run check` every entity is held.
  */
 
 import { join } from 'node:path'
