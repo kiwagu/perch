@@ -96,15 +96,20 @@ async function tab(shared: {
 
 /**
  * The deps of the starts of `world`, led by `engine` (none: a follower), its roles as `roles`
- * says; `document` stands in for each organisation's region document when given, and `executed`
- * keeps each command run, as `<key> <command id>`.
+ * says; `document` stands in for each organisation's region document when given, `executed`
+ * keeps each command run, as `<key> <command id>`, and `flushes` each flush a turn asks of an
+ * organisation's region, by its key.
  */
 function depsOf(
   world: TestWorld,
   engine: SyncEngine | undefined,
   locks: FakeLocks | undefined,
   roles: () => readonly Membership[] = () => world.session.space()?.memberships() ?? [],
-  extra: { readonly document?: () => object; readonly executed?: string[] } = {},
+  extra: {
+    readonly document?: () => object
+    readonly executed?: string[]
+    readonly flushes?: string[]
+  } = {},
 ): OrganisationStartsDeps {
   return {
     session: world.session,
@@ -119,7 +124,17 @@ function depsOf(
           tenant: (key: string) => {
             const view = space.tenant(key)
 
-            return view && extra.document ? { ...view, document: extra.document() } : view
+            return (
+              view && {
+                ...view,
+                ...(extra.document ? { document: extra.document() } : {}),
+                flush: () => {
+                  extra.flushes?.push(key)
+
+                  return view.flush()
+                },
+              }
+            )
           },
         }
       )
@@ -300,6 +315,7 @@ describe('organisationStarts', () => {
     const locks = new FakeLocks()
     const databases = browserDatabases({ tenants: true })
     const executed: string[] = []
+    const flushes = { a: [] as string[], b: [] as string[] }
 
     signedIn(storage, { ...ann, memberships: [acme] })
 
@@ -308,22 +324,14 @@ describe('organisationStarts', () => {
     const caught = () => Promise.resolve()
 
     organisationStarts(
-      depsOf(a, engineOf(caught).engine, locks, undefined, { executed }),
-    ).syncState({
-      leader: true,
-      channel: 'up',
-    })
+      depsOf(a, engineOf(caught).engine, locks, undefined, { executed, flushes: flushes.a }),
+    ).syncState({ leader: true, channel: 'up' })
     organisationStarts(
-      depsOf(b, engineOf(caught).engine, locks, undefined, { executed }),
-    ).syncState({
-      leader: true,
-      channel: 'up',
-    })
+      depsOf(b, engineOf(caught).engine, locks, undefined, { executed, flushes: flushes.b }),
+    ).syncState({ leader: true, channel: 'up' })
 
-    await expect.poll(async () => (await rowsOf(a, 'acme')).length).toBe(1)
-    await expect.poll(() => locks.queue.length + locks.requests).toBeGreaterThanOrEqual(2)
-    await settle()
-    await settle()
+    // Each turn flushes before it reads and once it is done: both turns ran to their end.
+    await expect.poll(() => [flushes.a.length >= 2, flushes.b.length >= 2]).toEqual([true, true])
 
     expect(executed).toEqual([`acme ${organisationSettingsCommands.createOrganisationSettings.id}`])
     expect(await rowsOf(b, 'acme')).toEqual([{ id: organisationSettingsIdOf('acme') }])
@@ -334,6 +342,7 @@ describe('organisationStarts', () => {
     const locks = new FakeLocks()
     const databases = browserDatabases({ tenants: true })
     const executed: string[] = []
+    const flushes: string[] = []
     const id = organisationSettingsIdOf('acme')
 
     signedIn(storage, { ...ann, memberships: [acme] })
@@ -355,15 +364,11 @@ describe('organisationStarts', () => {
     expect((await a.session.space()?.tenant('acme')?.flush())?.isOk()).toBe(true)
 
     organisationStarts(
-      depsOf(b, engineOf(caught).engine, locks, undefined, { executed }),
-    ).syncState({
-      leader: true,
-      channel: 'up',
-    })
+      depsOf(b, engineOf(caught).engine, locks, undefined, { executed, flushes }),
+    ).syncState({ leader: true, channel: 'up' })
 
-    await expect.poll(async () => await rowsOf(b, 'acme')).toEqual([{ id, locale: 'es' }])
-    await settle()
-    await settle()
+    // B's turn flushes before it reads and once it is done: it ran to its end.
+    await expect.poll(() => flushes.length).toBeGreaterThanOrEqual(2)
 
     expect(executed).toEqual([
       `acme ${organisationSettingsCommands.createOrganisationSettings.id}`,

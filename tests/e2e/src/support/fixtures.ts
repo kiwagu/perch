@@ -156,7 +156,7 @@ const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate
  * browser's (`en`), switches the page to sign-up and submits `account`, its password typed twice;
  * waits until the page asks to check the mail, the sign-up's mail on its way and nothing signed in.
  * A guest's language lives in the open page only, so it is chosen on the same load that signs up.
- * The gateway answers a sign-up no sooner than its floor (800 ms), by when an assertion looks only
+ * The gateway answers a sign-up no sooner than its floor (1050 ms), by when an assertion looks only
  * every 500 ms, so the page is read every 50 ms instead: the message is seen as it shows.
  */
 export async function startSignUp(page: Page, account: SeedAccount, locale = 'en'): Promise<void> {
