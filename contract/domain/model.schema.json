@@ -119,6 +119,44 @@
       "required": ["id", "identity", "locale", "theme"],
       "additionalProperties": false
     },
+    "organisation_settings": {
+      "type": "object",
+      "description": "An organisation's defaults for its members, set by its admins and read by every member: today the language an account its invitation creates starts in. A member's own settings always win.",
+      "x-perch": {
+        "table": "organisation_settings",
+        "region": "tenant",
+        "id": "ost",
+        "can": {
+          "admin": { "create": "any", "update": "any" }
+        },
+        "actions": {
+          "createOrganisationSettings": {
+            "description": "Creates the organisation's settings with no default language, on an admin's device that opens the organisation without them, its creator's first.",
+            "params": { "id": "$id" },
+            "changes": []
+          },
+          "updateLocale": {
+            "description": "Stores the default language an admin chose for the organisation.",
+            "params": { "id": "$id", "locale": "locale" },
+            "changes": []
+          }
+        }
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The settings' id, prefix ost; one row per organisation.",
+          "x-perch": { "readonly": true }
+        },
+        "locale": {
+          "description": "The organisation's default language: an account its invitation creates starts in it; none until an admin chooses one.",
+          "enum": ["en", "es"],
+          "x-perch": { "crdt": "none" }
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
     "note": {
       "type": "object",
       "description": "A note shared by every member of the organisation.",
