@@ -13,7 +13,7 @@ import { since } from './editions'
 /** The version from which an action's codes are a map and a `result` of one string keeps the budget. */
 export const BEHAVIOUR_EDITION = 6
 
-const LIST = `a list of codes; from version ${BEHAVIOUR_EDITION} an action's codes are a map, each code with when it answers: \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep`
+const LIST = `a list of codes; from version ${BEHAVIOUR_EDITION} an action's codes are a map, each code with when it answers: \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep; an empty list is \`codes: {}\``
 
 export function actionFormsProblems(contract: Contract): Problem[] {
   if (!since(contract, BEHAVIOUR_EDITION)) {

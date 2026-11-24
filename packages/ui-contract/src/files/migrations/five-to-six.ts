@@ -215,7 +215,7 @@ const olderForms = (platform: Plain): string[] =>
     return [
       ...(Array.isArray(codes)
         ? [
-            `${PLATFORM_FILE}: ${jsonPath(['actions', action, 'codes'])}: a list of codes, and from version 6 an action's codes are a map: write when each answers, \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep`,
+            `${PLATFORM_FILE}: ${jsonPath(['actions', action, 'codes'])}: a list of codes, and from version 6 an action's codes are a map: write when each answers, \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep; an empty list is \`codes: {}\``,
           ]
         : []),
       ...(length > DESCRIPTION_BUDGET

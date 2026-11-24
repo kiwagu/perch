@@ -2,8 +2,8 @@
  * The manifest, built only from the contract folder (the vocabulary, the screen files, the
  * platform file, the activities and the model) and the scenario files of
  * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens verbatim
- * with an example link on each binding, the platform section and the activities verbatim,
- * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
+ * with an example link on each binding, the platform section as written with each invariant's
+ * derived actions, the activities verbatim, the scenarios parsed, every declared anchor by name with its screen (with a field's composite
  * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
  * the kind, meaning and values of the part it marks, the composites and the field states of the
  * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the

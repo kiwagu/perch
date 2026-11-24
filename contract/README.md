@@ -813,9 +813,9 @@ added in <action>` and `platform action lines removed in <action>`, one per fact
 each parameter with its type (`param email: string`), each line of its result (`result: <the
 line>`, `result #<n>: <the line>` by position when there are several, the first being the plain
 success; the prose that stays, since it says what the action answers), each code its failure
-shows with its invariants and its condition (`code invalid-code: <the condition>`, `code
+shows with its invariants and its condition, quoted (`code invalid-code: "<the condition>"`, `code
 device-limit: invariant device-limit`, `code rate-limited: invariant failed-sign-ins,
-address-mails; <the condition>`), each role that may run it, its page sizes when it pages (`paged by
+address-mails; "<the condition>"`), each role that may run it, its page sizes when it pages (`paged by
 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice

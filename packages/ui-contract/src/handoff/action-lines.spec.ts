@@ -132,7 +132,7 @@ describe('actionLines of codes written as a map and a result written as a list',
     ).toEqual([
       'result #1: the device is signed in',
       'result #2: with the second factor on: asks for a code',
-      'code invalid-credentials: the email or the password is wrong',
+      'code invalid-credentials: "the email or the password is wrong"',
       'code device-limit: invariant device-limit',
     ])
   })
@@ -164,8 +164,19 @@ describe('actionLines of codes written as a map and a result written as a list',
       }),
     ).toEqual([
       'result: the mail is on its way',
-      'code rate-limited: invariant failed-sign-ins, address-mails; a fourth change within a quarter of an hour',
-      'code last-admin: invariant last-admin; checked as it runs',
+      'code rate-limited: invariant failed-sign-ins, address-mails; "a fourth change within a quarter of an hour"',
+      'code last-admin: invariant last-admin; "checked as it runs"',
     ])
+  })
+  it('quotes a condition, so one that reads like invariants never prints as them', () => {
+    const lines = (codes: NonNullable<Parameters<typeof actionLines>[0]>['codes']): string[] =>
+      actionLines({ description: 'Sends.', params: {}, result: 'sent', codes, changes: [] })
+
+    expect(lines({ 'rate-limited': 'invariant failed-sign-ins, address-mails' })).toContain(
+      'code rate-limited: "invariant failed-sign-ins, address-mails"',
+    )
+    expect(
+      lines({ 'rate-limited': { invariant: ['failed-sign-ins', 'address-mails'] } }),
+    ).toContain('code rate-limited: invariant failed-sign-ins, address-mails')
   })
 })

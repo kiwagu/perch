@@ -2,7 +2,7 @@
  * A platform action as lines for the hand-over diff, one per fact it declares: each parameter
  * with its type or the value it refers to, the constraints it writes (`valueWords`) and whether
  * it may be left out, each line of its result (with its position when there are several), each code its failure shows with the invariants it
- * refuses for and the condition it answers on, each role that may run it, the page
+ * refuses for and the condition it answers on (quoted, so a text never reads as invariants), each role that may run it, the page
  * sizes it answers with its default when it pages, each read it changes, the mail it
  * sends (who it goes to, the language it speaks, the screen its link opens and the search
  * parameter that carries the token) and each notice (its name, who it goes to, its language and
@@ -62,7 +62,7 @@ export function actionLines(action: PlatformAction | undefined): string[] {
     ...codeEntriesOf(action.codes).map(({ code, condition, invariants }) => {
       const answers = [
         ...(invariants.length > 0 ? [`invariant ${invariants.join(', ')}`] : []),
-        ...(condition === undefined ? [] : [condition]),
+        ...(condition === undefined ? [] : [JSON.stringify(condition)]),
       ]
 
       return answers.length === 0 ? `code ${code}` : `code ${code}: ${answers.join('; ')}`
