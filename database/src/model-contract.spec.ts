@@ -17,8 +17,8 @@
  * the branch, so a business commit that changes a limit does not fail this spec before the
  * implementation emits the values and the parameters again. Likewise, on a branch
  * (`CONTRACT_AHEAD=1`) an entity the model declares now and did not declare at the branch's merge
- * base may wait for its table (`entities-ahead.ts`); on `main` and in `bun run check` every entity
- * is held.
+ * base waits while the schema defines no table of its name (`entities-ahead.ts`), and is held once
+ * the table exists; on `main` and in `bun run check` every entity is held.
  */
 
 import { join } from 'node:path'
@@ -106,15 +106,17 @@ if (loaded.model === undefined) {
   throw new Error(`the model does not load: ${JSON.stringify(loaded.problems)}`)
 }
 
-/** The entities a business commit of the branch declared before their tables. */
+const schema = loadSchema()
+
+/** The entities a business commit of the branch declared before their tables, while none exists. */
 const waiting = entitiesAhead({
-  declared: Object.keys(loaded.model.entities),
+  declared: Object.values(loaded.model.entities),
+  stored: new Set((await schema).tables.keys()),
   root: ROOT,
   env: process.env,
 })
 
 const entities = Object.values(loaded.model.entities).filter((entity) => !waiting.has(entity.name))
-const schema = loadSchema()
 
 async function tableOf(name: string): Promise<TableModel> {
   const table = (await schema).tables.get(name)
