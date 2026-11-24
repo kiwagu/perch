@@ -65,7 +65,7 @@ function authoritativeDocument(count: number): LoroDoc {
   const records = doc.getMap('records')
 
   for (let index = 0; index < count; index++) {
-    const profile = records.setContainer(keyOf(index), new LoroMap())
+    const profile = records.ensureMergeableMap(keyOf(index))
 
     profile.set('identity', owner)
     profile.set('name', `Person ${index}`)
