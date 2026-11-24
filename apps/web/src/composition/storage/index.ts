@@ -58,7 +58,9 @@ export {
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'
 export {
+  askSyncLeader,
   forgetSyncLeader,
+  SYNC_ASK_KEY,
   SYNC_LEADER_KEY,
   type SyncLeader,
   savedSyncLeader,

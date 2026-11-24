@@ -106,6 +106,7 @@ export async function bootRoot(
     locks: new FakeLocks(),
     hints: () => syncHints(undefined),
     clock,
+    steady: () => clock.now(),
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     servedBuild: { watch: () => () => {} },

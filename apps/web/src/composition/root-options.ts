@@ -70,6 +70,8 @@ export interface AppRootOptions {
   readonly locks: LockManagerLike | undefined
   readonly hints: (identity: IdentityId) => SyncHints
   readonly clock: Clock
+  /** Milliseconds on this tab's steady clock (`performance.now()`), which setting the wall clock does not move. */
+  readonly steady: () => number
   readonly storage: KeyValueStorage
   readonly visibility: VisibilitySource
   /** Hears a newer build of the app the server serves, which the frame offers to load. */
