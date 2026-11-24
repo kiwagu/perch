@@ -589,6 +589,14 @@ describe('a tenant region', () => {
 
     const replaced = (text: string) => {
       const device = server.fork()
+      const deleted = noteDelete(device, { id })
+      const from = device.version()
+      // A new container of its own at the key: what replaces a record, not what a create attaches.
+      const note = device.getMap('records').setContainer(`note/${id}`, new LoroMap())
+
+      note.set('author', `member:${ann}`)
+      note.ensureMergeableText('text').update(text)
+      device.commit()
 
       return validateBatch({
         doc: server,
@@ -596,7 +604,7 @@ describe('a tenant region', () => {
         actor: bob,
         ability: member(bob),
         schema: replicaSchema,
-        updates: [noteDelete(device, { id }), noteCreate(device, { id, author: ann, text })],
+        updates: [deleted, device.export({ mode: 'update', from })],
       })
     }
     const rewritten = replaced('mine now')
