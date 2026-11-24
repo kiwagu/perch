@@ -202,7 +202,15 @@ export async function signUp(
   const seen = await mailbox.count(account.email)
 
   await startSignUp(page, account, locale)
-  await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } }, seen)
+  await openDeclaredMail(
+    page,
+    'sign-up',
+    {
+      params: { email: account.email, locale },
+      account: { email: account.email, language: locale },
+    },
+    seen,
+  )
   await expectPathname(page, CONTRACT_ROUTES['user.profile'])
 
   return account

@@ -78,7 +78,15 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
 
     await test.step('6. On device A, open the link of [mail:sign-up]', async () => {
       // The email's first mail, its sign-up's, in the language of the sign-up.
-      await openDeclaredMail(page, 'sign-up', { params: { email: data.email, locale: 'en' } }, 0)
+      await openDeclaredMail(
+        page,
+        'sign-up',
+        {
+          params: { email: data.email, locale: 'en' },
+          account: { email: data.email, language: 'en' },
+        },
+        0,
+      )
       // Expected: After step 6 [user.verify-email.message] carries [code:verified-before] on
       //   device A, its URL stays [/verify-email] and [user.verify-email.sign-in-link] shows
       await expect(page.getByTestId('user.verify-email.message')).toHaveAttribute(
