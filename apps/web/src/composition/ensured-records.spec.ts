@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ShapeRunner } from '@workspace/data'
+import { ShapeRunner, tenantRegionId } from '@workspace/data'
 import {
   identityIdFactory,
   noteIdFactory,
@@ -9,6 +9,7 @@ import {
   tenantIdFactory,
 } from '@workspace/ids'
 import { CONTRACT_ROLES } from '@workspace/kernel'
+import { privateRegionId } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
 
 import {
@@ -55,8 +56,9 @@ afterEach(async () => {
 })
 
 /**
- * A browser of Ann's, signed in and leading its tabs, whose gateway is out of reach until the
- * spec brings it up; on `gateway` when given, a gateway of its own otherwise.
+ * A browser of Ann's, signed in and leading its tabs, caught up with the gateway on her own region
+ * and Acme's, whose gateway then goes out of reach until the spec brings it up: what it writes
+ * meanwhile waits to be sent. On `gateway` when given, a gateway of its own otherwise.
  */
 async function browser(gateway?: TestGateway): Promise<TestWorld> {
   const storage = memoryStorage()
@@ -65,15 +67,23 @@ async function browser(gateway?: TestGateway): Promise<TestWorld> {
 
   const world = await openTestWorld({
     storage,
-    online: false,
-    network: true,
     memberships: [acme],
     ...(gateway ? { gateway } : {}),
   })
 
   worlds.push(world)
   expect((await world.session.restore()).isOk()).toBe(true)
-  await vi.waitFor(() => expect(world.states.at(-1)).toMatchObject({ leader: true }))
+
+  const engine = await vi.waitFor(
+    () => world.session.space()?.sync ?? expect.unreachable('the tab leads'),
+  )
+
+  await engine.caughtUp(privateRegionId(ann.identity.id), 30_000)
+  await engine.caughtUp(tenantRegionId('acme'), 30_000)
+
+  for (const transport of world.transports()) {
+    transport.goOffline()
+  }
 
   return world
 }
@@ -119,6 +129,7 @@ describe('a record two devices ensure before either create reached the gateway',
     ok(await writesOf(second).run(organisationSettingsCommands.createOrganisationSettings, { id }))
 
     await synced([first, second])
+    expect(first.gateway.stub.rejections()).toBe(0)
 
     for (const world of [first, second]) {
       const view = world.session.space()?.tenant('acme') ?? expect.unreachable('acme open')
@@ -169,6 +180,7 @@ describe('a record two devices ensure before either create reached the gateway',
     ok(await second.commands.execute(profileCommands.updateName, { id: profile, name: 'Ann B' }))
 
     await synced([first, second])
+    expect(first.gateway.stub.rejections()).toBe(0)
 
     for (const runner of [
       first.session.runner,

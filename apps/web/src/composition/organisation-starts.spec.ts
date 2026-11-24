@@ -564,10 +564,13 @@ describe('organisationStarts', () => {
       expect(await rowsOf(world, 'acme')).toEqual([{ id, locale: 'es' }]),
     )
     await engine.settled(30_000)
-    // The create reached the gateway: nothing of the tab's is left to send.
+    // The gateway took the create as it was: nothing is left to send, nothing was refused, and
+    // no reload brought the language back.
     expect(
       (await (world.session.space() ?? expect.unreachable('open')).unsent())._unsafeUnwrap(),
     ).toBe(false)
+    expect(elsewhere.gateway.stub.rejections()).toBe(0)
+    expect(world.published).toEqual([])
     expect((await atGateway())._unsafeUnwrap()).toEqual([{ id, locale: 'es' }])
     await vi.waitFor(async () =>
       expect(await rowsOf(elsewhere, 'acme')).toEqual([{ id, locale: 'es' }]),

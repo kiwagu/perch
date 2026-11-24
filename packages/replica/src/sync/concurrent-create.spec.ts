@@ -99,16 +99,29 @@ describe('a record two devices create before either create reached the gateway',
       const annsDevice = await admin(at, ann, 1n)
       const bobsDevice = await admin(at, bob, 2n)
 
-      // Both caught up with an empty region: each creates the row, and Ann gives it a language.
+      // Both catch up with the organisation's empty region.
+      for (const device of [annsDevice, bobsDevice]) {
+        device.engine.start()
+      }
+
+      await settleAll([annsDevice, bobsDevice])
+      await annsDevice.engine.caughtUp(acmeRegion.id, 60_000)
+      await bobsDevice.engine.caughtUp(acmeRegion.id, 60_000)
+
+      // Their pushes wait while each creates the row and Ann gives it a language.
+      for (const device of [annsDevice, bobsDevice]) {
+        device.transport.goOffline()
+      }
+
       await write(annsDevice, create)
       await write(annsDevice, setSpanish)
       await write(bobsDevice, create)
 
       const [one, two] = first === 'setter' ? [annsDevice, bobsDevice] : [bobsDevice, annsDevice]
 
-      one.engine.start()
+      one.transport.goOnline()
       await settleAll([one])
-      two.engine.start()
+      two.transport.goOnline()
       await settleAll([one, two])
 
       expect(annsDevice.region.recordJson(acmeSettingsKey)).toEqual({ locale: 'es' })

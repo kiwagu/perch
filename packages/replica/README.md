@@ -58,8 +58,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   once its update is durable. A create attaches the map Loro derives from the record's key
   (`ensureMergeableMap`), the same container on every device, so two devices that create one
   record before either sees the other's create make one record: an empty create sets no field,
-  and a field both write is ordered like any two concurrent writes of it (Lamport time, then
-  peer). A create of a record this document deleted before starts from the create's own fields:
+  a plain field both write is ordered like any two concurrent writes of it (Lamport time, then
+  peer), and a text field both write merges. A create of a record this document deleted before
+  starts from the create's own fields:
   the ones it does not write stay hidden (a list field keeps its hidden items for a later push).
 - `Projector`: `start()` projects current records, deletes those the region projected
   earlier but no longer holds (a deletion that failed before a reload), then follows
