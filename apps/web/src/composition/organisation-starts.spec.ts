@@ -1,12 +1,13 @@
 import { okAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { tenantRegionId } from '@workspace/data'
+import { ShapeRunner, tenantRegionId } from '@workspace/data'
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import { CONTRACT_ROLES } from '@workspace/kernel'
+import { RegionDoc, replaceRegionDoc } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
-import type { SyncEngine } from '@workspace/replica/sync'
-import { FakeLocks } from '@workspace/replica/testing'
+import { type SyncEngine, syncHints } from '@workspace/replica/sync'
+import { FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
 import {
   organisationSettingsCommands,
@@ -109,6 +110,12 @@ function depsOf(
     readonly document?: () => object
     readonly executed?: string[]
     readonly flushes?: string[]
+    /** The organisation's region document each command ran on, as the view held it then. */
+    readonly executedOn?: object[]
+    /** How far that document had pulled the region from the gateway when the command ran. */
+    readonly pulledAt?: number[]
+    /** Whether each command went through. */
+    readonly succeeded?: boolean[]
   } = {},
 ): OrganisationStartsDeps {
   return {
@@ -154,8 +161,19 @@ function depsOf(
       return {
         execute: (command, params) => {
           extra.executed?.push(`${key} ${command.id}`)
+          const document = world.session.space()?.tenant(key)?.document
 
-          return bus.execute(command, params)
+          extra.executedOn?.push(document ?? {})
+          extra.pulledAt?.push(document instanceof RegionDoc ? document.pulled() : -1)
+
+          const run = bus.execute(command, params)
+
+          void run.match(
+            () => extra.succeeded?.push(true),
+            () => extra.succeeded?.push(false),
+          )
+
+          return run
         },
       }
     },
@@ -172,6 +190,17 @@ function heldLock(locks: FakeLocks, key: string): () => void {
   void locks.request(`${ORGANISATION_START_LOCK}.${ann.identity.id}.${key}`, {}, () => held)
 
   return release
+}
+
+/** The engine of `world`'s tab, once the tab leads. */
+const leadingEngine = (world: TestWorld): Promise<SyncEngine> =>
+  vi.waitFor(() => world.session.space()?.sync ?? expect.unreachable('the tab leads'))
+
+/** The region document the organisation `key`'s view of `world` holds now. */
+function regionDocOf(world: TestWorld, key: string): RegionDoc {
+  const document = world.session.space()?.tenant(key)?.document
+
+  return document instanceof RegionDoc ? document : expect.unreachable(`${key} open`)
 }
 
 /** The settings rows the organisation `key`'s database holds on `world`'s device. */
@@ -436,5 +465,115 @@ describe('organisationStarts', () => {
     await settle()
 
     expect(await rowsOf(world, 'acme')).toEqual([])
+  })
+
+  it("creates the row on a document another tab's reset reopened while the engine still says caught up, and keeps the language the gateway holds", async () => {
+    const id = organisationSettingsIdOf('acme')
+    const admin = { ...ann, memberships: [acme] }
+    // Another browser of an admin creates the row, gives it a language and syncs it.
+    const theirs = memoryStorage()
+
+    signedIn(theirs, admin)
+
+    const elsewhere = await openTestWorld({ storage: theirs, memberships: [acme] })
+
+    worlds.push(elsewhere)
+    expect((await elsewhere.session.restore()).isOk()).toBe(true)
+    await leadingEngine(elsewhere)
+    // It writes as the lower peer: where its create and the reopened document's carry the same
+    // Lamport time, a fresh map of the reopened document's would win the record's key.
+    regionDocOf(elsewhere, 'acme').doc.setPeerId(1n)
+
+    const toAcme = elsewhere.session.tenantWritePath('acme')
+
+    expect(
+      (await toAcme.run(organisationSettingsCommands.createOrganisationSettings, { id })).isOk(),
+    ).toBe(true)
+    expect(
+      (await toAcme.run(organisationSettingsCommands.updateLocale, { id, locale: 'es' })).isOk(),
+    ).toBe(true)
+
+    const atGateway = () =>
+      new ShapeRunner(elsewhere.gateway.server).read(organisationSettingsShape, { id })
+
+    await vi.waitFor(async () =>
+      expect((await atGateway())._unsafeUnwrap()).toEqual([{ id, locale: 'es' }]),
+    )
+
+    // Ann's leading tab pulls it.
+    const storage = memoryStorage()
+    const bus = new Set<FakeHintChannel>()
+    const databases = browserDatabases({ tenants: true })
+    const locks = new FakeLocks()
+
+    signedIn(storage, admin)
+
+    const world = await openTestWorld({
+      storage,
+      gateway: elsewhere.gateway,
+      hints: bus,
+      databases,
+      locks,
+    })
+
+    worlds.push(world)
+    expect((await world.session.restore()).isOk()).toBe(true)
+
+    const engine = await leadingEngine(world)
+
+    await engine.caughtUp(tenantRegionId('acme'), 30_000)
+    expect(await rowsOf(world, 'acme')).toEqual([{ id, locale: 'es' }])
+
+    const caughtUpOn = regionDocOf(world, 'acme')
+
+    // Another tab of her browser resets the organisation's region and says so: the view reopens
+    // its document empty, while the engine still holds the one it caught up on.
+    const shared = (
+      await (databases.openTenant ?? expect.unreachable('shared databases'))(
+        ann.identity.id,
+        'acme',
+      )
+    )._unsafeUnwrap()
+    const resetting = (
+      await RegionDoc.open(shared, { kind: 'tenant', id: tenantRegionId('acme') })
+    )._unsafeUnwrap()
+
+    ;(await replaceRegionDoc(shared, resetting, 'reset'))._unsafeUnwrap().close()
+    syncHints(new FakeHintChannel(bus)).post('reset')
+    await vi.waitFor(() => expect(regionDocOf(world, 'acme')).not.toBe(caughtUpOn))
+
+    const reopened = regionDocOf(world, 'acme')
+
+    reopened.doc.setPeerId(2n)
+    expect(await rowsOf(world, 'acme')).toEqual([])
+
+    // The start asks the engine, which answers from the old document, and creates on the new one.
+    const executedOn: object[] = []
+    const pulledAt: number[] = []
+    const succeeded: boolean[] = []
+
+    organisationStarts(
+      depsOf(world, engine, locks, undefined, { executedOn, pulledAt, succeeded }),
+    ).syncState({ leader: true, channel: 'up' })
+    await vi.waitFor(() => expect(succeeded).toEqual([true]))
+    expect(executedOn).toEqual([reopened])
+    expect(pulledAt).toEqual([0])
+
+    // Once synced, the row keeps the language the gateway held, here, there and at the gateway.
+    await vi.waitFor(async () =>
+      expect(await rowsOf(world, 'acme')).toEqual([{ id, locale: 'es' }]),
+    )
+    await engine.settled(30_000)
+    // The gateway took the create as it was: nothing is left to send, nothing was refused, and
+    // no reload brought the language back.
+    expect(
+      (await (world.session.space() ?? expect.unreachable('open')).unsent())._unsafeUnwrap(),
+    ).toBe(false)
+    expect(elsewhere.gateway.stub.rejections()).toBe(0)
+    expect(world.published).toEqual([])
+    expect((await atGateway())._unsafeUnwrap()).toEqual([{ id, locale: 'es' }])
+    await vi.waitFor(async () =>
+      expect(await rowsOf(elsewhere, 'acme')).toEqual([{ id, locale: 'es' }]),
+    )
   })
 })

@@ -40,22 +40,36 @@ export interface NoteInput {
   readonly text: string
 }
 
+/** The note `id` of the document, a new map when it holds none (no write path edits one it lacks). */
+const noteOf = (doc: LoroDoc, id: string): LoroMap =>
+  doc.getMap('records').getOrCreateContainer(recordKey('note', id), new LoroMap())
+
 /** Edits the note `id` of the document in one commit and answers with the update it made. */
-function updateOf(doc: LoroDoc, id: string, edit: (note: LoroMap) => void): Uint8Array {
+function updateOf(
+  doc: LoroDoc,
+  id: string,
+  edit: (note: LoroMap) => void,
+  record: (doc: LoroDoc, id: string) => LoroMap = noteOf,
+): Uint8Array {
   const from = doc.version()
 
-  edit(doc.getMap('records').getOrCreateContainer(recordKey('note', id), new LoroMap()))
+  edit(record(doc, id))
   doc.commit()
 
   return doc.export({ mode: 'update', from })
 }
 
-/** Creates a note in the document; answers with the update to push. */
+/** Creates a note in the document, under the map every device derives from its key; answers with the update to push. */
 export function noteCreate(doc: LoroDoc, note: NoteInput): Uint8Array {
-  return updateOf(doc, note.id, (record) => {
-    record.set('author', `member:${note.author}`)
-    record.ensureMergeableText('text').update(note.text)
-  })
+  return updateOf(
+    doc,
+    note.id,
+    (record) => {
+      record.set('author', `member:${note.author}`)
+      record.ensureMergeableText('text').update(note.text)
+    },
+    (into, id) => into.getMap('records').ensureMergeableMap(recordKey('note', id)),
+  )
 }
 
 /** Rewrites the text of a note the document holds; answers with the update to push. */
