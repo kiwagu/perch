@@ -1,3 +1,4 @@
+import { SUPPORTED_LOCALES } from '@workspace/i18n'
 import { CONTRACT_VALUES, keepsPasswordRules } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
@@ -28,6 +29,13 @@ const signUpBody = z.object({
   name: z.string(),
 })
 
+/** The sign-up's JSON as sent, every field kept, with the language it names, if any. */
+const sentBody = z.looseObject({ locale: z.unknown().optional() })
+
+/** Whether the language a sign-up was sent in is none, or one the app speaks. */
+const spoken = (locale: unknown): boolean =>
+  locale === undefined || SUPPORTED_LOCALES.some((supported) => supported === locale)
+
 /**
  * Hands Better Auth a sign-up, once the client address's verification mails took it (every sign-up
  * counts, whatever its email), one email's sign-ups at a time in this process (two at once of a new
@@ -38,10 +46,14 @@ const signUpBody = z.object({
  * (`profileNameOf`): 400 `name-required` (nothing left once trimmed) or `name-too-long`. Better
  * Auth's answer names the account it made, or, for an
  * email that has one, an account it made up whose fields differ: the client gets `202` with no
- * body for both, no sooner than `SIGN_UP_FLOOR_MS` after the request began. A refusal of Better
- * Auth's (a malformed email, a language the gateway does not speak) passes as its status and code
- * alone; it does not depend on the email having an account. Nothing is signed in, so no socket
- * closes.
+ * body for both, no sooner than `SIGN_UP_FLOOR_MS` after the request began. A sign-up sent in no
+ * language or in one the app speaks starts in the default language of the organisation that
+ * invited the email (`startingLanguage`, looked up for a new email and a taken one alike), the
+ * JSON handed on with that language alone replaced; a refusal of Better Auth's after that lookup
+ * waits for the same floor, so its time tells nothing of the lookup. A refusal of a language the
+ * gateway does not speak, which looks nothing up, passes at once as its status and code alone, as
+ * any refusal that does not depend on the email having an account. Nothing is signed in, so no
+ * socket closes.
  */
 export async function signUp(
   deps: AuthMountDeps,
@@ -72,11 +84,20 @@ export async function signUp(
     return Response.json({ code: name.error }, { status: 400 })
   }
 
-  const answer = await deps.accounts.run(body.data.email.toLowerCase(), () =>
-    deps.auth.handler(withJsonBody(request, sent)),
+  const email = body.data.email.toLowerCase()
+  const original = sentBody.parse(sent)
+  const looked = spoken(original.locale)
+  const chosen = looked ? await deps.startingLanguage.of(email) : undefined
+  const handed = chosen === undefined ? original : { ...original, locale: chosen }
+  const answer = await deps.accounts.run(email, () =>
+    deps.auth.handler(withJsonBody(request, handed)),
   )
 
   if (answer.status !== 200) {
+    if (looked) {
+      await until(deps.clock, started + SIGN_UP_FLOOR_MS)
+    }
+
     return refusalOf(answer)
   }
 

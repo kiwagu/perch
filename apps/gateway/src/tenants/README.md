@@ -132,6 +132,16 @@ organisation's invitations not expired, newest first, whatever account has the e
 `forEmail` lists those to the ready organisations an identity does not belong to. Nothing of it
 logs, and no error names a token or an address.
 
+`InvitedLanguage` (`invited-language.ts`, the auth module's `StartingLanguage`) names the language
+an account an invitation creates starts in: the email's pending invitations (not expired, to
+ready organisations, the newest first), then each organisation's own settings row
+(`organisation_settings:ost_<key>` in its database, never another row) in that order; the first
+that names a default language wins, and none names none. A read that fails names none, logged as
+`sign-up:STARTING_LANGUAGE_UNREADABLE` with the organisation's key, and so does a lookup that
+outlasts `STARTING_LANGUAGE_BUDGET_MS` (250 ms) on the gateway's clock
+(`sign-up:STARTING_LANGUAGE_LATE`), whose reads still let each organisation's database go once
+they settle. Nothing is thrown, and no line names the email.
+
 `InvitationMails` (`invitations/`, an `InvitationMailer`) writes and sends the mail of an
 invitation: it starts at once and returns, never awaited, so the request that invited never waits
 for the mail server. It speaks the recipient's language: the one the
@@ -240,9 +250,11 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   `PendingInvitations` (`invitations/`, through its `index.ts`: the store, the token reader, the
   seven-day lifetime and the link to the front's `/invitation` screen), `InvitationMails` and the
   `InvitationMailer` interface it implements (`invitations/mails.ts`, `invitations/mailer.ts`).
+  `InvitedLanguage` (`invited-language.ts`): the starting language of an invited account.
 - `regionDatabases` (`region-databases.ts`): the database of each region, for the region hub.
 - Queries: `surql/` (organisations, memberships, members, invitations, the organisation
-  database's schema, a departing identity's memberships and the removal of a whole organisation).
+  database's schema, a departing identity's memberships, the removal of a whole organisation, and
+  the invitations of an email with an organisation's default language).
 - Built by the composition root, `src/composition/root.ts`; the sync registry hears the
   membership changes.
 

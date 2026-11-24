@@ -1,17 +1,21 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 import { CONTRACT_VALUES, PASSWORD_LENGTH } from '@workspace/kernel'
 
 import { passwordOfLength } from '../../__fixtures__/platform-values'
 import { linkToken } from '../../mail/__fixtures__/outbox'
+import { STARTING_LANGUAGE_BUDGET_MS } from '../../tenants/invited-language'
+import invitationsToEmailStatement from '../../tenants/surql/invitations-to-email.surql'
 import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import { hashPassword } from '../password-hash'
+import type { StartingLanguage } from '../starting-language.port'
 
 import {
   ANN,
   mountedOnFakeAuth,
   mountedOnRealAuth,
+  ORIGIN,
   PASSWORD,
   resendRequest,
   signInRequest,
@@ -344,4 +348,199 @@ describe('authHandler, the name of a sign-up', () => {
     expect(outbox.to(ANN)).toHaveLength(1)
     expect(outbox.to('bob@example.test')).toEqual([])
   })
+})
+
+/** A sign-up of `email` sent in `locale` (none: no language sent) from `origin`. */
+function signUpIn(locale: string | undefined, email = ANN, origin = ORIGIN): Request {
+  return new Request('http://gateway.test/auth/sign-up/email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin },
+    body: JSON.stringify({
+      name: 'Ann',
+      email,
+      password: PASSWORD,
+      ...(locale === undefined ? {} : { locale }),
+    }),
+  })
+}
+
+/** The starting language `real` looks up, counting its lookups. */
+function counted(real: StartingLanguage) {
+  const asked: string[] = []
+
+  return {
+    asked,
+    wrap: (): StartingLanguage => ({
+      of: (email) => {
+        asked.push(email)
+
+        return real.of(email)
+      },
+    }),
+  }
+}
+
+describe('authHandler, the starting language of a sign-up', () => {
+  /** Answers `request` once the gateway's clock passed the floor of a sign-up Better Auth took. */
+  async function atFloor(
+    mounted: Awaited<ReturnType<typeof mountedOnRealAuth>>,
+    request: Request,
+  ): Promise<Response | undefined> {
+    const pending = mounted.route(request, FROM)
+
+    await vi.waitFor(() => expect(mounted.clock.pending()).toBe(1), ARGON2_WAIT)
+    await mounted.clock.advance(SIGN_UP_FLOOR_MS)
+
+    return pending
+  }
+
+  it(
+    "starts an account an organisation invited in that organisation's language, whatever it was sent in",
+    async () => {
+      const mounted = await mountedOnRealAuth()
+
+      await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
+
+      expect((await atFloor(mounted, signUpIn('en')))?.status).toBe(202)
+      expect(await mounted.localeOf(ANN)).toBe('es')
+    },
+    REAL_SIGN_UPS_MS,
+  )
+
+  it(
+    'keeps the language a sign-up was sent in when no organisation names one, and English when it sent none',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+
+      await mounted.invitedTo({ key: 'acme', email: 'bob@example.test' })
+
+      expect((await atFloor(mounted, signUpIn('es')))?.status).toBe(202)
+      expect((await atFloor(mounted, signUpIn(undefined, 'bob@example.test')))?.status).toBe(202)
+      expect(await mounted.localeOf(ANN)).toBe('es')
+      expect(await mounted.localeOf('bob@example.test')).toBe('en')
+    },
+    REAL_SIGN_UPS_MS,
+  )
+
+  it('looks nothing up for a language the app does not speak, which is refused as before', async () => {
+    let lookups: ReturnType<typeof counted> | undefined
+    const mounted = await mountedOnRealAuth({
+      startingLanguage: (real) => {
+        lookups = counted(real)
+
+        return lookups.wrap()
+      },
+    })
+
+    await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
+
+    const answer = await mounted.route(signUpIn('fr'), FROM)
+
+    expect(answer?.status).toBe(400)
+    expect(lookups?.asked).toEqual([])
+    expect(await mounted.localeOf(ANN)).toBeUndefined()
+  })
+
+  it(
+    'finds the invitation of an email typed in mixed case',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+
+      await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
+
+      expect((await atFloor(mounted, signUpIn('en', 'Ann@Example.test')))?.status).toBe(202)
+      expect(await mounted.localeOf(ANN)).toBe('es')
+    },
+    REAL_SIGN_UPS_MS,
+  )
+
+  it('answers a refusal of Better Auth after the lookup no sooner than the floor', async () => {
+    const mounted = await mountedOnRealAuth()
+    let settled = false
+    const pending = mounted
+      .route(signUpIn('en', ANN, 'https://elsewhere.test'), FROM)
+      .then((answer) => {
+        settled = true
+
+        return answer
+      })
+
+    await vi.waitFor(() => expect(mounted.clock.pending()).toBe(1))
+    await mounted.clock.advance(SIGN_UP_FLOOR_MS - 1)
+    expect(settled).toBe(false)
+    await mounted.clock.advance(1)
+    expect((await pending)?.status).toBe(403)
+  })
+
+  it(
+    'looks the language up once for a new email and once for a taken one',
+    async () => {
+      let lookups: ReturnType<typeof counted> | undefined
+      const mounted = await mountedOnRealAuth({
+        startingLanguage: (real) => {
+          lookups = counted(real)
+
+          return lookups.wrap()
+        },
+      })
+
+      expect((await atFloor(mounted, signUpIn('en')))?.status).toBe(202)
+      expect((await atFloor(mounted, signUpIn('en')))?.status).toBe(202)
+      expect(lookups?.asked).toEqual([ANN, ANN])
+    },
+    REAL_SIGN_UPS_MS,
+  )
+
+  it(
+    "answers a new and a taken email at the floor while the lookup's reads are held past its budget",
+    async () => {
+      const gates: Array<() => void> = []
+      let reached = 0
+      const mounted = await mountedOnRealAuth({
+        budgetOnGatewayClock: true,
+        languageReads: (local) =>
+          interceptQueries(local, (text) => {
+            if (text !== invitationsToEmailStatement) {
+              return undefined
+            }
+
+            reached += 1
+
+            return new Promise<void>((release) => {
+              gates.push(release)
+            })
+          }),
+      })
+
+      onTestFinished(() => {
+        for (const release of gates) {
+          release()
+        }
+      })
+
+      for (const round of [1, 2]) {
+        let settled = false
+        const pending = mounted.route(signUpIn('en'), FROM).then((answer) => {
+          settled = true
+
+          return answer
+        })
+
+        await vi.waitFor(() => expect(reached).toBe(round))
+        await mounted.clock.advance(STARTING_LANGUAGE_BUDGET_MS)
+        // Better Auth took the sign-up once the lookup gave up: only the floor holds it now.
+        await vi.waitFor(() => expect(mounted.clock.pending()).toBe(1), ARGON2_WAIT)
+        await mounted.clock.advance(SIGN_UP_FLOOR_MS - STARTING_LANGUAGE_BUDGET_MS - 1)
+        expect(settled).toBe(false)
+        await mounted.clock.advance(1)
+        expect((await pending)?.status).toBe(202)
+      }
+
+      expect(mounted.failures).toEqual([
+        'sign-up:STARTING_LANGUAGE_LATE',
+        'sign-up:STARTING_LANGUAGE_LATE',
+      ])
+    },
+    REAL_SIGN_UPS_MS,
+  )
 })

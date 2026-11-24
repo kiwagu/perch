@@ -30,9 +30,11 @@ import {
   printedDuring,
   READBACK_FAILURE,
   resendRequest,
+  signUpRequest,
   verifyRequest as verify,
 } from './__fixtures__/mount'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
+import { SIGN_UP_FLOOR_MS } from './sign-up'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -89,6 +91,24 @@ async function seen(answer: Response | undefined) {
 }
 
 describe('authHandler, the verification of an email', () => {
+  it('answers the starting language of an account an organisation invited, which its identity keeps', async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
+    expect(
+      (await pastFloor(mounted.clock, mounted.route(signUpRequest(ANN), FROM), SIGN_UP_FLOOR_MS))
+        ?.status,
+    ).toBe(202)
+
+    const token = linkToken(await mounted.outbox.next(ANN))
+    const answer = await mounted.route(verify(token, 'phone'), FROM)
+    const body = verifiedAnswer.parse(await answer?.json())
+
+    expect(answer?.status).toBe(200)
+    expect(body.user.locale).toBe('es')
+    expect(await mounted.localeOf(ANN)).toBe('es')
+  })
+
   it('signs the device in the first time, its session admitted and its sockets closed, and answers the account', async () => {
     const { route, outbox, closes, sessions } = await mountedOnRealAuth()
     const token = await annsLink(outbox)
@@ -383,6 +403,30 @@ describe('authHandler, the resend of the verification mail', () => {
   })
 })
 
+/**
+ * The answer of `mounted` to `request`, its clock moved past any floor the answer waits on: a
+ * sign-up's refusal waits for the sign-up's floor once its starting language was looked up.
+ */
+async function pastAnyFloor(
+  mounted: ReturnType<typeof mountedOnFakeAuth>,
+  request: Request,
+): Promise<Response | undefined> {
+  let settled = false
+  const answer = mounted.route(request, FROM).finally(() => {
+    settled = true
+  })
+
+  while (!settled) {
+    if (mounted.clock.pending() > 0) {
+      await mounted.clock.advance(SIGN_UP_FLOOR_MS)
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  }
+
+  return answer
+}
+
 describe("authHandler, Better Auth's refusals", () => {
   /** A request of each path the mount serves, each naming Ann. */
   const requests = (): Request[] => [
@@ -414,7 +458,7 @@ describe("authHandler, Better Auth's refusals", () => {
     )
 
     for (const request of requests()) {
-      expect(await seen(await refusal.route(request, FROM))).toEqual({
+      expect(await seen(await pastAnyFloor(refusal, request))).toEqual({
         status: 400,
         headers: [['content-type', 'application/json;charset=utf-8']],
         body: '{"code":"SOME_CODE"}',
@@ -422,7 +466,7 @@ describe("authHandler, Better Auth's refusals", () => {
     }
 
     for (const request of requests()) {
-      expect(await seen(await failure.route(request, FROM))).toEqual({
+      expect(await seen(await pastAnyFloor(failure, request))).toEqual({
         status: 500,
         headers: [['content-type', 'application/json;charset=utf-8']],
         body: '{"code":"internal"}',

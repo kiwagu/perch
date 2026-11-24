@@ -269,6 +269,7 @@ async function openGateway(options: GatewayOptions = {}) {
     departure: noAccounts.departure,
     teardown: noAccounts.teardown,
     profiles,
+    startingLanguage: noAccounts.startingLanguage,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,

@@ -22,8 +22,10 @@ import { RequestLimits } from '../../../limits/request-limits'
 import { linkToken, type Outbox } from '../../../mail/__fixtures__/outbox'
 import { ConnectionRegistry, type MembershipsListener } from '../../../sync/connections'
 import { specInvitations } from '../../../tenants/__fixtures__/invitations'
+import { invitedTo } from '../../../tenants/__fixtures__/invited-language'
 import { specRetell } from '../../../tenants/__fixtures__/retell'
 import { AccountDeparture } from '../../../tenants/account-departure'
+import { InvitedLanguage, STARTING_LANGUAGE_BUDGET_MS } from '../../../tenants/invited-language'
 import { Organisations } from '../../../tenants/organisations'
 import { TenantDatabases } from '../../../tenants/tenant-databases'
 import {
@@ -34,10 +36,12 @@ import {
   openAuth,
   signUpOn,
 } from '../../__fixtures__/auth-instance'
+import identityLocaleStatement from '../../__fixtures__/identity-locale.surql'
 import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
 import { PasskeyRows } from '../../passkey-rows'
+import { noStartingLanguage, type StartingLanguage } from '../../starting-language.port'
 import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
 import challengeEndStatement from '../../surql/two-factor-challenge-end.surql'
@@ -163,6 +167,7 @@ export const noAccounts: Pick<
   | 'teardown'
   | 'mails'
   | 'profiles'
+  | 'startingLanguage'
 > = {
   passwords: {
     requestReset: notHere,
@@ -210,6 +215,7 @@ export const noAccounts: Pick<
     accountDeleted: () => undefined,
   },
   profiles: { queue: () => undefined },
+  startingLanguage: noStartingLanguage,
 }
 
 /**
@@ -267,6 +273,19 @@ export interface RealMountOptions extends OpenAuthOptions {
    * router does.
    */
   readonly handler?: (handle: AuthInstance['handler']) => AuthInstance['handler']
+  /**
+   * Stands between the mount and the starting language of a sign-up, given the real lookup over
+   * the directory and the organisations' databases: a test counts its lookups.
+   */
+  readonly startingLanguage?: (real: StartingLanguage) => StartingLanguage
+  /** What the real lookup reaches the directory through, made from it: a test holds its reads. */
+  readonly languageReads?: (local: LocalDb) => LocalDb
+  /**
+   * The real lookup's budget runs on the gateway's clock, as in the gateway. By default it runs on
+   * a clock of its own that no test moves, so a count of the gateway clock's timers sees the
+   * floors alone.
+   */
+  readonly budgetOnGatewayClock?: boolean
 }
 
 /** The instance each outbox the fixture opened belongs to. */
@@ -309,6 +328,7 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
 
   return {
     organisations,
+    databases,
     departure: {
       blocked: (identity) => departure.blocked(identity),
       leave: (identity, steps) => organisations.leaveAll(identity, steps),
@@ -350,10 +370,19 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   /** The identities whose profile was asked to follow their email, in order. */
   const followed: IdentityId[] = []
   const steps: string[] = []
-  const { organisations, departure } = organisationsOver(
+  const { organisations, departure, databases } = organisationsOver(
     options.organisationsDirectory?.(opened.local) ?? opened.local,
     (code) => failures.push(code),
   )
+  // The lookup the gateway wires, over the directory and the organisations' databases; its lines
+  // join the failures by their codes.
+  const realLanguage = new InvitedLanguage({
+    directory: options.languageReads?.(opened.local) ?? opened.local,
+    databases,
+    clock: options.budgetOnGatewayClock === true ? opened.clock : manualClock(),
+    log: { warn: (fields) => failures.push(fields.code) },
+    budgetMs: STARTING_LANGUAGE_BUDGET_MS,
+  })
   const teardown = new AccountTeardown(opened.local)
   /** What the mount answers with; the console's routes of a spec answer over the same. */
   const deps: AuthMountDeps = {
@@ -427,6 +456,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     },
     clock: opened.clock,
     accounts: turns,
+    startingLanguage: options.startingLanguage?.(realLanguage) ?? realLanguage,
   }
   const route = authHandler(deps)
   /** Ann's identity, once she signed up. */
@@ -455,6 +485,20 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     organisations,
     teardown,
     steps,
+    /**
+     * The ready organisation `key` invited `email` just now, its default language `locale` (none
+     * when left out).
+     */
+    invitedTo: (invitation: Parameters<typeof invitedTo>[1]) =>
+      invitedTo({ directory: opened.local, databases, clock: opened.clock }, invitation),
+    /** The language stored on the identity of `email`, once it signed up. */
+    localeOf: async (email: string): Promise<unknown> => {
+      const [locale] = await opened.local.db.query<[unknown]>(identityLocaleStatement, {
+        email: email.toLowerCase(),
+      })
+
+      return locale
+    },
   }
 }
 
