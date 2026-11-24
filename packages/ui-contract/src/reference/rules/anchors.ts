@@ -85,7 +85,7 @@ const attributes: ReferenceRule = {
       "- `data-state` on a `status`, `list`, `section` or `item`, each a state of the vocabulary: an app state on the frame's `status`, a container state on a `status`, `list` or `section` (`loading` while its data arrives after the page), a row state on an `item`, which an entry that differs from the others or changes in place carries and an entry in its normal state does not. The state of a field is not written here: the loader derives `unsaved` and `saved` from the vocabulary's \"Field states\", the manifest lists a field's under `fieldStates`, and the rule `field-states-carried` says which field carries which, and when.",
       '- `data-code` on a `message`, `error`, `toast` or `dialog`: the stable code of what it says (see the rule `error-codes-and-fields`).',
     ].join('\n'),
-    "The page speaks the user's language, so tests and agents never assert its words. They assert the anchor with its code, state, id or value. A behaviour that varies is a code or a state of one anchor, never a second anchor: the sign-in form has one `user.sign-in.toggle-button` whose `data-value` says which way it switches, and one `user.sign-in.error` whose code says what went wrong.",
+    "The page speaks the user's language, so tests and agents never assert its words. They assert the anchor with its code, state, id or value. A behaviour that varies is a code, a state or a value of one anchor, never a second anchor: the sign-in form has one `user.sign-in.toggle-button` whose `data-value` says which way it switches, and one `user.sign-in.error` whose code says what went wrong.",
   ].join('\n\n'),
   keys: [
     'screen.anchors.<name>.codes',
