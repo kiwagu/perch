@@ -131,7 +131,7 @@
         },
         "actions": {
           "createOrganisationSettings": {
-            "description": "Creates the organisation's settings with no default language, on an admin's device that opens the organisation without them, its creator's first.",
+            "description": "Creates the organisation's settings, with no default language, at each opening of the organisation by an admin's device that holds none: under its one id, so a stored language stays.",
             "params": { "id": "$id" },
             "changes": []
           },
@@ -145,7 +145,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "The settings' id, prefix ost; one row per organisation.",
+          "description": "The settings' id, prefix ost: one per organisation, the same on every device, derived from the organisation's key.",
           "x-perch": { "readonly": true }
         },
         "locale": {
