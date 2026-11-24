@@ -200,7 +200,7 @@ actions:
         description: Sign in past the account's limit of devices as for sign-in, once the dialog device-limit is confirmed.
     result:
       - "the device is signed in as by sign-in; a right code forgets the email's failed sign-ins"
-      - "the failed sign-ins are judged first: while they keep a password out, the answer is rate-limited whatever else holds, and no code is looked at"
+      - "the failed sign-ins are judged before the challenge and the code: while they keep a password out, a well-formed request answers rate-limited whatever its challenge and code, and no code is looked at"
       - "a backup code is used up when it signs the device in; one the attempt stops at before the check (the device limit, a ban, an ended code step) stays usable"
       - "once the check has started, a server failure, the code step ending or another change to the account during it can leave a backup code used up, nothing signed in"
       - "past the limit of devices nothing is signed in, no code is checked or spent, the failed sign-ins stay; the confirmation signs in again from the password, asking a code again"
