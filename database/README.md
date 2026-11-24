@@ -86,7 +86,10 @@ only the gateway's own writes change it (the profile's email through the confirm
   the field (enum members, `minLength`, `maxLength`, `format: email`, `pattern`), no more and no
   less; the values are held to the contract by their own spec, in the ahead mode as they were at
   the branch's base or head, so this spec needs no contract of its own to follow a business
-  commit. An upper length bound is the parameter of a contract value, never a number, except on
+  commit. In the same mode an entity the model declares now and did not declare at the branch's
+  merge base waits for its table (`src/__fixtures__/entities-ahead.ts`, with its spec), so a
+  business commit may add an entity before the implementation adds its table; on `main` and in
+  `bun run check` every entity is held. An upper length bound is the parameter of a contract value, never a number, except on
   the two columns that hold no value (`device_session.device` and `.label`, listed in the spec);
   `tenant.key` and `tenant.name`, which no model field states, are held to the platform values
   `organisation-key` and `organisation-name`.
