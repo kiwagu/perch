@@ -5,11 +5,10 @@ import { CONTRACT_VALUES, PASSWORD_LENGTH } from '@workspace/kernel'
 
 import { passwordOfLength } from '../../__fixtures__/platform-values'
 import { linkToken } from '../../mail/__fixtures__/outbox'
-import { STARTING_LANGUAGE_BUDGET_MS } from '../../tenants/invited-language'
 import invitationsToEmailStatement from '../../tenants/surql/invitations-to-email.surql'
 import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import { hashPassword } from '../password-hash'
-import type { StartingLanguage } from '../starting-language.port'
+import { STARTING_LANGUAGE_BUDGET_MS, type StartingLanguage } from '../starting-language.port'
 
 import {
   ANN,
@@ -21,7 +20,7 @@ import {
   signInRequest,
   signUpRequest,
 } from './__fixtures__/mount'
-import { SIGN_UP_FLOOR_MS } from './sign-up'
+import { SIGN_UP_FLOOR_MS, SIGN_UP_WORK_MS } from './sign-up'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -492,7 +491,7 @@ describe('authHandler, the starting language of a sign-up', () => {
   )
 
   it(
-    "answers a new and a taken email at the floor while the lookup's reads are held past its budget",
+    "keeps Better Auth's whole allowance for a new and a taken email after a lookup that used its whole budget",
     async () => {
       const gates: Array<() => void> = []
       let reached = 0
@@ -528,9 +527,10 @@ describe('authHandler, the starting language of a sign-up', () => {
 
         await vi.waitFor(() => expect(reached).toBe(round))
         await mounted.clock.advance(STARTING_LANGUAGE_BUDGET_MS)
-        // Better Auth took the sign-up once the lookup gave up: only the floor holds it now.
+        // Better Auth took the sign-up once the lookup gave up: only the floor holds it now, and
+        // the lookup's budget took nothing of the time the floor keeps above Better Auth's work.
         await vi.waitFor(() => expect(mounted.clock.pending()).toBe(1), ARGON2_WAIT)
-        await mounted.clock.advance(SIGN_UP_FLOOR_MS - STARTING_LANGUAGE_BUDGET_MS - 1)
+        await mounted.clock.advance(SIGN_UP_WORK_MS - 1)
         expect(settled).toBe(false)
         await mounted.clock.advance(1)
         expect((await pending)?.status).toBe(202)

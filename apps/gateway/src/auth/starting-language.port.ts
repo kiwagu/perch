@@ -13,5 +13,12 @@ export interface StartingLanguage {
   of(email: string): Promise<Locale | undefined>
 }
 
+/**
+ * How long a sign-up looks for its starting language before it starts without it. The sign-up's
+ * floor keeps it on top of the time it keeps above Better Auth's work, so a lookup that takes all
+ * of it changes no answer's time.
+ */
+export const STARTING_LANGUAGE_BUDGET_MS = 250
+
 /** Names no language: an account starts in its sign-up page's. */
 export const noStartingLanguage: StartingLanguage = { of: () => Promise.resolve(undefined) }

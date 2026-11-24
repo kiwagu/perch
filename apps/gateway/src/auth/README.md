@@ -206,8 +206,9 @@ row in one transaction and mails the account its verification link (`sendOnSignU
 email that has an account it writes nothing, mails nothing, and answers with an account it made up,
 whose fields differ from a real one's. So the mount answers every sign-up Better Auth accepted
 (`auth-handler/sign-up.ts`) with its own `202` and no body, the same headers for a new, a taken
-and a concurrently taken email, never sooner than `SIGN_UP_FLOOR_MS` (800 ms) after its request
-began: the floor sits above the work of either branch (a new account's writes, a taken email's
+and a concurrently taken email, never sooner than `SIGN_UP_FLOOR_MS` (1050 ms) after its request
+began: the starting language's budget (`STARTING_LANGUAGE_BUDGET_MS`, 250 ms), then
+`SIGN_UP_WORK_MS` (800 ms), which sits above the work of either branch (a new account's writes, a taken email's
 hashing) and above Better Auth's own floor for a resend, so neither the answer nor its time tells
 whether the email has an account. One email's sign-ups run one at a time (the account's turn,
 `GatewayRoot.accountTurns`, by the email in lower case): two at once of a new email would
@@ -264,8 +265,8 @@ account. Better Auth's token inside lives a day (`VERIFICATION_LINK_LIFETIME_S`)
 link. The mail is written by `@workspace/email`
 (`renderVerificationMail`) and sent through the mail port. It speaks the account's language: the one its settings
 name once it has settings (`accountLocale`, `account-locale.ts`), the one it signed up in before,
-which for an account an invitation created is its starting language, the inviting organisation's
-default.
+which for an account an invitation created is its starting language: the inviting organisation's
+default when one names it, else the language it signed up in.
 Settings that could not be read, or name a language the gateway does not speak, send no mail and are
 logged as `mail:LOCALE_UNREADABLE`, never a mail in a guessed language; a mail that could not be
 written or sent is logged by its code (`mail:SEND_FAILED`, `mail:LINK_INVALID`, or the email

@@ -25,7 +25,7 @@ import { specInvitations } from '../../../tenants/__fixtures__/invitations'
 import { invitedTo } from '../../../tenants/__fixtures__/invited-language'
 import { specRetell } from '../../../tenants/__fixtures__/retell'
 import { AccountDeparture } from '../../../tenants/account-departure'
-import { InvitedLanguage, STARTING_LANGUAGE_BUDGET_MS } from '../../../tenants/invited-language'
+import { InvitedLanguage } from '../../../tenants/invited-language'
 import { Organisations } from '../../../tenants/organisations'
 import { TenantDatabases } from '../../../tenants/tenant-databases'
 import {
@@ -41,7 +41,11 @@ import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
 import { PasskeyRows } from '../../passkey-rows'
-import { noStartingLanguage, type StartingLanguage } from '../../starting-language.port'
+import {
+  noStartingLanguage,
+  STARTING_LANGUAGE_BUDGET_MS,
+  type StartingLanguage,
+} from '../../starting-language.port'
 import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
 import challengeEndStatement from '../../surql/two-factor-challenge-end.surql'

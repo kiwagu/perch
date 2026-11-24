@@ -14,9 +14,6 @@ import invitationsToEmailStatement from './surql/invitations-to-email.surql'
 import organisationLocaleStatement from './surql/organisation-locale.surql'
 import type { TenantDatabases } from './tenant-databases'
 
-/** How long the gateway looks for the starting language of a sign-up before it starts without it. */
-export const STARTING_LANGUAGE_BUDGET_MS = 250
-
 export interface InvitedLanguageDeps {
   /** The directory, which holds the invitations. */
   readonly directory: LocalDb

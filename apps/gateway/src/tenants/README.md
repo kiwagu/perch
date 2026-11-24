@@ -138,7 +138,7 @@ ready organisations, the newest first), then each organisation's own settings ro
 (`organisation_settings:ost_<key>` in its database, never another row) in that order; the first
 that names a default language wins, and none names none. A read that fails names none, logged as
 `sign-up:STARTING_LANGUAGE_UNREADABLE` with the organisation's key, and so does a lookup that
-outlasts `STARTING_LANGUAGE_BUDGET_MS` (250 ms) on the gateway's clock
+outlasts the auth port's `STARTING_LANGUAGE_BUDGET_MS` (250 ms) on the gateway's clock
 (`sign-up:STARTING_LANGUAGE_LATE`), whose reads still let each organisation's database go once
 they settle. Nothing is thrown, and no line names the email.
 

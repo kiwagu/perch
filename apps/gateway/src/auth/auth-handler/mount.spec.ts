@@ -6,6 +6,7 @@ import { z } from '@workspace/zod'
 
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
+import { CREDENTIAL_CHECKS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
@@ -393,7 +394,10 @@ describe('authHandler', () => {
 
     expect(refused?.status).toBe(429)
     expect(await refused?.json()).toEqual({ code: 'rate-limited' })
-    expect(refused?.headers.get('Retry-After')).toBe('10')
+    // What is left of the address's window once the sign-ups' floor passed, in whole seconds.
+    expect(refused?.headers.get('Retry-After')).toBe(
+      String(Math.ceil((CREDENTIAL_CHECKS.windowMs - SIGN_UP_FLOOR_MS) / 1000)),
+    )
     expect(received).toHaveLength(20)
     // Bob's refused sign-in took none of his email's ten places.
     expect(await signIns(route, 'bob@example.test', 11)).toEqual([...times(10, 401), 429])

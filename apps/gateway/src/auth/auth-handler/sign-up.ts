@@ -6,17 +6,25 @@ import { until } from '../../floor'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { profileNameOf } from '../profile-name'
+import { STARTING_LANGUAGE_BUDGET_MS } from '../starting-language.port'
 
 import type { AuthMountDeps } from './mount'
 import { refusalOf, withJsonBody } from './requests'
 
 /**
- * How soon, at the earliest, an accepted sign-up answers after its request began: above the work of
- * either branch (a new account's writes, a taken email's made-up account) and above Better Auth's
- * own floor for a resend, so the time of the answer tells nothing of the email, in this process and
- * while that work stays under it.
+ * The time a sign-up's floor keeps above Better Auth's work: above the work of either branch (a new
+ * account's writes, a taken email's made-up account) and above Better Auth's own floor for a
+ * resend.
  */
-export const SIGN_UP_FLOOR_MS = 800
+export const SIGN_UP_WORK_MS = 800
+
+/**
+ * How soon, at the earliest, an accepted sign-up answers after its request began: the starting
+ * language's budget, then the time kept above Better Auth's work, so the time of the answer tells
+ * nothing of the email, in this process and while that work stays under it, however long the
+ * lookup took.
+ */
+export const SIGN_UP_FLOOR_MS = STARTING_LANGUAGE_BUDGET_MS + SIGN_UP_WORK_MS
 
 /**
  * As much of a sign-up's body as the mount reads before Better Auth does: the email its turn is
