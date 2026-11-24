@@ -556,6 +556,53 @@ describe('syncStatus', () => {
 
       expect(shown.current()).toBe('connecting')
     })
+
+    it('does not take the late news of a silent leader’s last word for a fresh one', async () => {
+      const browser = tabsOfOneBrowser()
+      const view = browser.storage.tab()
+      const shown = browser.tab(browser.wall, view)
+
+      // The leader's last word, whose storage event this tab is told only ten seconds later.
+      view.set('perch.sync.leader', record(browser.wall.now()))
+      await browser.pass(10_000)
+
+      expect(shown.current()).toBe('connecting')
+
+      view.changeElsewhere('perch.sync.leader', view.get('perch.sync.leader'))
+
+      expect(shown.current()).toBe('connecting')
+    })
+
+    it('does not take a removed record for a word of the leader', async () => {
+      const browser = tabsOfOneBrowser()
+      const view = browser.storage.tab()
+      const shown = browser.tab(browser.wall, view)
+
+      view.changeElsewhere('perch.sync.leader', record(browser.wall.now()))
+      await browser.pass(10_000)
+      view.changeElsewhere('perch.sync.leader', undefined)
+      // A record left in storage that this tab has not heard written since.
+      view.set('perch.sync.leader', record(browser.wall.now() - 10_000))
+
+      expect(shown.current()).toBe('connecting')
+    })
+
+    it('writes a record of its own for every beat, two within one millisecond too', async () => {
+      const browser = tabsOfOneBrowser()
+      const view = browser.storage.tab()
+      const leader = browser.tab(browser.wall, view)
+
+      leader.syncState({ leader: true, channel: 'up' })
+      await settle()
+
+      const before = view.get('perch.sync.leader')
+
+      // Another tab asks within the same millisecond: the answer must reach it as a change.
+      browser.storage.tab().set('perch.sync.ask', 'now')
+      await settle()
+
+      expect(view.get('perch.sync.leader')).not.toBe(before)
+    })
   })
 
   describe('a wall clock set back', () => {

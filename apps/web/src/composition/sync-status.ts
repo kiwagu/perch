@@ -74,19 +74,13 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
   // outbox answers only the period it was asked in, and only while it is the latest one asked.
   let period = 0
   let asked = 0
-  // On this tab's steady clock: when it last heard the leader write its record, and when it first
-  // asked for a beat it has not heard since, however often the ask is sent again. The wall clock
-  // dates only the record the tab finds when it starts; one dated after now (the clock was set
-  // back since) has no known age until the leader is heard.
-  const found = savedSyncLeader(options.storage)
-  const startedAt = options.clock.now()
+  // On this tab's steady clock: when the leader wrote the newest record this tab heard of, and when
+  // this tab first asked for a beat no fresh word has answered since, however often it is sent.
   let heard: number | undefined
   let askedAt: number | undefined
-
-  if (found !== undefined) {
-    heard = found.at <= startedAt ? options.steady() - (startedAt - found.at) : -Infinity
-  }
-
+  // The time of the record this tab wrote last: each one later than the one before, so that every
+  // write is a change the other tabs hear of, within one millisecond or with the clock set back.
+  let wrote = -Infinity
   let stopped = false
   let cancel = () => {}
   const notify = () => {
@@ -95,11 +89,13 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
     }
   }
   const publish = () => {
+    wrote = Math.max(options.clock.now(), wrote + 1)
+
     const leader: Leader = {
       channel,
       waiting,
       stopped: options.protocolRefused(),
-      at: options.clock.now(),
+      at: wrote,
     }
 
     saveSyncLeader(options.storage, leader)
@@ -141,6 +137,25 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
     publish()
     check()
   }
+  // When the leader wrote `leader`, on this tab's steady clock: its age read off the wall clock now.
+  // None for a record dated after now, written while the clock stood further on.
+  const writtenAt = (leader: Leader) => {
+    const age = options.clock.now() - leader.at
+
+    return age >= 0 ? options.steady() - age : undefined
+  }
+  // The leader wrote, and this tab heard of it: a word dated by the record's own time, so the late
+  // news of an old write is no fresh word; one dated after now was written as the clock was set
+  // back, just now. A fresh word answers whatever this tab asked.
+  const hear = (leader: Leader) => {
+    const at = writtenAt(leader) ?? options.steady()
+
+    heard = Math.max(heard ?? at, at)
+
+    if (options.steady() - at < EVERY) {
+      askedAt = undefined
+    }
+  }
   // How long this tab has not heard the leader.
   const silence = () => (heard === undefined ? Infinity : options.steady() - heard)
   // A tab that does not lead asks for a beat when it has not heard the leader for a while.
@@ -178,12 +193,14 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
       if (leading) {
         beat()
       }
-    } else if (key === SYNC_LEADER_KEY) {
-      // The leader wrote: it is alive now, and whatever this tab asked is answered.
-      heard = options.steady()
-      askedAt = undefined
-      notify()
-    } else if (key === undefined) {
+    } else if (key === SYNC_LEADER_KEY || key === undefined) {
+      const leader = key === undefined ? undefined : savedSyncLeader(options.storage)
+
+      // A record removed is no word of the leader.
+      if (leader !== undefined) {
+        hear(leader)
+      }
+
       notify()
     }
   })
@@ -195,6 +212,14 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
       notify()
     }
   })
+
+  // The record the tab finds when it starts, dated by its own time; one dated after now (the clock
+  // was set back since) has no known age until the leader is heard.
+  const found = savedSyncLeader(options.storage)
+
+  if (found !== undefined) {
+    heard = writtenAt(found) ?? -Infinity
+  }
 
   ask()
   tick()
