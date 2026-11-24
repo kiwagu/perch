@@ -124,6 +124,8 @@ function tabsOfOneBrowser() {
         protocolRefused: () => false,
         canSync: true,
         visibility: timers.visibility ?? inView,
+        // The browser's steady clock: setting the wall clock back does not move it.
+        steady: () => clock.now(),
       }),
     /** Lets `ms` pass a second at a time, each tab hearing the others' writes in between. */
     pass: async (ms: number) => {
@@ -175,6 +177,7 @@ function browser() {
         protocolRefused: options.protocolRefused ?? (() => false),
         canSync: options.canSync ?? true,
         visibility: inView,
+        steady: () => clock.now(),
       })
 
       status.subscribe(heard)
@@ -258,7 +261,7 @@ describe('syncStatus', () => {
     const other = device.tab()
 
     // What a leading tab wrote before its page closed: refreshed no more.
-    device.storage.set(
+    device.storage.changeElsewhere(
       'perch.sync.leader',
       JSON.stringify({ channel: 'up', waiting: false, stopped: false, at: device.clock.now() }),
     )
@@ -335,6 +338,7 @@ describe('syncStatus', () => {
         protocolRefused: () => false,
         canSync: true,
         visibility: inView,
+        steady: () => clock.now(),
       })
 
       return { storage, clock, reads, status }
@@ -484,13 +488,18 @@ describe('syncStatus', () => {
       await settle()
       await browser.pass(5 * 60_000 + 30_000)
       tab.show()
-      // The storage event of the leader's last beat, told only now: the record is the one asked about.
-      view.changeElsewhere('perch.sync.leader', view.get('perch.sync.leader'))
+
+      // The storage event of the leader's last beat, told only now, after the tab's ask.
+      const last = view.get('perch.sync.leader')
+
+      view.changeElsewhere('perch.sync.leader', last)
 
       expect(shown.current()).toBe('synced')
 
       await settle()
 
+      // The leader answered the ask with a record of its own.
+      expect(view.get('perch.sync.leader')).not.toBe(last)
       expect(shown.current()).toBe('synced')
     })
 
@@ -547,15 +556,53 @@ describe('syncStatus', () => {
 
       expect(shown.current()).toBe('connecting')
     })
+  })
 
-    it('says connecting within ten seconds once the clock was set back and the leader then stopped answering', async () => {
+  describe('a wall clock set back', () => {
+    it('keeps saying synced in a tab in view while the clock is set back under a hidden leader that answers', async () => {
+      const browser = tabsOfOneBrowser()
+      const leader = browser.tab(hiddenTab(browser.wall))
+      const shown = browser.tab()
+
+      leader.syncState({ leader: true, channel: 'up' })
+      await browser.pass(30_000)
+      browser.setBack(60_000)
+
+      expect(shown.current()).toBe('synced')
+
+      for (let second = 1; second <= 90; second += 1) {
+        await browser.pass(1_000)
+
+        expect(shown.current(), `after ${second} s`).toBe('synced')
+      }
+    })
+
+    it('says connecting from seven seconds after the leader’s last word, wherever the clock is set back meanwhile, and stays so', async () => {
+      const browser = tabsOfOneBrowser()
+      const shown = browser.tab()
+
+      // A leader whose page stops running right after this word.
+      browser.storage.tab().set('perch.sync.leader', record(browser.wall.now()))
+      await settle()
+      await browser.pass(5_000)
+      browser.setBack(60_000)
+
+      for (let second = 6; second <= 80; second += 1) {
+        await browser.pass(1_000)
+
+        if (second >= 7) {
+          expect(shown.current(), `after ${second} s`).toBe('connecting')
+        }
+      }
+    })
+
+    it('says connecting from seven seconds after the leader’s last word, written once the clock was set back', async () => {
       const browser = tabsOfOneBrowser()
       const shown = browser.tab()
       const leader = browser.storage.tab()
 
       leader.set('perch.sync.leader', record(browser.wall.now()))
       await settle()
-      // The tab in view has asked once and heard nothing back yet.
       await browser.pass(5_000)
       browser.setBack(60_000)
       // The leader's last word, at the time set back; then its page stops running.
@@ -564,51 +611,30 @@ describe('syncStatus', () => {
 
       expect(shown.current()).toBe('synced')
 
-      await browser.pass(10_000)
-
-      expect(shown.current()).toBe('connecting')
-    })
-
-    it('says connecting within ten seconds when the clock is set back while an ask of the tab waits for an answer that never comes', async () => {
-      const browser = tabsOfOneBrowser()
-      const shown = browser.tab()
-
-      browser.storage.tab().set('perch.sync.leader', record(browser.wall.now()))
-      await settle()
-      await browser.pass(5_000)
-      browser.setBack(60_000)
-
-      // An ask dated after now waits for nothing: the record has no known age.
-      expect(shown.current()).toBe('connecting')
-
-      await browser.pass(10_000)
-
-      expect(shown.current()).toBe('connecting')
-
-      // Nor once the clock has caught up with the time of that ask.
-      for (let second = 11; second <= 80; second += 1) {
+      for (let second = 1; second <= 80; second += 1) {
         await browser.pass(1_000)
 
-        expect(shown.current(), `after ${second} s`).toBe('connecting')
+        if (second >= 7) {
+          expect(shown.current(), `after ${second} s`).toBe('connecting')
+        }
       }
     })
 
-    it('does not take a record written before the clock was set back for a fresh one once its leader stopped answering', async () => {
+    it('says connecting within four seconds in a tab opened after the clock was set back, on a record its silent leader wrote before', async () => {
       const browser = tabsOfOneBrowser()
-      const shown = browser.tab()
 
       browser.storage.tab().set('perch.sync.leader', record(browser.wall.now()))
       await settle()
       browser.setBack(60_000)
-      await browser.pass(10_000)
 
-      expect(shown.current()).toBe('connecting')
+      const opened = browser.tab()
 
-      // Nor once the clock has caught up with the time the record carries.
-      for (let second = 11; second <= 80; second += 1) {
+      for (let second = 1; second <= 80; second += 1) {
         await browser.pass(1_000)
 
-        expect(shown.current(), `after ${second} s`).toBe('connecting')
+        if (second >= 4) {
+          expect(opened.current(), `after ${second} s`).toBe('connecting')
+        }
       }
     })
   })

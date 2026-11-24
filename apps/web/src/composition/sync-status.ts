@@ -5,10 +5,11 @@
  * record in the browser's storage, written when its channel changes and every two seconds while
  * it leads; every tab reads that record with its own network. The browser may hold back the
  * timers of a hidden tab (Chrome, once it has been hidden for minutes, to one wake-up a minute),
- * and the leader's two-second beat with them, but not what the tab hears: a tab that finds the
- * record late asks the leader for its beat, and the leader answers. A record nobody refreshed for
- * a few seconds, whose leader did not answer either, belongs to a leader that went away: the tab
- * that leads next is still connecting.
+ * and the leader's two-second beat with them, but not what the tab hears: a tab that has not heard
+ * the leader for a while asks it for its beat, and the leader answers. A leader not heard for a few
+ * seconds, which did not answer either, went away: the tab that leads next is still connecting.
+ * How long a tab has not heard the leader is measured on its steady clock, which setting the wall
+ * clock does not move; the wall clock only dates a record the tab has not heard written.
  */
 
 import type { ResultAsync } from 'neverthrow'
@@ -32,9 +33,9 @@ import {
 } from './storage'
 
 const EVERY = 2_000
-/** A record older than this missed a beat of its leader: a tab that reads it asks for one. */
+/** A leader not heard for this long missed a beat: a tab asks it for one. */
 const LATE = EVERY + EVERY / 2
-/** A leader that has not refreshed its record for this long, nor answered when asked, went away. */
+/** A leader not heard for this long, which did not answer when asked either, went away. */
 const STALE = 3 * EVERY
 
 export interface SyncStatusOptions {
@@ -53,6 +54,8 @@ export interface SyncStatusOptions {
   readonly canSync: boolean
   /** Whether this tab is in view: one that comes back asks a late leader at once. */
   readonly visibility: VisibilitySource
+  /** Milliseconds on this tab's steady clock (`performance.now()`), which setting the wall clock does not move. */
+  readonly steady: () => number
 }
 
 export interface SyncStatusSource extends SyncStatusPort {
@@ -71,12 +74,19 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
   // outbox answers only the period it was asked in, and only while it is the latest one asked.
   let period = 0
   let asked = 0
-  // This tab's first ask for a beat not answered yet: when it asked, and the record it found late
-  // (by its time); a record other than that one answers it, however often the ask is sent again.
-  let pending: { readonly at: number; readonly about: number } | undefined
-  // The time of a record found dated after now, written before the clock was set back: it keeps
-  // no known age, even once the clock has caught up with it, until the leader writes another.
-  let unaged: number | undefined
+  // On this tab's steady clock: when it last heard the leader write its record, and when it first
+  // asked for a beat it has not heard since, however often the ask is sent again. The wall clock
+  // dates only the record the tab finds when it starts; one dated after now (the clock was set
+  // back since) has no known age until the leader is heard.
+  const found = savedSyncLeader(options.storage)
+  const startedAt = options.clock.now()
+  let heard: number | undefined
+  let askedAt: number | undefined
+
+  if (found !== undefined) {
+    heard = found.at <= startedAt ? options.steady() - (startedAt - found.at) : -Infinity
+  }
+
   let stopped = false
   let cancel = () => {}
   const notify = () => {
@@ -131,37 +141,23 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
     publish()
     check()
   }
-  // How long ago the leader wrote its record. One dated after now has no known age, since the
-  // clock was set back after it was written: it counts as late and stale alike.
-  const ageOf = (leader: Leader, now: number) =>
-    leader.at > now || leader.at === unaged ? Infinity : now - leader.at
-  // A tab that does not lead asks for a beat when the record is late. The first ask about a record
-  // keeps its time; one dated after now (the clock was set back) starts again.
+  // How long this tab has not heard the leader.
+  const silence = () => (heard === undefined ? Infinity : options.steady() - heard)
+  // A tab that does not lead asks for a beat when it has not heard the leader for a while.
   const ask = () => {
-    const leader = savedSyncLeader(options.storage)
-    const now = options.clock.now()
-
-    if (leader !== undefined && leader.at > now) {
-      unaged = leader.at
-    }
-
-    if (leading || leader === undefined || ageOf(leader, now) <= LATE) {
+    if (leading || savedSyncLeader(options.storage) === undefined || silence() <= LATE) {
       return
     }
 
-    if (pending === undefined || pending.about !== leader.at || pending.at > now) {
-      pending = { at: now, about: leader.at }
-    }
-
-    askSyncLeader(options.storage, now)
+    askedAt ??= options.steady()
+    askSyncLeader(options.storage, options.clock.now())
   }
-  // A stale record belongs to a leader that went away, unless this tab asked about it less than a
-  // beat ago and the answer may still be on the way. The leading tab is not gone to itself.
-  const gone = (leader: Leader) => {
-    const now = options.clock.now()
-    const answering = pending !== undefined && pending.at <= now && now - pending.at < EVERY
+  // A leader not heard for long went away, unless this tab asked it for a beat less than a beat
+  // ago and the answer may still be on the way. The leading tab is not gone to itself.
+  const gone = () => {
+    const answering = askedAt !== undefined && options.steady() - askedAt < EVERY
 
-    return !leading && ageOf(leader, now) > STALE && !answering
+    return !leading && silence() > STALE && !answering
   }
   const tick = () => {
     cancel = options.clock.schedule(EVERY, () => {
@@ -182,7 +178,12 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
       if (leading) {
         beat()
       }
-    } else if (key === SYNC_LEADER_KEY || key === undefined) {
+    } else if (key === SYNC_LEADER_KEY) {
+      // The leader wrote: it is alive now, and whatever this tab asked is answered.
+      heard = options.steady()
+      askedAt = undefined
+      notify()
+    } else if (key === undefined) {
       notify()
     }
   })
@@ -214,7 +215,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
         return 'offline'
       }
 
-      if (leader === undefined || gone(leader) || leader.channel === 'down') {
+      if (leader === undefined || gone() || leader.channel === 'down') {
         return 'connecting'
       }
 
