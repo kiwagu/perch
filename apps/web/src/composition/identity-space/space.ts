@@ -98,6 +98,8 @@ export interface TenantView {
   flush(): ResultAsync<void, DataError>
   /** Imports what the browser's other tabs appended to the region since this tab last did. */
   catchUpLocal(): ResultAsync<void, DataError>
+  /** The region's document now: another one once a reset or a reopen replaced it. */
+  readonly document: object
 }
 
 export class Space implements IdentitySpace {
@@ -216,6 +218,7 @@ export class Space implements IdentitySpace {
           writePath: this.#told(space.writePath),
           flush: () => space.flush(),
           catchUpLocal: () => space.region.catchUpLocal().map(() => undefined),
+          document: space.region,
         }
   }
 

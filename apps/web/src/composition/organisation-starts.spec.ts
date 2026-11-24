@@ -18,6 +18,7 @@ import { browserDatabases, openTestWorld, type TestWorld } from './__fixtures__/
 import { signedIn } from './__fixtures__/signed-in'
 import { createCommandBus } from './commands'
 import {
+  ORGANISATION_START_LOCK,
   type OrganisationStartsDeps,
   organisationStarts,
   START_RETRY_MS,
@@ -93,12 +94,17 @@ async function tab(shared: {
   return world
 }
 
-/** The deps of the starts of `world`, led by `engine` (none: a follower), its roles as `roles` says. */
+/**
+ * The deps of the starts of `world`, led by `engine` (none: a follower), its roles as `roles`
+ * says; `document` stands in for each organisation's region document when given, and `executed`
+ * keeps each command run, as `<key> <command id>`.
+ */
 function depsOf(
   world: TestWorld,
   engine: SyncEngine | undefined,
   locks: FakeLocks | undefined,
   roles: () => readonly Membership[] = () => world.session.space()?.memberships() ?? [],
+  extra: { readonly document?: () => object; readonly executed?: string[] } = {},
 ): OrganisationStartsDeps {
   return {
     session: world.session,
@@ -110,22 +116,47 @@ function depsOf(
           identity: space.identity,
           sync: engine,
           memberships: roles,
-          tenant: (key: string) => space.tenant(key),
+          tenant: (key: string) => {
+            const view = space.tenant(key)
+
+            return view && extra.document ? { ...view, document: extra.document() } : view
+          },
         }
       )
     },
     clock: world.clock,
     locks,
     logger: { warn: () => {} },
-    commandsFor: (key, admitted) =>
-      createCommandBus({
+    commandsFor: (key, admitted) => {
+      const bus = createCommandBus({
         writePath: world.session.tenantWritePath(key, admitted),
         session: world.session,
         deviceId: 'device-test',
         logger: { info: () => {}, warn: () => {} },
         events: { publish: () => okAsync(undefined) },
-      }),
+      })
+
+      return {
+        execute: (command, params) => {
+          extra.executed?.push(`${key} ${command.id}`)
+
+          return bus.execute(command, params)
+        },
+      }
+    },
   }
+}
+
+/** Another tab holds the start's lock of Ann's organisation `key` until the answer is called. */
+function heldLock(locks: FakeLocks, key: string): () => void {
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  void locks.request(`${ORGANISATION_START_LOCK}.${ann.identity.id}.${key}`, {}, () => held)
+
+  return release
 }
 
 /** The settings rows the organisation `key`'s database holds on `world`'s device. */
@@ -267,7 +298,8 @@ describe('organisationStarts', () => {
   it("lets one tab create the row at a time: a second leader reads the first one's row and creates none", async () => {
     const storage = memoryStorage()
     const locks = new FakeLocks()
-    const databases = browserDatabases()
+    const databases = browserDatabases({ tenants: true })
+    const executed: string[] = []
 
     signedIn(storage, { ...ann, memberships: [acme] })
 
@@ -275,20 +307,129 @@ describe('organisationStarts', () => {
     const b = await tab({ storage, locks, databases })
     const caught = () => Promise.resolve()
 
-    organisationStarts(depsOf(a, engineOf(caught).engine, locks)).syncState({
+    organisationStarts(
+      depsOf(a, engineOf(caught).engine, locks, undefined, { executed }),
+    ).syncState({
       leader: true,
       channel: 'up',
     })
-    organisationStarts(depsOf(b, engineOf(caught).engine, locks)).syncState({
+    organisationStarts(
+      depsOf(b, engineOf(caught).engine, locks, undefined, { executed }),
+    ).syncState({
       leader: true,
       channel: 'up',
     })
 
     await expect.poll(async () => (await rowsOf(a, 'acme')).length).toBe(1)
-    await expect.poll(async () => (await rowsOf(b, 'acme')).length).toBe(1)
+    await expect.poll(() => locks.queue.length + locks.requests).toBeGreaterThanOrEqual(2)
+    await settle()
     await settle()
 
-    expect(await rowsOf(a, 'acme')).toEqual([{ id: organisationSettingsIdOf('acme') }])
+    expect(executed).toEqual([`acme ${organisationSettingsCommands.createOrganisationSettings.id}`])
     expect(await rowsOf(b, 'acme')).toEqual([{ id: organisationSettingsIdOf('acme') }])
+  })
+
+  it('keeps the language a tab stored when another tab of the browser leads next', async () => {
+    const storage = memoryStorage()
+    const locks = new FakeLocks()
+    const databases = browserDatabases({ tenants: true })
+    const executed: string[] = []
+    const id = organisationSettingsIdOf('acme')
+
+    signedIn(storage, { ...ann, memberships: [acme] })
+
+    const a = await tab({ storage, locks, databases })
+    const b = await tab({ storage, locks, databases })
+    const caught = () => Promise.resolve()
+    const deps = depsOf(a, engineOf(caught).engine, locks, undefined, { executed })
+
+    organisationStarts(deps).syncState({ leader: true, channel: 'up' })
+    await expect.poll(async () => (await rowsOf(a, 'acme')).length).toBe(1)
+    expect(
+      (
+        await deps
+          .commandsFor('acme', () => true)
+          .execute(organisationSettingsCommands.updateLocale, { id, locale: 'es' })
+      ).isOk(),
+    ).toBe(true)
+    expect((await a.session.space()?.tenant('acme')?.flush())?.isOk()).toBe(true)
+
+    organisationStarts(
+      depsOf(b, engineOf(caught).engine, locks, undefined, { executed }),
+    ).syncState({
+      leader: true,
+      channel: 'up',
+    })
+
+    await expect.poll(async () => await rowsOf(b, 'acme')).toEqual([{ id, locale: 'es' }])
+    await settle()
+    await settle()
+
+    expect(executed).toEqual([
+      `acme ${organisationSettingsCommands.createOrganisationSettings.id}`,
+      `acme ${organisationSettingsCommands.updateLocale.id}`,
+    ])
+    expect(await rowsOf(b, 'acme')).toEqual([{ id, locale: 'es' }])
+  })
+
+  it('takes the start up again once the account is admin again, after a turn its role went in', async () => {
+    const storage = memoryStorage()
+    const locks = new FakeLocks()
+
+    signedIn(storage, { ...ann, memberships: [acme] })
+
+    const world = await tab({ storage, locks })
+    let admin = true
+    const roles = () => [{ ...acme, role: admin ? CONTRACT_ROLES.admin : CONTRACT_ROLES.member }]
+    const release = heldLock(locks, 'acme')
+    const starts = organisationStarts(
+      depsOf(world, engineOf(() => Promise.resolve()).engine, locks, roles),
+    )
+
+    starts.syncState({ leader: true, channel: 'up' })
+    // The start caught up and waits for the lock another tab holds; meanwhile the role goes.
+    await expect.poll(() => locks.queue.length).toBe(1)
+    admin = false
+    release()
+    await expect.poll(() => locks.queue.length).toBe(0)
+    await settle()
+    await settle()
+
+    expect(await rowsOf(world, 'acme')).toEqual([])
+
+    admin = true
+    starts.syncState({ leader: true, channel: 'up' })
+
+    await expect.poll(async () => (await rowsOf(world, 'acme')).length).toBe(1)
+  })
+
+  it('creates nothing in a turn whose region document was replaced since its catch-up, and catches up again', async () => {
+    const storage = memoryStorage()
+    const locks = new FakeLocks()
+
+    signedIn(storage, { ...ann, memberships: [acme] })
+
+    const world = await tab({ storage, locks })
+    let document: object = {}
+    let catchUps = 0
+    // The first catch-up answers; the one after the replacement waits, as a fresh document does.
+    const { engine } = engineOf(() => {
+      catchUps += 1
+
+      return catchUps === 1 ? Promise.resolve() : new Promise(() => {})
+    })
+    const release = heldLock(locks, 'acme')
+
+    organisationStarts(
+      depsOf(world, engine, locks, undefined, { document: () => document }),
+    ).syncState({ leader: true, channel: 'up' })
+    await expect.poll(() => locks.queue.length).toBe(1)
+    // A reset replaces the region's document with an empty one while the start waits.
+    document = {}
+    release()
+    await expect.poll(() => catchUps).toBe(2)
+    await settle()
+
+    expect(await rowsOf(world, 'acme')).toEqual([])
   })
 })

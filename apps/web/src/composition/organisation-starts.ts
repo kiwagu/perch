@@ -6,9 +6,11 @@
  * Web Lock per account and organisation; a turn imports what the other tabs appended, flushes,
  * reads, creates only what is still missing, and flushes again. The write goes to that
  * organisation whichever is current, and only while the same space, the same engine, the
- * membership as admin and the open database still hold when it is admitted. A start that failed
- * is tried again after `START_RETRY_MS`; a new engine, a change of the memberships and a new sign-in
- * look again. A failure is logged by its code alone.
+ * membership as admin, the open database and the region's document the catch-up was asked about
+ * still hold when it is admitted. A turn whose document a reset replaced meanwhile creates nothing
+ * and catches up again; one whose admin role or database went creates nothing and forgets the
+ * start, which a new engine, a change of the memberships or a new sign-in takes up again; a start
+ * that failed is tried again after `START_RETRY_MS`. A failure is logged by its code alone.
  */
 
 import { ResultAsync } from 'neverthrow'
@@ -57,6 +59,9 @@ export interface OrganisationStarts {
 
 type Space = NonNullable<ReturnType<OrganisationStartsDeps['space']>>
 
+/** How a start's turn ended: the row is there, nothing was done, or it failed. */
+type Turn = 'done' | 'skipped' | 'failed'
+
 export function organisationStarts(deps: OrganisationStartsDeps): OrganisationStarts {
   /** The engine each organisation's start was taken up by; another engine takes it up afresh. */
   const watched = new Map<string, SyncEngine>()
@@ -66,8 +71,10 @@ export function organisationStarts(deps: OrganisationStartsDeps): OrganisationSt
       .memberships()
       .some((member) => member.tenant.key === key && member.role === CONTRACT_ROLES.admin)
 
-  const ensure = (space: Space, key: string, still: () => boolean): Promise<boolean> =>
-    oneTabAtATime<void, DataError>(
+  const ensure = (space: Space, key: string, still: () => boolean): Promise<Turn> => {
+    let turn: Turn = 'done'
+
+    return oneTabAtATime<void, DataError>(
       deps.locks,
       `${ORGANISATION_START_LOCK}.${space.identity.id}.${key}`,
       {
@@ -80,6 +87,8 @@ export function organisationStarts(deps: OrganisationStartsDeps): OrganisationSt
         const view = space.tenant(key)
 
         if (view === undefined || !still()) {
+          turn = 'skipped'
+
           return ResultAsync.fromSafePromise(Promise.resolve())
         }
 
@@ -97,18 +106,19 @@ export function organisationStarts(deps: OrganisationStartsDeps): OrganisationSt
           .andThen(() => view.flush())
       },
     ).match(
-      () => true,
-      (failure) => {
+      () => turn,
+      (failure): Turn => {
         deps.logger.warn({ event: 'organisation-start', outcome: failure.code })
 
-        return false
+        return 'failed'
       },
     )
+  }
 
   const take = (space: Space, engine: SyncEngine, key: string): void => {
     watched.set(key, engine)
 
-    const still = () => {
+    const eligible = () => {
       const now = deps.space()
 
       return (
@@ -119,30 +129,43 @@ export function organisationStarts(deps: OrganisationStartsDeps): OrganisationSt
         isAdmin(now, key)
       )
     }
+    const documentNow = () => deps.space()?.tenant(key)?.document
     const forget = () => {
       if (watched.get(key) === engine) {
         watched.delete(key)
       }
     }
     const attempt = (): void => {
+      // The turn is bound to the document the catch-up is asked about: one a reset opened
+      // meanwhile, empty until it pulls, is caught up again before anything is read in it.
+      const document = documentNow()
+      const still = () => eligible() && documentNow() === document
+
       void engine.caughtUp(tenantRegionId(key), FIRST_PULL_WAIT_MS).then(
         async () => {
-          if (!still()) {
+          if (!eligible()) {
             forget()
 
             return
           }
 
-          if (!(await ensure(space, key, still))) {
-            if (still()) {
-              deps.clock.schedule(START_RETRY_MS, attempt)
-            } else {
-              forget()
-            }
-          }
+          settle(await ensure(space, key, still), document)
         },
-        () => (still() ? attempt() : forget()),
+        () => (eligible() ? attempt() : forget()),
       )
+    }
+    const settle = (turn: Turn, document: object | undefined): void => {
+      if (turn === 'done') {
+        return
+      }
+
+      if (!eligible()) {
+        forget()
+      } else if (documentNow() !== document) {
+        attempt()
+      } else {
+        deps.clock.schedule(START_RETRY_MS, attempt)
+      }
     }
 
     attempt()
