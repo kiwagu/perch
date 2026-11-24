@@ -141,7 +141,7 @@
             "changes": []
           },
           "clearLocale": {
-            "description": "Removes the organisation's default language: an account its invitation creates then starts in the language it signs up in.",
+            "description": "Removes the organisation's default language, so sign-up reads none for an account its invitation creates.",
             "params": { "id": "$id" },
             "changes": []
           }

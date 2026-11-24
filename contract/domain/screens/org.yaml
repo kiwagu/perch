@@ -483,7 +483,7 @@ flow:
                 toast: false
                 onDone:
                   target: idle
-                  description: This device holds the chosen language; once the server has it, an account the organisation's invitation creates starts in it.
+                  description: This device holds the chosen language; once the server has it, it is the organisation's default that sign-up reads for an account its invitation creates.
                   actions:
                     - clear: organisation.settings.error
                 onError:
@@ -497,7 +497,7 @@ flow:
                 toast: false
                 onDone:
                   target: idle
-                  description: The organisation has no default language on this device; once the server has it, an account its invitation creates starts in its sign-up's language.
+                  description: The organisation has no default language on this device; once the server has it, sign-up reads none for an account the organisation's invitation creates.
                   actions:
                     - clear: organisation.settings.error
                 onError:
