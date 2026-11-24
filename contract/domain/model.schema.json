@@ -139,6 +139,11 @@
             "description": "Stores the default language an admin chose for the organisation.",
             "params": { "id": "$id", "locale": "locale" },
             "changes": []
+          },
+          "clearLocale": {
+            "description": "Removes the organisation's default language: an account its invitation creates then starts in the language it signs up in.",
+            "params": { "id": "$id" },
+            "changes": []
           }
         }
       },

@@ -238,9 +238,14 @@ anchors:
         params:
           locale: organisation.settings.locale-select
     roles: [ admin ]
+  organisation.settings.clear-button:
+    kind: button
+    description: Removes the organisation's default language; shown while it has one.
+    binding: { action: organisation_settings.clearLocale }
+    roles: [ admin ]
   organisation.settings.error:
     kind: error
-    description: Why the last change of the default language failed, under its select.
+    description: Why the last change or removal of the default language failed, under its select.
     roles: [ admin ]
   organisation.received.list:
     kind: list
@@ -470,6 +475,7 @@ flow:
                 organisation.settings.locale-select:
                   target: storing
                   guard: defaultsHeld
+                organisation.settings.clear-button: clearing
             storing:
               invoke:
                 src: organisation_settings.updateLocale
@@ -483,6 +489,19 @@ flow:
                 onError:
                   target: idle
                   description: This device could not store it; a refusal by the server comes later, as the frame's notice that a change was undone.
+                  actions:
+                    - show: organisation.settings.error
+            clearing:
+              invoke:
+                src: organisation_settings.clearLocale
+                toast: false
+                onDone:
+                  target: idle
+                  description: The organisation has no default language on this device; once the server has it, an account its invitation creates starts in its sign-up's language.
+                  actions:
+                    - clear: organisation.settings.error
+                onError:
+                  target: idle
                   actions:
                     - show: organisation.settings.error
         notes-add:
