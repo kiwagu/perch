@@ -4,6 +4,8 @@ import { createActor, waitFor } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
 import { identityIdFactory, invitationIdFactory, noteIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
+import { projected } from '@workspace/ui-contract/machines'
 
 import { createOrganisationMachine, type OrganisationMachineDeps } from '.'
 
@@ -32,9 +34,19 @@ function later() {
   }
 }
 
-/** An organisation page: the organisation current, the page's writes, and the machine over them. */
-function page(writes: Partial<OrganisationMachineDeps> = {}) {
+/**
+ * An organisation page: the organisation current, the page's writes, and the machine over them.
+ * `writes` may be given the way another organisation becomes current, for a write that does it.
+ */
+function page(
+  writes:
+    | Partial<OrganisationMachineDeps>
+    | ((becomes: (key: string) => void) => Partial<OrganisationMachineDeps>) = {},
+) {
   let current: string | undefined = 'acme'
+  const becomes = (key: string) => {
+    current = key
+  }
   const deps: OrganisationMachineDeps = {
     select: vi.fn((key: string) => {
       current = key
@@ -50,9 +62,12 @@ function page(writes: Partial<OrganisationMachineDeps> = {}) {
     copy: vi.fn(() => okAsync(undefined)),
     accept: vi.fn(() => okAsync(undefined)),
     decline: vi.fn(() => okAsync(undefined)),
+    setDefaultLanguage: vi.fn(() => okAsync(undefined)),
+    clearDefaultLanguage: vi.fn(() => okAsync(undefined)),
+    defaultsHeld: () => true,
     account: () => ann,
     current: () => current,
-    ...writes,
+    ...(typeof writes === 'function' ? writes(becomes) : writes),
   }
   const actor = createActor(createOrganisationMachine(deps)).start()
   const emitted: unknown[] = []
@@ -64,9 +79,7 @@ function page(writes: Partial<OrganisationMachineDeps> = {}) {
     deps,
     emitted,
     /** Another organisation becomes current without the page choosing it. */
-    becomes: (key: string) => {
-      current = key
-    },
+    becomes,
     snapshot: () => actor.getSnapshot(),
     viewing: () => waitFor(actor, (state) => state.matches('viewing')),
     region: (region: string, state: string) =>
@@ -76,6 +89,15 @@ function page(writes: Partial<OrganisationMachineDeps> = {}) {
 
 /** What the machine emits for the frame's toast: the success of a note's change. */
 const toast = (code: string) => ({ type: 'show', anchor: 'app-shell.toast', codes: [code] })
+
+/** What it emits for the host to empty a field. */
+const cleared = (anchor: string) => ({ type: 'clear', anchor })
+
+/** The create form's fields, emptied once an organisation is created. */
+const CREATE_FIELDS_CLEARED = [
+  cleared('organisation.create.key-input'),
+  cleared('organisation.create.name-input'),
+]
 
 describe('organisation machine', () => {
   it('opens and closes the create form by its toggle, and creates from it with its toast', async () => {
@@ -99,7 +121,7 @@ describe('organisation machine', () => {
     expect(deps.create).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'globex', name: 'Globex' }),
     )
-    expect(emitted).toEqual([toast('organisation-created')])
+    expect(emitted).toEqual([...CREATE_FIELDS_CLEARED, toast('organisation-created')])
   })
 
   it('keeps the create form open with the code of a refused creation, until a creation starts every area afresh', async () => {
@@ -174,7 +196,7 @@ describe('organisation machine', () => {
     await region('notes-add', 'idle')
 
     expect(snapshot().context.errors.codes.notes).toBeUndefined()
-    expect(emitted).toEqual([toast('note-created')])
+    expect(emitted).toEqual([cleared('organisation.notes.new-textarea'), toast('note-created')])
   })
 
   it('invites with a role: the invitation toasts, both fields empty and the invitations are read again', async () => {
@@ -183,11 +205,11 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
     await region('invite', 'idle')
 
-    expect(deps.invite).toHaveBeenCalledWith('bea@example.test', 'admin')
+    expect(deps.invite).toHaveBeenCalledWith('bea@example.test', CONTRACT_ROLES.admin)
     expect(emitted).toEqual([
       { type: 'clear', anchor: 'organisation.invite.email-input' },
       { type: 'clear', anchor: 'organisation.invite.role-select' },
@@ -204,7 +226,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
     // Another organisation becomes current without the page choosing it, and its form is typed in.
     becomes('globex')
@@ -213,6 +235,135 @@ describe('organisation machine', () => {
 
     expect(emitted).toEqual([toast('invited')])
     expect(snapshot().context.invitationsChanged).toBe(1)
+  })
+
+  it("empties the create form's fields once the organisation is created, which made it current before it ended", async () => {
+    const { actor, snapshot, emitted, region } = page((becomes) => ({
+      // The service selects the organisation it creates before the creation ends.
+      create: () => okAsync(undefined).map(() => becomes('globex')),
+    }))
+
+    actor.send({ type: 'organisation.create.submit-button', key: 'globex', name: 'Globex' })
+    await region('create-form', 'closed')
+
+    expect(emitted).toEqual([...CREATE_FIELDS_CLEARED, toast('organisation-created')])
+    expect(snapshot().context.errors).toEqual({ of: undefined, codes: {} })
+  })
+
+  it('keeps what was typed in the create form when the creation is refused', async () => {
+    const { actor, snapshot, emitted, region } = page({ create: () => refused('key-taken') })
+
+    actor.send({ type: 'organisation.create.submit-button', key: 'acme', name: 'Acme' })
+    await region('create-form', 'open')
+
+    expect(emitted).toEqual([])
+    expect(snapshot().context.errors).toEqual({ of: 'acme', codes: { create: 'key-taken' } })
+  })
+
+  it("leaves the new note's field as typed when the note is added in an organisation that stopped being current meanwhile", async () => {
+    const note = later()
+    const { actor, emitted, becomes, region } = page({ addNote: () => note.result })
+
+    actor.send({ type: 'organisation.notes.add-button', text: 'Plans' })
+    becomes('globex')
+    note.done()
+    await region('notes-add', 'idle')
+
+    expect(emitted).toEqual([toast('note-created')])
+  })
+
+  describe('the default language of the organisation', () => {
+    it('takes no choice before the organisation settings are on this device', () => {
+      const { actor } = page({ defaultsHeld: () => false })
+
+      expect(
+        actor.getSnapshot().can({ type: 'organisation.settings.locale-select', locale: 'es' }),
+      ).toBe(false)
+    })
+
+    it('stores the chosen language with no toast, and clears the error once stored', async () => {
+      const { actor, deps, emitted, region } = page()
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+      await region('default-language', 'idle')
+
+      expect(deps.setDefaultLanguage).toHaveBeenCalledWith('es')
+      expect(emitted).toEqual([])
+    })
+
+    it('keeps the code of a refused change for the error, and takes no other change meanwhile', async () => {
+      const pending = later()
+      const { actor, snapshot, region } = page({ setDefaultLanguage: () => pending.result })
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+
+      expect(snapshot().can({ type: 'organisation.settings.clear-button' })).toBe(false)
+      expect(snapshot().can({ type: 'organisation.settings.locale-select', locale: 'en' })).toBe(
+        false,
+      )
+
+      pending.refuse('organisation_settings:FORBIDDEN')
+      await region('default-language', 'idle')
+
+      expect(snapshot().context.errors.codes.settings).toBe('organisation_settings:FORBIDDEN')
+    })
+
+    it('removes the language by the clear button, and forgets the earlier error', async () => {
+      const { actor, deps, snapshot, region } = page({
+        setDefaultLanguage: () => refused('organisation_settings:FAILED'),
+      })
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+      await region('default-language', 'idle')
+      actor.send({ type: 'organisation.settings.clear-button' })
+      await region('default-language', 'idle')
+
+      expect(deps.clearDefaultLanguage).toHaveBeenCalledOnce()
+      expect(snapshot().context.errors.codes.settings).toBeUndefined()
+    })
+  })
+
+  describe("clears an area's error through its flow", () => {
+    const machine = () => createOrganisationMachine(page().deps)
+    /** The effects of the flow on the success of the action `state` of `region`, in order. */
+    const effectsOnDone = (region: string, state: string, branch = 0) =>
+      projected(machine().config).states['viewing']?.regions?.[region]?.states[state]?.invoke
+        ?.onDone[branch]?.effects
+
+    it.each([
+      ['note-items', 'saving', 0, 'organisation.notes.error'],
+      ['note-items', 'deleting', 0, 'organisation.notes.error'],
+      ['invite', 'running', 0, 'organisation.invite.error'],
+      ['members', 'running', 0, 'organisation.invite.error'],
+      ['member-roles', 'changing', 0, 'organisation.invite.error'],
+      ['member-roles', 'changing', 1, 'organisation.invite.error'],
+      ['sent-copy', 'running', 0, 'organisation.invite.error'],
+      ['sent-revoke', 'running', 0, 'organisation.invite.error'],
+      ['received-decline', 'running', 0, 'organisation.received.error'],
+      ['notes-add', 'running', 0, 'organisation.notes.error'],
+    ])(
+      'on the success of the %s region\'s "%s" (branch %i), first of its effects',
+      (region, state, branch, anchor) => {
+        expect(effectsOnDone(region, state, branch)?.[0]).toEqual({
+          type: 'clear',
+          params: { anchor },
+        })
+      },
+    )
+
+    it('empties the invitation form after the invitation error, as its flow lists them', () => {
+      expect(effectsOnDone('invite', 'running')?.map(({ params }) => params)).toEqual([
+        { anchor: 'organisation.invite.error' },
+        { anchor: 'organisation.invite.email-input' },
+        { anchor: 'organisation.invite.role-select' },
+        { anchor: 'organisation.sent.list' },
+        { anchor: 'app-shell.toast', codes: ['invited'] },
+      ])
+    })
+
+    it('has no action of its own that forgets an error', () => {
+      expect(Object.keys(machine().implementations.actions)).not.toContain('forget')
+    })
   })
 
   it('toasts a removal, reading the members again', async () => {
@@ -236,7 +387,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     await region('invite', 'idle')
 
@@ -255,50 +406,78 @@ describe('organisation machine', () => {
     const change = later()
     const { actor, deps, snapshot, emitted, region } = page({ setRole: vi.fn(() => change.result) })
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
 
-    expect(snapshot().context.changingRole).toEqual({ identity: bea, role: 'admin', of: 'acme' })
+    expect(snapshot().context.changingRole).toEqual({
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+      of: 'acme',
+    })
     expect(
-      snapshot().can({ type: 'organisation.members.role-select', identity: ann, role: 'member' }),
+      snapshot().can({
+        type: 'organisation.members.role-select',
+        identity: ann,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toBe(false)
 
     change.done()
     await region('member-roles', 'idle')
 
-    expect(deps.setRole).toHaveBeenCalledWith({ identity: bea, role: 'admin' })
+    expect(deps.setRole).toHaveBeenCalledWith({ identity: bea, role: CONTRACT_ROLES.admin })
     expect(emitted).toEqual([toast('role-changed')])
     expect(snapshot().context.membersChanged).toBe(1)
     expect(snapshot().context.changingRole).toBeUndefined()
     expect(
-      snapshot().can({ type: 'organisation.members.role-select', identity: ann, role: 'member' }),
+      snapshot().can({
+        type: 'organisation.members.role-select',
+        identity: ann,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toBe(true)
   })
 
   it('remembers a role set, with the read of the members that confirms it, until another is set on its row', async () => {
     const { actor, snapshot, region } = page()
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.changingRole).toBeUndefined()
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: bea, role: 'admin', read: 1, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' },
     ])
 
-    actor.send({ type: 'organisation.members.role-select', identity: cy, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: cy,
+      role: CONTRACT_ROLES.admin,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: bea, role: 'admin', read: 1, of: 'acme' },
-      { identity: cy, role: 'admin', read: 2, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' },
+      { identity: cy, role: CONTRACT_ROLES.admin, read: 2, of: 'acme' },
     ])
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: cy, role: 'admin', read: 2, of: 'acme' },
-      { identity: bea, role: 'member', read: 3, of: 'acme' },
+      { identity: cy, role: CONTRACT_ROLES.admin, read: 2, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.member, read: 3, of: 'acme' },
     ])
   })
 
@@ -308,23 +487,35 @@ describe('organisation machine', () => {
       setRole: () => (refuse ? refused('not-admin') : okAsync(undefined)),
     })
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
     await region('member-roles', 'idle')
 
     refuse = true
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.changingRole).toBeUndefined()
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: bea, role: 'admin', read: 1, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' },
     ])
   })
 
   it('does not read the members again after the account demoted itself', async () => {
     const { actor, snapshot, emitted, region } = page()
 
-    actor.send({ type: 'organisation.members.role-select', identity: ann, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: ann,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(emitted).toEqual([toast('role-changed')])
@@ -337,7 +528,11 @@ describe('organisation machine', () => {
     const change = later()
     const { actor, snapshot, becomes, region } = page({ setRole: vi.fn(() => change.result) })
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
     becomes('globex')
     change.done()
     await region('member-roles', 'idle')
@@ -348,7 +543,11 @@ describe('organisation machine', () => {
   it('shows a refused role change under the invitation and lets the select show the role kept', async () => {
     const { actor, snapshot, emitted, region } = page({ setRole: () => refused('last-admin') })
 
-    actor.send({ type: 'organisation.members.role-select', identity: ann, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: ann,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.errors.codes).toEqual({ members: 'last-admin' })
@@ -481,7 +680,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     await region('invite', 'idle')
 
@@ -501,7 +700,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     becomes('globex')
     actor.send({ type: 'organisation.members.remove-button', identity: bea })
@@ -525,7 +724,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     becomes('globex')
     actor.send({ type: 'organisation.notes.add-button', text: 'Plans' })

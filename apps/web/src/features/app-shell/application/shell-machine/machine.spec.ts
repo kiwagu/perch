@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import type { Locale } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import type { Theme } from '../../../../platform/theme'
 import { type FrameWrites, NOTHING_SEEN } from '../setting-writes'
@@ -494,7 +495,7 @@ describe('shell machine', () => {
     await waitFor(shell.actor, (state) => state.status === 'done')
 
     expect(shell.signOutHere).toHaveBeenCalledOnce()
-    expect(shell.emitted).toContainEqual({ type: 'navigate', to: '/sign-in' })
+    expect(shell.emitted).toContainEqual({ type: 'navigate', to: CONTRACT_ROUTES['user.sign-in'] })
   })
 
   it('says a screen that failed to render, and takes it away when another screen opens', () => {

@@ -1,7 +1,8 @@
 import { Fragment } from 'react'
 
-import { useT } from '@workspace/i18n'
+import { type Locale, useT } from '@workspace/i18n'
 import type { IdentityId, InvitationId, NoteId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -11,7 +12,11 @@ import type {
   OrganisationEvent,
   TenantRole,
 } from '../../../application/organisation-machine'
-import { OrganisationCreate } from '../../components/organisation-create/organisation-create.view'
+import {
+  type CreateDraft,
+  OrganisationCreate,
+} from '../../components/organisation-create/organisation-create.view'
+import { OrganisationDefaultLanguage } from '../../components/organisation-default-language/organisation-default-language.view'
 import {
   type InviteDraft,
   OrganisationInvite,
@@ -34,13 +39,21 @@ import {
 } from '../../components/organisation-sent/organisation-sent.view'
 import { roleLabel } from '../../components/role-words'
 
-export type { InviteDraft, MemberItem, NoteItem, OrganisationErrors, ReceivedItem, SentItem }
+export type {
+  CreateDraft,
+  InviteDraft,
+  MemberItem,
+  NoteItem,
+  OrganisationErrors,
+  ReceivedItem,
+  SentItem,
+}
 
 /** An organisation the signed-in identity belongs to, with its role there. */
 export interface OrganisationChoice {
   readonly key: string
   readonly name: string
-  readonly role: 'member' | 'admin'
+  readonly role: TenantRole
 }
 
 export interface OrganisationViewProps {
@@ -63,8 +76,14 @@ export interface OrganisationViewProps {
   /** The note whose edit form is shown; none while no note is edited. */
   readonly editing: NoteId | undefined
   readonly onToggleCreate: () => void
-  /** The actions of the forms resolve true once done, and the form that asked starts afresh. */
-  readonly onCreate: (input: { readonly key: string; readonly name: string }) => Promise<boolean>
+  /** What the create form's fields hold, and a change of them. */
+  readonly create: CreateDraft
+  readonly onCreateChange: (draft: CreateDraft) => void
+  /** What the new note's field holds, and a change of it. */
+  readonly newNote: string
+  readonly onNewNoteChange: (text: string) => void
+  /** The actions of the forms resolve true once done; the page empties the fields as its flow says. */
+  readonly onCreate: (input: CreateDraft) => Promise<boolean>
   readonly onSelect: (key: string) => void
   readonly onAddNote: (text: string) => Promise<boolean>
   readonly onOpenEdit: (id: NoteId) => void
@@ -80,6 +99,10 @@ export interface OrganisationViewProps {
   readonly onRevoke: (id: InvitationId) => void
   readonly onAccept: (id: InvitationId) => void
   readonly onDecline: (id: InvitationId) => void
+  /** The current organisation's default language, shown to an administrator; none while it has none. */
+  readonly defaultLanguage?: Locale | undefined
+  readonly onChooseDefaultLanguage: (locale: Locale) => void
+  readonly onClearDefaultLanguage: () => void
 }
 
 function OrganisationHeader(props: {
@@ -117,7 +140,6 @@ function OrganisationHeader(props: {
             onChange={props.onSelect}
             disabled={!props.can({ type: 'organisation.page.current-select', key: current.key })}
             testId="organisation.page.current-select"
-            holdsInput={false}
           />
         ) : null}
       </CardContent>
@@ -152,13 +174,15 @@ export function OrganisationView(props: OrganisationViewProps) {
               notes={props.notes}
               editing={props.editing}
               error={props.errors?.notes}
+              text={props.newNote}
               can={props.can}
+              onTextChange={props.onNewNoteChange}
               onAdd={props.onAddNote}
               onOpenEdit={props.onOpenEdit}
               onEdit={props.onEditNote}
               onDelete={props.onDeleteNote}
             />
-            {current.role === 'admin' ? (
+            {current.role === CONTRACT_ROLES.admin ? (
               <>
                 <OrganisationMembers
                   members={props.members}
@@ -179,6 +203,13 @@ export function OrganisationView(props: OrganisationViewProps) {
                   can={props.can}
                   onCopy={props.onCopy}
                   onRevoke={props.onRevoke}
+                />
+                <OrganisationDefaultLanguage
+                  locale={props.defaultLanguage}
+                  error={props.errors?.settings}
+                  can={props.can}
+                  onChoose={props.onChooseDefaultLanguage}
+                  onClear={props.onClearDefaultLanguage}
                 />
               </>
             ) : null}
@@ -217,8 +248,10 @@ export function OrganisationView(props: OrganisationViewProps) {
       {/* Closed, the create form is hidden and keeps what was typed; another organisation starts it afresh. */}
       <div key={current?.key ?? ''} hidden={current !== undefined && !props.creating}>
         <OrganisationCreate
+          draft={props.create}
           error={props.errors?.create}
           can={props.can}
+          onChange={props.onCreateChange}
           onCreate={props.onCreate}
         />
       </div>

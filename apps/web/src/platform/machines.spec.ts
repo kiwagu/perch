@@ -38,7 +38,7 @@ import { createOrganisationMachine } from '../features/organisation/application/
 import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'
 import { createDeleteAccountMachine } from '../features/user/application/delete-account.machine'
 import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
-import { createProfileMachine } from '../features/user/application/profile.machine'
+import { createProfileMachine } from '../features/user/application/profile-machine'
 import { createResetPasswordMachine } from '../features/user/application/reset-password.machine'
 import { createSettingsMachine } from '../features/user/application/settings/settings-machine'
 import { SignInService } from '../features/user/application/sign-in.service'
@@ -108,6 +108,9 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       copy: () => okAsync(undefined),
       accept: () => okAsync(undefined),
       decline: () => okAsync(undefined),
+      setDefaultLanguage: () => okAsync(undefined),
+      clearDefaultLanguage: () => okAsync(undefined),
+      defaultsHeld: () => false,
       account: () => undefined,
       current: () => undefined,
     }),
@@ -146,6 +149,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       changePassword: () => okAsync(undefined),
       changeEmail: () => okAsync(undefined),
       requestAccountDeletion: () => okAsync(undefined),
+      enableTwoFactor: () => errAsync(dataError('data:OFFLINE', 'not in this spec')),
+      confirmTwoFactor: () => okAsync(undefined),
+      disableTwoFactor: () => okAsync(undefined),
+      renewCodes: () => okAsync([]),
+      addPasskey: () => okAsync(undefined),
+      removePasskey: () => okAsync(undefined),
     }),
   'user.profile': () =>
     createProfileMachine({

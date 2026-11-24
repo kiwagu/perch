@@ -1,7 +1,9 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { tokenLink } from '../../auth/account-mails'
 
 /** The front's screen an invitation link opens: it shows the invitation the link's token names. */
-export const INVITATION_PATH = '/invitation'
+export const INVITATION_PATH = CONTRACT_ROUTES['organisation.invitation']
 
 /** The link to the front's invitation screen carrying `token`, which a mail sends. */
 export const invitationLink = (publicUrl: string, token: string): string =>

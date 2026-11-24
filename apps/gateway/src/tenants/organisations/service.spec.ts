@@ -12,6 +12,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_VALUES } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
@@ -466,7 +467,7 @@ describe('Organisations', () => {
     expect(created.tenant.id).toMatch(/^tnt_/)
     expect(created).toEqual({
       tenant: { id: created.tenant.id, key: 'acme', name: 'Acme' },
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
     expect(await organisations.membershipsOf(ann.id)).toEqual(ok([created]))
     const [rows] = await directory.db.query<[Array<{ status: string; database: string }>]>(
@@ -479,7 +480,7 @@ describe('Organisations', () => {
       await directory.db.query<[{ databases: { t_acme?: string } }]>(namespaceInfo)
 
     expect(namespace.databases.t_acme).toMatch(/^DEFINE DATABASE t_acme STRICT\b/)
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
     expect(heard).toEqual([[ann.id, [created]]])
   })
 
@@ -499,7 +500,7 @@ describe('Organisations', () => {
     expect(again.tenant.id).not.toBe(first.tenant.id)
     expect(opened).toEqual(['acme', 'acme'])
     expect(await organisations.membershipsOf(ann.id)).toEqual(ok([again]))
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
   })
 
   it('refuses a key another identity took', async () => {
@@ -539,7 +540,7 @@ describe('Organisations', () => {
     )
 
     expect(rows).toEqual([{ status: 'ready', database: 't_acme' }])
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
     expect(heard).toEqual([[ann.id, [created]]])
   })
 
@@ -551,8 +552,11 @@ describe('Organisations', () => {
       await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' })
     )._unsafeUnwrap()
 
-    expect(created).toMatchObject({ tenant: { key: 'acme', name: 'Acme' }, role: 'admin' })
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(created).toMatchObject({
+      tenant: { key: 'acme', name: 'Acme' },
+      role: CONTRACT_ROLES.admin,
+    })
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
     // The listener that heard it keeps the list; the one that did not is told again after the delay.
     expect(heard).toEqual([[ann.id, [created]]])
     expect(deaf).toEqual([[ann.id, [created]]])
@@ -592,17 +596,19 @@ describe('Organisations', () => {
     ).toEqual(refused('key-taken'))
   })
 
-  it('refuses a key outside the pattern and a name outside 1..80 characters', async () => {
+  it('refuses a key outside the pattern and a name outside the length of an organisation name', async () => {
     const { organisations, ann, directory, heard } = await harness()
     const create = async (key: string, name: string) =>
       (await organisations.create({ identity: ann.id, key, name }))._unsafeUnwrapErr()
 
-    expect(await create('Acme', 'Acme')).toEqual(refused('invalid-key'))
-    expect(await create('a', 'Acme')).toEqual(refused('invalid-key'))
-    expect(await create('acme-corp', 'Acme')).toEqual(refused('invalid-key'))
-    expect(await create('acme', '')).toEqual(refused('invalid-name'))
-    expect(await create('acme', '   ')).toEqual(refused('invalid-name'))
-    expect(await create('acme', 'x'.repeat(81))).toEqual(refused('invalid-name'))
+    expect(await create('Acme', 'Acme')).toEqual(refused('key-invalid'))
+    expect(await create('a', 'Acme')).toEqual(refused('key-invalid'))
+    expect(await create('acme-corp', 'Acme')).toEqual(refused('key-invalid'))
+    expect(await create('acme', '')).toEqual(refused('name-required'))
+    expect(await create('acme', '   ')).toEqual(refused('name-required'))
+    expect(
+      await create('acme', 'x'.repeat(CONTRACT_VALUES['organisation-name'].maxLength + 1)),
+    ).toEqual(refused('name-too-long'))
     const [tenants, memberships] = await directory.db.query<[unknown[], unknown[]]>(directoryRows)
 
     expect(tenants).toEqual([])
@@ -627,7 +633,7 @@ describe('Organisations', () => {
     })
 
     expect(memberships).toEqual([])
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
     expect(heard).toEqual([[bob.id, []]])
   })
 
@@ -656,7 +662,7 @@ describe('Organisations', () => {
     expect(await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })).toEqual(
       ok(undefined),
     )
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
     expect(heard).toEqual([[bob.id, []]])
   })
 
@@ -689,7 +695,7 @@ describe('Organisations', () => {
     expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
     expect(heard).toEqual([])
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([]))
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
 
     await retold()
 
@@ -715,7 +721,7 @@ describe('Organisations', () => {
         actor: ann.id,
         key: 'acme',
         email: 'bob@example.test',
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     )._unsafeUnwrap()
 
@@ -746,15 +752,18 @@ describe('Organisations', () => {
     held.release()
 
     expect(await removal).toEqual(ok(undefined))
-    expect((await accepting)._unsafeUnwrap()).toEqual({ tenant: acme.tenant, role: 'member' })
+    expect((await accepting)._unsafeUnwrap()).toEqual({
+      tenant: acme.tenant,
+      role: CONTRACT_ROLES.member,
+    })
 
-    const joined: Membership = { tenant: acme.tenant, role: 'member' }
+    const joined: Membership = { tenant: acme.tenant, role: CONTRACT_ROLES.member }
 
     // Removed, then accepted: the directory and the organisation's database agree.
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
     expect(await membersIn('acme')).toEqual([
-      { identity: ann.id, role: 'admin' },
-      { identity: bob.id, role: 'member' },
+      { identity: ann.id, role: CONTRACT_ROLES.admin },
+      { identity: bob.id, role: CONTRACT_ROLES.member },
     ])
     expect(heard).toEqual([
       [bob.id, []],
@@ -789,7 +798,7 @@ describe('Organisations', () => {
         actor: ann.id,
         key: 'zeta',
         email: 'bob@example.test',
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     )._unsafeUnwrap()
 
@@ -820,15 +829,18 @@ describe('Organisations', () => {
     held.release()
 
     expect(await departure).toEqual(ok(undefined))
-    expect((await accepting)._unsafeUnwrap()).toEqual({ tenant: zeta.tenant, role: 'member' })
+    expect((await accepting)._unsafeUnwrap()).toEqual({
+      tenant: zeta.tenant,
+      role: CONTRACT_ROLES.member,
+    })
 
-    const joined: Membership = { tenant: zeta.tenant, role: 'member' }
+    const joined: Membership = { tenant: zeta.tenant, role: CONTRACT_ROLES.member }
 
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
     expect(await membersIn('zeta')).toEqual([
-      { identity: ann.id, role: 'admin' },
-      { identity: bob.id, role: 'member' },
+      { identity: ann.id, role: CONTRACT_ROLES.admin },
+      { identity: bob.id, role: CONTRACT_ROLES.member },
     ])
     // Only the acceptance told bob's listeners; the departure took no region from any connection.
     expect(heard).toEqual([[bob.id, [joined]]])
@@ -844,7 +856,7 @@ describe('Organisations', () => {
     expect(await organisations.remove({ actor: ann.id, key: 'acme', identity: cat.id })).toEqual(
       ok(undefined),
     )
-    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: CONTRACT_ROLES.admin }])
     expect(await organisations.membershipsOf(cat.id)).toEqual(ok([]))
     // A removal cannot tell a first one from one asked again after a failure: it always tells.
     expect(heard).toEqual([[cat.id, []]])
@@ -898,7 +910,7 @@ describe('Organisations.setRole', () => {
         actor: setup.ann.id,
         key: 'acme',
         identity: setup.bob.id,
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
       }),
     ).toEqual(ok(undefined))
     setup.heard.splice(0)
@@ -910,34 +922,58 @@ describe('Organisations.setRole', () => {
     const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf } = await withBob()
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'admin' }]]])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.admin }]]])
   })
 
   it('demotes another admin to member, and tells the demoted identity, not the actor', async () => {
     const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf } = await withTwoAdmins()
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'member' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
 
   it('lets an admin demote itself while another admin stays', async () => {
     const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf } = await withTwoAdmins()
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: ann.id, role: 'member' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: ann.id,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', ann.id)).toEqual(['member'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'member', [bob.id]: 'admin' })
-    expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: 'member' }]]])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.member,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
+    expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
 
   it('refuses the only admin demoting itself `last-admin`, leaving every role as it was and telling nobody', async () => {
@@ -949,12 +985,15 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: ann.id,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
     expect(heard).toEqual([])
   })
 
@@ -971,25 +1010,34 @@ describe('Organisations.setRole', () => {
     })
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
     expect(steps).toEqual(['directory write', `rerole ${bob.id} tenant:acme admin`, 'told'])
   })
 
   it('re-judges a role written again, and no connection for a change that is refused', async () => {
     const { organisations, ann, bob, cat, steps } = await withBob()
-    const set = (actor: IdentityId, identity: IdentityId, role: 'member' | 'admin') =>
+    const set = (actor: IdentityId, identity: IdentityId, role: TenantRole) =>
       organisations.setRole({ actor, key: 'acme', identity, role })
 
-    expect(await set(ann.id, bob.id, 'member')).toEqual(ok(undefined))
+    expect(await set(ann.id, bob.id, CONTRACT_ROLES.member)).toEqual(ok(undefined))
     expect(steps).toEqual([`rerole ${bob.id} tenant:acme member`])
     steps.splice(0)
 
-    expect((await set(ann.id, ann.id, 'member'))._unsafeUnwrapErr()).toEqual(refused('last-admin'))
-    expect((await set(ann.id, cat.id, 'admin'))._unsafeUnwrapErr()).toEqual(
+    expect((await set(ann.id, ann.id, CONTRACT_ROLES.member))._unsafeUnwrapErr()).toEqual(
+      refused('last-admin'),
+    )
+    expect((await set(ann.id, cat.id, CONTRACT_ROLES.admin))._unsafeUnwrapErr()).toEqual(
       refused('no-such-member'),
     )
-    expect((await set(bob.id, bob.id, 'admin'))._unsafeUnwrapErr()).toEqual(refused('not-admin'))
+    expect((await set(bob.id, bob.id, CONTRACT_ROLES.admin))._unsafeUnwrapErr()).toEqual(
+      refused('not-admin'),
+    )
     expect(steps).toEqual([])
   })
 
@@ -1005,34 +1053,45 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: bob.id,
-          role: 'admin',
+          role: CONTRACT_ROLES.admin,
         })
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
     // Both rows were written before.
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
     expect(heard).toEqual([])
 
     letRerole(true)
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'admin' }]]])
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.admin }]]])
   })
 
   it('refuses a member changing a role, an outsider and an unknown organisation', async () => {
     const { organisations, ann, bob, cat, heard, memberRolesIn } = await withBob()
     const set = async (actor: IdentityId, key: string) =>
       (
-        await organisations.setRole({ actor, key, identity: bob.id, role: 'admin' })
+        await organisations.setRole({ actor, key, identity: bob.id, role: CONTRACT_ROLES.admin })
       )._unsafeUnwrapErr()
 
     expect(await set(bob.id, 'acme')).toEqual(refused('not-admin'))
     expect(await set(cat.id, 'acme')).toEqual(refused('not-a-member'))
     expect(await set(ann.id, 'globex')).toEqual(refused('no-such-tenant'))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
     expect(heard).toEqual([])
   })
 
@@ -1041,7 +1100,12 @@ describe('Organisations.setRole', () => {
 
     expect(
       (
-        await organisations.setRole({ actor: ann.id, key: 'acme', identity: cat.id, role: 'admin' })
+        await organisations.setRole({
+          actor: ann.id,
+          key: 'acme',
+          identity: cat.id,
+          role: CONTRACT_ROLES.admin,
+        })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('no-such-member'))
     expect(await rolesOf('acme', cat.id)).toEqual([])
@@ -1056,11 +1120,19 @@ describe('Organisations.setRole', () => {
     await forgetMember('acme', bob.id)
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'member' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
 
   it('decides on the directory: a lost member row of the only admin changes nothing about who is the last admin, and the refusal writes it again as the directory has it', async () => {
@@ -1074,12 +1146,15 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: ann.id,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
   })
 
   it('a `last-admin` refusal whose restore of the member row fails answers that failure, telling nobody', async () => {
@@ -1095,7 +1170,7 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: ann.id,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
@@ -1115,21 +1190,29 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: bob.id,
-          role: 'admin',
+          role: CONTRACT_ROLES.admin,
         })
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
     expect(heard).toEqual([])
 
     refuseInTenants(undefined)
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'admin' }]]])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.admin }]]])
   })
 
   it('a self-demotion whose directory write fails after the member row was written answers failed, and asking again completes it', async () => {
@@ -1148,24 +1231,35 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: ann.id,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
     // The member row went first; the directory, the authority, still says admin.
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'member', [bob.id]: 'admin' })
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.member,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(heard).toEqual([])
 
     onDirectoryQuery(undefined)
 
     // Ann is still an admin to the directory, so she can ask again.
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: ann.id, role: 'member' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: ann.id,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', ann.id)).toEqual(['member'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'member', [bob.id]: 'admin' })
-    expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: 'member' }]]])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.member,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
+    expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
 
   it("a self-demotion that failed at the directory, then the other admin's self-demotion: the retry is refused `last-admin` and its member row says admin again", async () => {
@@ -1184,19 +1278,30 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: ann.id,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
     onDirectoryQuery(undefined)
     // Half done: ann's member row says member, the directory still counts her an admin.
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'member', [bob.id]: 'admin' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.member,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
 
     expect(
-      await organisations.setRole({ actor: bob.id, key: 'acme', identity: bob.id, role: 'member' }),
+      await organisations.setRole({
+        actor: bob.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toEqual(ok(undefined))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'member', [bob.id]: 'member' })
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.member,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
     heard.splice(0)
 
     expect(
@@ -1205,12 +1310,15 @@ describe('Organisations.setRole', () => {
           actor: ann.id,
           key: 'acme',
           identity: ann.id,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
     expect(heard).toEqual([])
   })
 
@@ -1218,14 +1326,22 @@ describe('Organisations.setRole', () => {
     const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf, retold } =
       await withTwoAdmins()
     const deaf = deafOnce(organisations, 'rejects')
-    const demoted: Membership = { tenant: acme.tenant, role: 'member' }
+    const demoted: Membership = { tenant: acme.tenant, role: CONTRACT_ROLES.member }
 
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'member' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toEqual(ok(undefined))
     // Both rows were written before the telling.
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
     expect(heard).toEqual([[bob.id, [demoted]]])
     expect(deaf).toEqual([[bob.id, [demoted]]])
 
@@ -1264,7 +1380,7 @@ describe('Organisations.setRole', () => {
       actor: ann.id,
       key: 'acme',
       identity: bob.id,
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
 
     await held.waiting
@@ -1276,7 +1392,7 @@ describe('Organisations.setRole', () => {
       actor: bob.id,
       key: 'acme',
       identity: ann.id,
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
 
     await queued
@@ -1284,10 +1400,10 @@ describe('Organisations.setRole', () => {
 
     expect(await first).toEqual(ok(undefined))
     expect((await second)._unsafeUnwrapErr()).toEqual(refused('not-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
-    expect(await memberRolesIn('acme')).toEqual({ [bob.id]: 'member' })
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await memberRolesIn('acme')).toEqual({ [bob.id]: CONTRACT_ROLES.member })
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
 
   it("a self-demotion first and the other admin's departure at once: the departure is refused `last-admin`, an admin stays", async () => {
@@ -1299,7 +1415,7 @@ describe('Organisations.setRole', () => {
       actor: ann.id,
       key: 'acme',
       identity: ann.id,
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
 
     await held.waiting
@@ -1312,9 +1428,9 @@ describe('Organisations.setRole', () => {
 
     expect(await demotion).toEqual(ok(undefined))
     expect((await departure)._unsafeUnwrapErr()).toEqual({ kind: 'refused', code: 'last-admin' })
-    expect(await rolesOf('acme', ann.id)).toEqual(['member'])
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-    expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: 'member' }]]])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.member])
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
   })
 
   it("the other admin's departure first and a self-demotion at once: the demotion is refused `last-admin`, an admin stays", async () => {
@@ -1331,7 +1447,7 @@ describe('Organisations.setRole', () => {
       actor: ann.id,
       key: 'acme',
       identity: ann.id,
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
 
     await queued
@@ -1339,7 +1455,7 @@ describe('Organisations.setRole', () => {
 
     expect(await departure).toEqual(ok(undefined))
     expect((await demotion)._unsafeUnwrapErr()).toEqual(refused('last-admin'))
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
     expect(await rolesOf('acme', bob.id)).toEqual([])
     expect(heard).toEqual([])
   })
@@ -1365,12 +1481,18 @@ describe('Organisations, a failed tell', () => {
           await organisations.create({ identity: ann.id, key: 'zeta', name: 'Zeta' })
         )._unsafeUnwrap()
 
-        expect(zeta).toMatchObject({ tenant: { key: 'zeta', name: 'Zeta' }, role: 'admin' })
+        expect(zeta).toMatchObject({
+          tenant: { key: 'zeta', name: 'Zeta' },
+          role: CONTRACT_ROLES.admin,
+        })
 
         return {
           identity: ann.id,
           memberships: [acme, zeta],
-          rows: { acme: { [ann.id]: 'admin', [bob.id]: 'member' }, zeta: { [ann.id]: 'admin' } },
+          rows: {
+            acme: { [ann.id]: CONTRACT_ROLES.admin, [bob.id]: CONTRACT_ROLES.member },
+            zeta: { [ann.id]: CONTRACT_ROLES.admin },
+          },
         }
       },
     ],
@@ -1383,14 +1505,14 @@ describe('Organisations, a failed tell', () => {
             actor: ann.id,
             key: 'acme',
             identity: bob.id,
-            role: 'admin',
+            role: CONTRACT_ROLES.admin,
           }),
         ).toEqual(ok(undefined))
 
         return {
           identity: bob.id,
-          memberships: [{ tenant: acme.tenant, role: 'admin' }],
-          rows: { acme: { [ann.id]: 'admin', [bob.id]: 'admin' } },
+          memberships: [{ tenant: acme.tenant, role: CONTRACT_ROLES.admin }],
+          rows: { acme: { [ann.id]: CONTRACT_ROLES.admin, [bob.id]: CONTRACT_ROLES.admin } },
         }
       },
     ],
@@ -1402,7 +1524,11 @@ describe('Organisations, a failed tell', () => {
           await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id }),
         ).toEqual(ok(undefined))
 
-        return { identity: bob.id, memberships: [], rows: { acme: { [ann.id]: 'admin' } } }
+        return {
+          identity: bob.id,
+          memberships: [],
+          rows: { acme: { [ann.id]: CONTRACT_ROLES.admin } },
+        }
       },
     ],
   ]
@@ -1521,14 +1647,14 @@ describe('Organisations, a failed tell', () => {
       }
     })
 
-    const promoted: Membership = { tenant: acme.tenant, role: 'admin' }
-    const demoted: Membership = { tenant: acme.tenant, role: 'member' }
+    const promoted: Membership = { tenant: acme.tenant, role: CONTRACT_ROLES.admin }
+    const demoted: Membership = { tenant: acme.tenant, role: CONTRACT_ROLES.member }
     const queue = watchQueue('ofIdentity')
     const first = organisations.setRole({
       actor: ann.id,
       key: 'acme',
       identity: bob.id,
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
 
     await vi.waitFor(() => expect(slow).toEqual([[bob.id, [promoted]]]))
@@ -1540,14 +1666,17 @@ describe('Organisations, a failed tell', () => {
       actor: ann.id,
       key: 'acme',
       identity: bob.id,
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
 
     await queued
     await flush()
     expect(written).toHaveLength(1)
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
 
     release()
 
@@ -1571,7 +1700,12 @@ describe('Organisations, a failed tell', () => {
 
     onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
     expect(heard).toEqual([])
     onDirectoryQuery(undefined)
@@ -1583,7 +1717,7 @@ describe('Organisations, a failed tell', () => {
       ok(undefined),
     )
     expect(heard).toEqual([
-      [bob.id, [{ tenant: acme.tenant, role: 'admin' }]],
+      [bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.admin }]],
       [bob.id, []],
     ])
     expect(clock.pending()).toBe(0)
@@ -1595,7 +1729,12 @@ describe('Organisations, a failed tell', () => {
 
     onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
     expect(heard).toEqual([])
     onDirectoryQuery(undefined)
@@ -1627,7 +1766,12 @@ describe('Organisations, a failed tell', () => {
 
     onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
     onDirectoryQuery(undefined)
 
@@ -1654,7 +1798,12 @@ describe('Organisations, a failed tell', () => {
 
     onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
     expect(
-      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+      await organisations.setRole({
+        actor: ann.id,
+        key: 'acme',
+        identity: bob.id,
+        role: CONTRACT_ROLES.admin,
+      }),
     ).toEqual(ok(undefined))
 
     // The member row goes, then the directory refuses to delete the membership.
@@ -1666,14 +1815,14 @@ describe('Organisations, a failed tell', () => {
     expect((await organisations.leaveAll(bob.id))._unsafeUnwrapErr()).toMatchObject({
       code: 'data:WRITE_FAILED',
     })
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
     expect(heard).toEqual([])
     onDirectoryQuery(undefined)
 
     await retold()
 
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'admin' }]]])
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.admin }]]])
   })
 })
 
@@ -1688,9 +1837,12 @@ describe('OrganisationAdmission', () => {
       members: new TenantMembers(databases),
     })
 
-    expect((await admission.admit(acme.tenant, bob.id, 'admin')).isOk()).toBe(true)
-    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
+    expect((await admission.admit(acme.tenant, bob.id, CONTRACT_ROLES.admin)).isOk()).toBe(true)
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
   })
 
   it('refuses an identity already in `already-member` once its member row is restored with the directory role', async () => {
@@ -1706,13 +1858,16 @@ describe('OrganisationAdmission', () => {
       members: new TenantMembers(databases),
     })
 
-    expect((await admission.admit(acme.tenant, bob.id, 'member')).isOk()).toBe(true)
+    expect((await admission.admit(acme.tenant, bob.id, CONTRACT_ROLES.member)).isOk()).toBe(true)
     // Asked again for the founder with another role: the directory's role wins.
-    expect((await admission.admit(acme.tenant, ann.id, 'member'))._unsafeUnwrapErr()).toEqual(
-      refused('already-member'),
-    )
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(
+      (await admission.admit(acme.tenant, ann.id, CONTRACT_ROLES.member))._unsafeUnwrapErr(),
+    ).toEqual(refused('already-member'))
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
   })
 })
 
@@ -1743,7 +1898,7 @@ describe('the members list', () => {
     await invited('bob@example.test')
 
     expect(await organisations.membersOf({ actor: ann.id, key: 'acme' })).toEqual(
-      members([ann, 'admin'], [bob, 'member']),
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
     )
     expect(
       (await organisations.membersOf({ actor: bob.id, key: 'acme' }))._unsafeUnwrapErr(),
@@ -1773,10 +1928,13 @@ describe('the members list', () => {
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
     refuseInTenants(undefined)
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await listed(setup)).toEqual(members([ann, CONTRACT_ROLES.admin]))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
     expect(await rolesOf('acme', bob.id)).toEqual([])
   })
 
@@ -1791,7 +1949,7 @@ describe('the members list', () => {
         actor: ann.id,
         key: 'acme',
         email: 'bob@example.test',
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     )._unsafeUnwrap()
 
@@ -1806,10 +1964,13 @@ describe('the members list', () => {
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
     onDirectoryQuery(undefined)
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await listed(setup)).toEqual(members([ann, CONTRACT_ROLES.admin]))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
     expect(await rolesOf('acme', bob.id)).toEqual([])
     expect(
       (await organisations.invitations.pending({ actor: ann.id, key: 'acme' }))._unsafeUnwrap(),
@@ -1831,16 +1992,24 @@ describe('the members list', () => {
           actor: ann.id,
           key: 'acme',
           identity: bob.id,
-          role: 'admin',
+          role: CONTRACT_ROLES.admin,
         })
       )._unsafeUnwrapErr(),
     ).toMatchObject({ code: 'data:WRITE_FAILED' })
     onDirectoryQuery(undefined)
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.admin,
+    })
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await listed(setup)).toEqual(
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
+    )
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('lists a member whose departure failed at the directory after its member row went, and writes its row again', async () => {
@@ -1856,22 +2025,32 @@ describe('the members list', () => {
       code: 'data:WRITE_FAILED',
     })
     onDirectoryQuery(undefined)
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await listed(setup)).toEqual(
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
+    )
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('deletes a member row no membership wants', async () => {
     const setup = await withBob()
     const { ann, bob, cat, memberRolesIn, rolesOf } = setup
 
-    await rowOf(setup, cat.id, 'admin')
-    expect(await memberRolesIn('acme')).toMatchObject({ [cat.id]: 'admin' })
+    await rowOf(setup, cat.id, CONTRACT_ROLES.admin)
+    expect(await memberRolesIn('acme')).toMatchObject({ [cat.id]: CONTRACT_ROLES.admin })
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await listed(setup)).toEqual(
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
+    )
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
     expect(await rolesOf('acme', cat.id)).toEqual([])
   })
 
@@ -1881,9 +2060,12 @@ describe('the members list', () => {
 
     await directory.db.query(identityForget, { identity: recordId('identity', bob.id) })
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await listed(setup)).toEqual(members([ann, CONTRACT_ROLES.admin]))
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('writes the missing row of a membership whose identity is gone too', async () => {
@@ -1893,8 +2075,11 @@ describe('the members list', () => {
     await directory.db.query(identityForget, { identity: recordId('identity', bob.id) })
     await forgetMember('acme', bob.id)
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await listed(setup)).toEqual(members([ann, CONTRACT_ROLES.admin]))
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
   })
 
   it('lists in the order the memberships were made', async () => {
@@ -1906,18 +2091,24 @@ describe('the members list', () => {
     await invited('cat@example.test')
     // The member rows are written in the reverse order: they would list cat first.
     await clearMembers('acme')
-    await rowOf(setup, cat.id, 'member')
-    await rowOf(setup, bob.id, 'member')
-    await rowOf(setup, ann.id, 'admin')
+    await rowOf(setup, cat.id, CONTRACT_ROLES.member)
+    await rowOf(setup, bob.id, CONTRACT_ROLES.member)
+    await rowOf(setup, ann.id, CONTRACT_ROLES.admin)
     expect(
       (await new TenantMembers(databases).list('acme'))._unsafeUnwrap().map((row) => keyOf(row.id)),
     ).toEqual([cat.id, bob.id, ann.id])
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member'], [cat, 'member']))
+    expect(await listed(setup)).toEqual(
+      members(
+        [ann, CONTRACT_ROLES.admin],
+        [bob, CONTRACT_ROLES.member],
+        [cat, CONTRACT_ROLES.member],
+      ),
+    )
     expect(await memberRolesIn('acme')).toEqual({
-      [ann.id]: 'admin',
-      [bob.id]: 'member',
-      [cat.id]: 'member',
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+      [cat.id]: CONTRACT_ROLES.member,
     })
   })
 
@@ -1925,7 +2116,7 @@ describe('the members list', () => {
     const setup = await withBob()
     const { ann, bob, cat, onDirectoryQuery, memberRolesIn } = setup
 
-    await rowOf(setup, cat.id, 'member')
+    await rowOf(setup, cat.id, CONTRACT_ROLES.member)
     onDirectoryQuery((text) => {
       if (text === membershipsOfTenantStatement) {
         throw new Error('the directory went away for a moment')
@@ -1934,15 +2125,20 @@ describe('the members list', () => {
 
     expect((await listed(setup))._unsafeUnwrapErr()).toMatchObject({ code: 'data:QUERY_FAILED' })
     expect(await memberRolesIn('acme')).toEqual({
-      [ann.id]: 'admin',
-      [bob.id]: 'member',
-      [cat.id]: 'member',
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+      [cat.id]: CONTRACT_ROLES.member,
     })
 
     onDirectoryQuery(undefined)
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await listed(setup)).toEqual(
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
+    )
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
   })
 
   it('answers data:WRITE_FAILED when a row cannot be written, stops there, and the next read settles', async () => {
@@ -1950,34 +2146,47 @@ describe('the members list', () => {
     const { ann, bob, cat, forgetMember, refuseInTenants, memberRolesIn } = setup
 
     await forgetMember('acme', bob.id)
-    await rowOf(setup, cat.id, 'member')
+    await rowOf(setup, cat.id, CONTRACT_ROLES.member)
     refuseInTenants(memberAddStatement)
 
     expect((await listed(setup))._unsafeUnwrapErr()).toMatchObject({ code: 'data:WRITE_FAILED' })
     // The writes go one after the other, the first failure answering: the delete that follows
     // the failed write was not tried.
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [cat.id]: 'member' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [cat.id]: CONTRACT_ROLES.member,
+    })
 
     refuseInTenants(undefined)
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await listed(setup)).toEqual(
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
+    )
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
   })
 
   it('answers data:WRITE_FAILED when a row cannot be deleted, and the next read settles', async () => {
     const setup = await withBob()
     const { ann, bob, cat, refuseInTenants, memberRolesIn } = setup
 
-    await rowOf(setup, cat.id, 'member')
+    await rowOf(setup, cat.id, CONTRACT_ROLES.member)
     refuseInTenants(memberRemoveStatement)
 
     expect((await listed(setup))._unsafeUnwrapErr()).toMatchObject({ code: 'data:WRITE_FAILED' })
-    expect(await memberRolesIn('acme')).toMatchObject({ [cat.id]: 'member' })
+    expect(await memberRolesIn('acme')).toMatchObject({ [cat.id]: CONTRACT_ROLES.member })
 
     refuseInTenants(undefined)
 
-    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await listed(setup)).toEqual(
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
+    )
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
   })
 
   it('waits for an accept paused between its member row and its directory transaction', async () => {
@@ -1991,7 +2200,7 @@ describe('the members list', () => {
         actor: ann.id,
         key: 'acme',
         email: 'bob@example.test',
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     )._unsafeUnwrap()
     const held = holdDirectory(invitationAcceptStatement)
@@ -2009,14 +2218,22 @@ describe('the members list', () => {
     // the member row the accept wrote is not deleted meanwhile.
     await queued
     await flush()
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
 
     held.release()
 
     expect((await accepting).isOk()).toBe(true)
-    expect(await listing).toEqual(members([ann, 'admin'], [bob, 'member']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await listing).toEqual(
+      members([ann, CONTRACT_ROLES.admin], [bob, CONTRACT_ROLES.member]),
+    )
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: CONTRACT_ROLES.admin,
+      [bob.id]: CONTRACT_ROLES.member,
+    })
+    expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
   })
 
   it('waits for a departure paused between its member-row delete and its membership delete', async () => {
@@ -2026,7 +2243,7 @@ describe('the members list', () => {
     const departure = organisations.leaveAll(bob.id)
 
     await held.reached
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
 
     const queued = watchQueue().untilQueued()
     const listing = listed(setup)
@@ -2035,13 +2252,13 @@ describe('the members list', () => {
     // two deletes, which would leave a row no membership wants.
     await queued
     await flush()
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
 
     held.release()
 
     expect(await departure).toEqual(ok(undefined))
-    expect(await listing).toEqual(members([ann, 'admin']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await listing).toEqual(members([ann, CONTRACT_ROLES.admin]))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
     expect(await rolesOf('acme', bob.id)).toEqual([])
   })
 
@@ -2084,8 +2301,8 @@ describe('the members list', () => {
     ])
 
     expect(created).toEqual(ok(acme))
-    expect(listing).toEqual(members([ann, 'admin']))
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
-    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(listing).toEqual(members([ann, CONTRACT_ROLES.admin]))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
+    expect(await rolesOf('acme', ann.id)).toEqual([CONTRACT_ROLES.admin])
   })
 })

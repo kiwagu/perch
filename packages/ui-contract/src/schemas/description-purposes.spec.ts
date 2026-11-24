@@ -65,7 +65,7 @@ const FILES: ReadonlyArray<{
   {
     file: 'the platform file',
     schema: platformFileSchema,
-    fields: ['action', 'actionParameter', 'composite'],
+    fields: ['value', 'action', 'actionParameter', 'composite'],
     meanings: ['event', 'compositeItem'],
   },
   {

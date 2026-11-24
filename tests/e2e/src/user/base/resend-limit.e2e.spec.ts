@@ -16,6 +16,7 @@ test.describe('Ask for the verification mail again too often', { tag: '@full' },
       // Expected: After step 1 [mail:sign-up] reaches the email
       expectDeclaredMail(await mailbox.next(data.email, 0), 'sign-up', {
         params: { email: data.email, locale: 'en' },
+        account: { email: data.email, language: 'en' },
       })
     })
 

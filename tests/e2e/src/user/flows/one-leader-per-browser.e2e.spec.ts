@@ -1,6 +1,8 @@
 // scenario: user/flows/one-leader-per-browser
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test, toast } from '../../support/fixtures'
 
@@ -20,7 +22,7 @@ test.describe('Sync from one tab per browser', { tag: '@full' }, () => {
     }
 
     await test.step('1. On device A, open [/me] in a first tab and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toBeVisible()
     })
@@ -29,7 +31,7 @@ test.describe('Sync from one tab per browser', { tag: '@full' }, () => {
       await test.step('2. On device A, open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const second = await page.context().newPage()
 
-        await second.goto('/me')
+        await second.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(second)
         await expect(second.getByTestId('user.profile.heading')).toBeVisible()
 

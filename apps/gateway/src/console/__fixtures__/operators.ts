@@ -5,6 +5,7 @@
  */
 
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 
 import {
   AUTH_SECRET,
@@ -69,7 +70,7 @@ export const deviceOf = (email: string): string => `device-${email}`
 export async function setRole(
   auth: ConsoleAuth,
   identity: IdentityId,
-  role: 'operator' | 'user',
+  role: PlatformRole | 'user',
 ): Promise<void> {
   await auth.local.db.query(identityRoleSetStatement, { identity, role })
 }
@@ -81,7 +82,7 @@ export async function setRole(
 export async function signedUp(
   auth: ConsoleAuth,
   email: string,
-  options: { readonly role?: 'operator' | 'user'; readonly name?: string } = {},
+  options: { readonly role?: PlatformRole | 'user'; readonly name?: string } = {},
 ): Promise<SignedIn> {
   const device = deviceOf(email)
   const { token, user } = await signUpOn(auth.auth, email, deviceHeaders(device), {

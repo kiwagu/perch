@@ -1,3 +1,5 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 /**
  * The screen the router resolved for the address open, as the frame names and marks it: the path
  * of its route as declared (`/$` for an address no other route takes), and `/$` as well for a page
@@ -7,7 +9,7 @@
  */
 
 /** The path of the binding that opens the not-found screen. */
-export const NOT_FOUND_PATH = '/$'
+export const NOT_FOUND_PATH = CONTRACT_ROUTES['not-found']
 
 /** The fields of the router's state this reads: the router types its matches loosely. */
 interface RoutedState {

@@ -11,7 +11,7 @@ describe('SignOutHere', () => {
   it('signs the saved account out on this device', () => {
     const signOutHere = vi.fn()
 
-    renderWithProviders(<SignOutHere onSignOutHere={signOutHere} />)
+    renderWithProviders(<SignOutHere can={() => true} onSignOutHere={signOutHere} />)
 
     const button = screen.getByTestId('app-shell.sign-out-here-button')
 
@@ -20,8 +20,13 @@ describe('SignOutHere', () => {
     expect(signOutHere).toHaveBeenCalledOnce()
   })
 
-  it('holds the button while the sign-out runs', () => {
-    renderWithProviders(<SignOutHere onSignOutHere={() => {}} signingOutHere={true} />)
+  it('holds the button while the flow takes no sign-out, as while it runs', () => {
+    renderWithProviders(
+      <SignOutHere
+        can={(event) => event.type !== 'app-shell.sign-out-here-button'}
+        onSignOutHere={() => {}}
+      />,
+    )
 
     expect(screen.getByTestId('app-shell.sign-out-here-button').hasAttribute('disabled')).toBe(true)
   })

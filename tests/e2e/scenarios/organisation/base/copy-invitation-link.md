@@ -10,7 +10,7 @@ data:
 ---
 # Copy an invitation's link
 
-Where: [/org] on device A (user A, administrator) and [/invitation] from the copied link on device B (user B, another browser)
+Where: [/org] on device A (user A, admin) and [/invitation] from the copied link on device B (user B, another browser)
 
 ## Scenario: The copied link is the link the invitation mail carries, and it lets the invited account join
 

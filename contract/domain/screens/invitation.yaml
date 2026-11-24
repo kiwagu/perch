@@ -7,16 +7,6 @@ bindings:
   - path: /invitation
     roles: [ guest, identity ]
     history: push
-    search:
-      type: object
-      properties:
-        token:
-          type: string
-          minLength: 1
-          maxLength: 4096
-          description: The token the invitation mail carries in its link.
-          examples: [ eyJhbG...dXJl ]
-      additionalProperties: false
 entry: [ organisation.invitation.status, organisation.invitation.heading, organisation.invitation.error ]
 anchors:
   organisation.invitation.status:
@@ -37,7 +27,6 @@ anchors:
   organisation.invitation.sign-in-link:
     kind: link
     binding: { route: /sign-in }
-    roles: [ guest ]
   organisation.invitation.accept-button:
     kind: button
     description: Makes the account a member with the role shown, and opens the organisation.
@@ -65,6 +54,8 @@ flow:
       nobodyHere: nobody is signed in on this device
       linkUnusable: { codes: [ link-invalid, link-expired ] }
       invitationGone: { codes: [ invitation-gone ] }
+    renders:
+      open: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ]
   states:
     checking:
       description: The token of the link is being read.
@@ -93,12 +84,12 @@ flow:
               - show: organisation.invitation.error
     asking:
       description: The organisation and the role, with the buttons that accept and decline.
-      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      meta: { renders: [ open ] }
       on:
         organisation.invitation.accept-button: accepting
         organisation.invitation.decline-button: declining
     accepting:
-      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      meta: { renders: [ open ] }
       entry:
         - clear: organisation.invitation.error
       invoke:
@@ -117,7 +108,7 @@ flow:
             actions:
               - show: organisation.invitation.error
     declining:
-      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      meta: { renders: [ open ] }
       entry:
         - clear: organisation.invitation.error
       invoke:
@@ -144,7 +135,7 @@ flow:
       type: final
       meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge ] }
     link-dead:
-      description: The error says the link does not work; a new invitation is asked of the organisation's administrator.
+      description: The error says the link does not work; a new invitation is asked of an admin of the organisation.
       type: final
     unread:
       description: The error says why the link could not be read; loading the page again tries it again.

@@ -1,14 +1,17 @@
 // @vitest-environment jsdom
 import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 import { sizeOptionOf } from '@workspace/ui-contract/anchors'
 
+import { renderWithFacts } from '../../../../../field-facts.test-support'
 import { accountsNamed, bart, opal, una } from '../../../../../platform/__fixtures__/accounts'
 import type { AccountPage } from '../../../../../platform/accounts.port'
-import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/console.en.json'
 import es from '../../i18n/console.es.json'
 
@@ -16,8 +19,31 @@ import { UsersView, type UsersViewProps } from './users.view'
 
 const LIST = 'console.users.list'
 
-/** The users page with `props` over a first page of 25 holding Bart, Una and Opal. */
-function renderView(props: Partial<UsersViewProps> = {}) {
+/** Whether a field of the page holds unsaved input, as the frame's leave guard reads it. */
+let unsavedNow = false
+
+function UnsavedProbe() {
+  unsavedNow = useUnsavedInput()
+
+  return null
+}
+
+/** The view in the frame's scope of unsaved input, with a probe reading it. */
+const inUnsavedScope = (view: ReactElement) => (
+  <UnsavedInputScope>
+    {view}
+    <UnsavedProbe />
+  </UnsavedInputScope>
+)
+
+/**
+ * The users page with `props` over a first page of 25 holding Bart, Una and Opal, set into
+ * `around` when it is given.
+ */
+function renderView(
+  props: Partial<UsersViewProps> = {},
+  around: (view: ReactElement) => ReactElement = (view) => view,
+) {
   const handlers = {
     onText: vi.fn(),
     onSearch: vi.fn(() => Promise.resolve(true)),
@@ -30,15 +56,15 @@ function renderView(props: Partial<UsersViewProps> = {}) {
     page: { accounts: [bart, una, opal], total: 3 },
     failure: undefined,
     at: { page: 1, size: 25 },
-    pageHref: (page) => `/console/users?page=${page}`,
-    accountHref: (id: IdentityId) => `/console/account?id=${id}`,
+    pageHref: (page) => `${CONTRACT_ROUTES['console.users']}?page=${page}`,
+    accountHref: (id: IdentityId) => `${CONTRACT_ROUTES['console.account']}?id=${id}`,
     can: () => true,
     ...handlers,
     ...props,
   }
-  const rendered = renderWithProviders(<UsersView {...all} />)
+  const rendered = renderWithFacts(around(<UsersView {...all} />))
 
-  return { ...rendered, ...handlers }
+  return { ...rendered, ...handlers, view: all }
 }
 
 const rows = () => screen.queryAllByTestId(`${LIST}.account-item`)
@@ -150,8 +176,8 @@ describe('UsersView', () => {
     const next = screen.getByTestId(`${LIST}.next-link`)
 
     expect(range.textContent).toBe('11-20 of 25')
-    expect(previous.getAttribute('href')).toBe('/console/users?page=1')
-    expect(next.getAttribute('href')).toBe('/console/users?page=3')
+    expect(previous.getAttribute('href')).toBe(`${CONTRACT_ROUTES['console.users']}?page=1`)
+    expect(next.getAttribute('href')).toBe(`${CONTRACT_ROUTES['console.users']}?page=3`)
     expect(next.textContent).toBe('Next')
 
     expect(fireEvent.click(next)).toBe(false)
@@ -187,7 +213,7 @@ describe('UsersView', () => {
     ])
     expect(range.textContent).toBe('0 of 11')
     expect(screen.getByTestId(`${LIST}.previous-link`).getAttribute('href')).toBe(
-      '/console/users?page=2',
+      `${CONTRACT_ROUTES['console.users']}?page=2`,
     )
     expect(screen.queryByTestId(`${LIST}.next-link`)).toBeNull()
   })
@@ -239,12 +265,27 @@ describe('UsersView', () => {
     expect(onSize).toHaveBeenCalledWith(10)
   })
 
+  it('chooses a size at once: the select holds no input, so it shows no state and a leave asks nothing', async () => {
+    const { view, rerender } = renderView({ at: { page: 1, size: 25 } }, inUnsavedScope)
+    const user = userEvent.setup()
+
+    await user.click(screen.getByTestId(`${LIST}.size-select`))
+    await user.click(await screen.findByRole('option', { name: '10' }))
+    rerender(inUnsavedScope(<UsersView {...view} at={{ page: 1, size: 10 }} />))
+
+    const select = screen.getByTestId(`${LIST}.size-select`)
+
+    expect(select.getAttribute('data-value')).toBe('10')
+    expect(select.hasAttribute('data-state')).toBe(false)
+    expect(unsavedNow).toBe(false)
+  })
+
   it("links each row to its account's card, a plain click opening the entry's own id", () => {
     const { onOpen } = renderView()
     const [, unaRow] = rows()
     const open = within(unaRow ?? expect.unreachable('a row')).getByTestId(`${LIST}.open-link`)
 
-    expect(open.getAttribute('href')).toBe(`/console/account?id=${una.id}`)
+    expect(open.getAttribute('href')).toBe(`${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     expect(open.textContent).toBe('Open')
     expect(fireEvent.click(open, { ctrlKey: true })).toBe(true)
     expect(onOpen).not.toHaveBeenCalled()

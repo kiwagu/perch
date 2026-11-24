@@ -12,6 +12,8 @@ import { linkToken, Outbox } from '../mail/__fixtures__/outbox'
 import { AUTH_SECRET } from './__fixtures__/auth-instance'
 import settingsLocaleStatement from './__fixtures__/settings-locale.surql'
 import { readVerificationToken, verificationKey } from './account-links'
+import { SIGN_UP_FLOOR_MS } from './auth-handler'
+import { ANN, mountedOnRealAuth, pastFloor, signUpRequest } from './auth-handler/__fixtures__/mount'
 import type { AuthLog } from './auth-log'
 import { verificationLink, verificationMailer } from './verification-mail'
 
@@ -114,6 +116,19 @@ describe('verificationMailer', () => {
     })
     // Better Auth's secret itself does not read it: the key is the link's own.
     expect(await readVerificationToken(token, AUTH_SECRET)).toBeUndefined()
+  })
+
+  it('writes the mail of an account an organisation invited in its starting language', async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
+    await pastFloor(
+      mounted.clock,
+      mounted.route(signUpRequest(ANN), '203.0.113.7'),
+      SIGN_UP_FLOOR_MS,
+    )
+
+    expect((await mounted.outbox.next(ANN)).subject).toBe('Confirma tu correo para Perch')
   })
 
   it('writes in the language the account signed up in while it has no settings', async () => {

@@ -5,6 +5,18 @@
       "dir": "features/organisation",
       "shapes": [
         {
+          "id": "organisation.organisation-settings",
+          "file": "features/organisation/application/organisation-settings/organisation-settings.shape.surql",
+          "tables": [
+            "organisation_settings"
+          ],
+          "region": "tenant",
+          "fields": [
+            "id",
+            "locale"
+          ]
+        },
+        {
           "id": "organisation.organisation",
           "file": "features/organisation/presentation/pages/organisation/organisation.shape.surql",
           "tables": [
@@ -20,6 +32,51 @@
         }
       ],
       "commands": [
+        {
+          "id": "organisation.organisation-settings.createOrganisationSettings",
+          "file": "features/organisation/application/organisation-settings/organisation-settings.commands.surql",
+          "tables": [
+            "organisation_settings"
+          ],
+          "region": "tenant",
+          "ops": [
+            "create"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "organisation.organisation-settings.updateLocale",
+          "file": "features/organisation/application/organisation-settings/organisation-settings.commands.surql",
+          "tables": [
+            "organisation_settings"
+          ],
+          "region": "tenant",
+          "ops": [
+            "set"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "organisation.organisation-settings.clearLocale",
+          "file": "features/organisation/application/organisation-settings/organisation-settings.commands.surql",
+          "tables": [
+            "organisation_settings"
+          ],
+          "region": "tenant",
+          "ops": [
+            "unset"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
         {
           "id": "organisation.organisation.createNote",
           "file": "features/organisation/presentation/pages/organisation/organisation.commands.surql",

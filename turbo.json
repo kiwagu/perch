@@ -35,7 +35,14 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "lint": {},
+    "lint": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/eslint.config.js",
+        "$TURBO_ROOT$/packages/eslint-config/src/**",
+        "$TURBO_ROOT$/packages/kernel/src/contract-terms.gen.ts"
+      ]
+    },
     "test": {
       "dependsOn": ["^build"]
     },
@@ -43,8 +50,23 @@
       "dependsOn": ["^build"],
       "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
     },
+    "@workspace/kernel#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
+    "@workspace/gateway#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
+    "@workspace/database#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
     "model": {
       "dependsOn": ["^build"],
+      "cache": false
+    },
+    "emit": {
       "cache": false
     },
     "model:check": {
@@ -86,6 +108,9 @@
       "cache": false
     },
     "//#contract:check": {
+      "cache": false
+    },
+    "//#contract:check:current": {
       "cache": false
     },
     "//#contract:check:sources": {

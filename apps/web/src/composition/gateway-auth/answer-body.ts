@@ -15,8 +15,11 @@ export const answerBody = (response: Response): ResultAsync<unknown, never> =>
 const refusal = z.object({ code: z.string() })
 
 /** The code a refusal's body names, `undefined` when it names none. */
+export const codeIn = (body: unknown): string | undefined => refusal.safeParse(body).data?.code
+
+/** The code a refusal's body names, `undefined` when it names none. */
 export const refusalCode = (response: Response): ResultAsync<string | undefined, never> =>
-  answerBody(response).map((body) => refusal.safeParse(body).data?.code)
+  answerBody(response).map(codeIn)
 
 /** The code a 403 names for an account an operator banned. */
 export const ACCOUNT_BANNED_CODE = 'account-banned'

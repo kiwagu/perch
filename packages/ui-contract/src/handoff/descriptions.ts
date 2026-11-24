@@ -6,7 +6,7 @@
  */
 
 import type { Contract } from '../check'
-import { declaredAnchors } from '../check'
+import { declaredAnchors, editionOf } from '../check'
 import { derivedDescriptionOf, failuresOf } from '../files'
 
 /** One `<anchor>: <description>` line per written description the engine says itself. */
@@ -14,7 +14,7 @@ export function listDescriptions(contract: Contract): string {
   const context = {
     screens: contract.screens.screens,
     codes: contract.vocabulary.codes,
-    failureOf: failuresOf(contract.model, contract.screens.platform.actions),
+    failureOf: failuresOf(contract.model, contract.screens.platform.actions, editionOf(contract)),
   }
   const lines = declaredAnchors(contract.screens).flatMap(({ anchor, def, screen }) => {
     const derived = derivedDescriptionOf(anchor, def, screen, context)

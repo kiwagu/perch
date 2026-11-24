@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import {
   FakeDevices,
@@ -97,7 +98,7 @@ async function openPage(): Promise<void> {
         </ShellContainer>
       </NoticeProvider>
     ),
-    history: createMemoryHistory({ initialEntries: ['/devices'] }),
+    history: createMemoryHistory({ initialEntries: [CONTRACT_ROUTES.device] }),
   })
   const services = fakeServices(session)
 

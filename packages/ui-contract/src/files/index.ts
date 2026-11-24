@@ -1,3 +1,4 @@
+export { type CodeEntry, codeEntriesOf, codeNamesOf, outcomesOf } from './action-codes'
 export {
   type Activity,
   type ActivityState,
@@ -5,20 +6,31 @@ export {
   loadActivities,
 } from './activities'
 export {
+  ATTRIBUTION_EDITION,
+  attributedCodes,
   CONFIRM_RULE_ROW,
   type ControlMove,
+  codeNamedAfter,
+  constrains,
   controlMovesOf,
   type DerivedQuestion,
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
+  FIELD_CODE_SUFFIXES,
+  type FieldCodeSuffix,
   failuresOf,
   isBare,
+  mailSearchesOf,
   ownControlsOf,
+  questionCodeOf,
   type Request,
   requestsOf,
+  type SearchTaker,
+  searchTakersOf,
   TOAST_RULE_ROW,
   TYPE_PASSWORD,
+  withDerivedInputs,
 } from './derive'
 export type { DerivedToast } from './expand-flow'
 export { filesUnder } from './files-under'
@@ -38,6 +50,16 @@ export {
   rootOf,
   transitionsOf,
 } from './flow-nodes'
+export { hintBudgetProblems } from './hint-budget'
+export { invariantActions } from './invariants'
+export {
+  MIGRATIONS,
+  type Migration,
+  type MigrationFiles,
+  type MigrationReport,
+  type MigrationStep,
+  migrate,
+} from './migrations'
 export {
   loadModel,
   type Model,
@@ -54,15 +76,20 @@ export {
   COVERAGE_FILE,
   DOMAIN_DIR,
   ENTITY_SCHEMA_FILE,
+  GUIDE_FILES,
   isBusinessFile,
   MANIFEST_SCHEMA_FILE,
   MODEL_FILE,
   PLATFORM_FILE,
   PLATFORM_SCHEMA_FILE,
+  REFERENCE_FILE,
+  routeKeyOf,
   SCENARIOS_DIR,
   SCREEN_SCHEMA_FILE,
   SCREENS_DIR,
   scenarioFile,
+  TERMS_FILE,
+  TERMS_SCHEMA_FILE,
   VOCABULARY_FILE,
 } from './paths'
 export {
@@ -75,6 +102,7 @@ export {
 } from './problems'
 export { readJson } from './read-json'
 export { parseYaml } from './read-yaml'
+export { parseYamlDocument } from './read-yaml-document'
 export { loadScenarios } from './scenarios'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {
@@ -90,6 +118,7 @@ export {
   type FlowRegionState,
   type FlowState,
   type FlowTransition,
+  loadResolvedModel,
   loadScreens,
   loadScreensWith,
   type ParamValue,
@@ -101,7 +130,21 @@ export {
   type Screen,
   type ScreensFile,
 } from './screens'
+export { loadTerms, type TermEntry, type Terms } from './terms'
 export { createValidator, jsonSchemaProblems, validateAgainst } from './validator'
+export {
+  DEFAULTS_EDITION,
+  type DefaultLengths,
+  fieldValueOf,
+  keywordsOf,
+  loosest,
+  parameterValueOf,
+  type ResolvedValue,
+  resolveValue,
+  wideningsOf,
+  withDefaultLength,
+  withDefaultLengths,
+} from './values'
 export {
   parseVocabulary,
   VOCABULARY_SECTIONS,

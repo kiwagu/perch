@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import type { Mail } from '@workspace/mailbox'
 
 import { appReady, expect } from './fixtures'
@@ -15,7 +16,7 @@ export const accountDeleted = (page: Page) =>
 
 /** Opens /settings and waits until the app is ready there. */
 export async function openSettings(page: Page): Promise<void> {
-  await page.goto('/settings')
+  await page.goto(CONTRACT_ROUTES['user.settings'])
   await appReady(page)
   await expect(page.getByTestId('user.settings.deletion.form')).toBeVisible()
 }

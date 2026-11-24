@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { type LocalDb, recordId } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 
@@ -93,7 +94,7 @@ describe('the membership_tenant index', () => {
     })
 
     expect(admins).toBe(2)
-    expect(role).toBe('member')
+    expect(role).toBe(CONTRACT_ROLES.member)
     expect(absent).toBeUndefined()
   })
 

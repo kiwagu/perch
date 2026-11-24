@@ -18,9 +18,12 @@ export const registry = defineEntityPrefixes({
   device_session: 'dvs',
   note: 'nte',
   settings: 'stg',
+  organisation_settings: 'ost',
   account: 'acc',
   verification: 'vrf',
   invitation: 'inv',
+  two_factor: 'tfa',
+  passkey: 'pkey',
 } as const)
 
 export type EntityKind = keyof typeof registry.prefixes
@@ -39,11 +42,17 @@ export type NoteId = EntityIdOf<typeof registry.prefixes, 'note'>
 
 export type SettingsId = EntityIdOf<typeof registry.prefixes, 'settings'>
 
+export type OrganisationSettingsId = EntityIdOf<typeof registry.prefixes, 'organisation_settings'>
+
 export type AccountId = EntityIdOf<typeof registry.prefixes, 'account'>
 
 export type VerificationId = EntityIdOf<typeof registry.prefixes, 'verification'>
 
 export type InvitationId = EntityIdOf<typeof registry.prefixes, 'invitation'>
+
+export type TwoFactorId = EntityIdOf<typeof registry.prefixes, 'two_factor'>
+
+export type PasskeyId = EntityIdOf<typeof registry.prefixes, 'passkey'>
 
 export const {
   identityIdFactory,
@@ -53,9 +62,12 @@ export const {
   device_sessionIdFactory,
   noteIdFactory,
   settingsIdFactory,
+  organisation_settingsIdFactory,
   accountIdFactory,
   verificationIdFactory,
   invitationIdFactory,
+  two_factorIdFactory,
+  passkeyIdFactory,
 } = registry.factories
 
 export const idSchemas = withSchemas(registry)

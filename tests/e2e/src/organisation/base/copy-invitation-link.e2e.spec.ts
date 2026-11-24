@@ -1,4 +1,6 @@
 // scenario: organisation/base/copy-invitation-link
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { firstLink } from '@workspace/mailbox'
 
 import { frontOf } from '../../support/browsers'
@@ -89,7 +91,7 @@ test.describe("Copy an invitation's link", { tag: '@full' }, () => {
       //   [code:invitation-accepted] and [organisation.page.role-badge] carries [value:member]
       await Promise.all([
         expect(toast(deviceB, 'invitation-accepted')).toBeVisible(),
-        expectPathname(deviceB, '/org', 10_000),
+        expectPathname(deviceB, CONTRACT_ROUTES.organisation, 10_000),
       ])
       await expect(deviceB.getByTestId('organisation.page.role-badge')).toHaveAttribute(
         'data-value',

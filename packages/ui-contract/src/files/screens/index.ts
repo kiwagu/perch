@@ -1,6 +1,6 @@
 export { ACCOUNT, type PlatformMail, type PlatformNotice, RECIPIENT } from '../../schemas'
 
-export { loadScreens, loadScreensWith } from './load'
+export { loadResolvedModel, loadScreens, loadScreensWith } from './load'
 export type {
   AnchorBinding,
   AnchorDef,
@@ -17,6 +17,8 @@ export type {
   Platform,
   PlatformComposite,
   PlatformFile,
+  PlatformValue,
   Screen,
   ScreensFile,
+  WrittenPlatform,
 } from './types'

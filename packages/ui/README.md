@@ -40,17 +40,32 @@ than its portal or overlay. A control that is not a test target carries a
     `<nav>`. Without `navigation` it renders no `<nav>`, and the page takes the whole width
     with no room kept for the bar.
   - `OptionSelect`: a labelled choice between a few options; `testId` marks the trigger, and
-    each option carries the derived `<testId>.option` with its value as `data-value`.
+    each option carries the derived `<testId>.option` with its value as `data-value`; with no
+    `value` it shows its `placeholder` and its trigger carries no `data-value`.
   - `ConfirmDialog`: a modal question with one action and a way back (`title`,
     `description`, `confirmLabel`, `cancelLabel`, `destructive`, `onConfirm`, `onCancel`);
     `testId` marks the dialog, with `code` as its `data-code`, and its buttons carry
     `<testId>.confirm-button` and `<testId>.cancel-button`.
+  - `InputDialog`: a `ConfirmDialog` that asks for something typed: its props plus `children`
+    (the inputs, between its text and its two actions) and `confirmDisabled`; the first input has
+    the focus once it opens, Enter in an input presses the confirm button (which does nothing while
+    `confirmDisabled` holds it), and Escape is the cancel button.
   - `PasswordInput`: a password input with its eye beside it (`showLabel`, `hideLabel` for its
     accessible name), which shows what the input holds as typed or hides it again; `testId`
     marks the input, and the eye carries the derived `<testId>.visibility-button` with `show`
     or `hide` as its `data-value`, what a click does. Whether the input shows its value is its
     own, never a flow's: the eye is always enabled, the input disabled or not.
   - `navItemVariants`: the classes of a navigation item, active or not.
+- `./field-facts`: what the kit's fields take from the app when their element says nothing.
+  `FieldFactsProvider` takes a map of `FieldFacts` (`maxLength`, `type`, `marksState`,
+  `holdsInput`, each optional) by anchor, the `data-testid` a field renders (`Select` and
+  `OptionSelect`: their `anchor` and `testId`); `useFieldFacts(anchor)` reads one entry (none
+  without a provider, an anchor or an entry; an inner provider replaces an outer one). The kit
+  imports no contract data: the app passes the map in. `Input` takes `maxLength` and `type`,
+  `Textarea` `maxLength`, and each of `Input`, `Textarea`, `Select` and `OptionSelect` takes
+  `marksState` and `holdsInput`, always after the element's own prop: own prop, then the field's
+  facts, then (for `marksState`) its form's say, then the kit's default (colours on, input held).
+  Without a provider nothing changes. `PasswordInput` keeps its own `type`.
 - `./unsaved-input`: whether the fields of a page hold input the user typed and no action
   took yet. `UnsavedInputScope` collects what the fields inside report, `useUnsavedInput()`
   says whether any holds unsaved input now (whoever guards a leave reads it; false outside a
@@ -74,9 +89,10 @@ than its portal or overlay. A control that is not a test target carries a
   without it (or outside a scope), for an anchor it does not store, or for a field without an
   anchor, a field is never `saved`. The saved value lives in the field alone: a remount starts
   with none, and the app giving another value clears it. `Form` takes `marksState` (true when
-  left out) for all its fields, and `useMarksState(own)` gives a field its own say, else its
-  form's, else true. `Input`, `Textarea`, `Select` and `OptionSelect` take `marksState` too,
-  and it controls only the color: a field always tracks its state and renders `data-state`
+  left out) for all its fields, and `useMarksState(own, anchor)` gives a field its own say, else
+  its facts' (`./field-facts`, by its anchor), else its form's, else true; `useHoldsInput(own,
+  anchor)` gives its own say, else its facts', else true. `Input`, `Textarea`, `Select` and
+  `OptionSelect` take `marksState` too, and it controls only the color: a field always tracks its state and renders `data-state`
   (`unsaved` or `saved`, absent for none) on its anchor element, whether or not it paints it.
   Painted, the state changes only `border-color` of the border the element already draws (the
   `Input`, the `textarea`, the `SelectTrigger`), never its width, spacing or focus halo

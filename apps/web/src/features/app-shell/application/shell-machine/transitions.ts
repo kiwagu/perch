@@ -1,9 +1,14 @@
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 /**
  * The transitions and effects the frame's flow writes in several states, each as the machine's
  * config takes it, and the frame's messages that `running` takes whatever its regions are doing.
  */
 
-export const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
+export const TO_SIGN_IN = {
+  type: 'navigate',
+  params: { to: CONTRACT_ROUTES['user.sign-in'] },
+} as const
 /** The notice goes with the account that was signed in when it was raised, the state of its sync too. */
 export const SIGNED_OUT = {
   actions: [

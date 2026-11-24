@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import type { InvitationOnLink } from '../../../platform/invitations.port'
 
@@ -17,8 +18,12 @@ const DECLINE = {
   type: 'organisation.invitation.decline-button',
 } as const satisfies InvitationEvent
 
-const forAnn: InvitationOnLink = { organisation: { name: 'Acme' }, role: 'admin', forYou: true }
-const forSomeoneElse: InvitationOnLink = { ...forAnn, role: 'member', forYou: false }
+const forAnn: InvitationOnLink = {
+  organisation: { name: 'Acme' },
+  role: CONTRACT_ROLES.admin,
+  forYou: true,
+}
+const forSomeoneElse: InvitationOnLink = { ...forAnn, role: CONTRACT_ROLES.member, forYou: false }
 
 const refused = (code: string) => (): ResultAsync<never, BusError> =>
   errAsync({ code, message: 'refused' })
@@ -65,7 +70,7 @@ async function asking(opening: Opening = {}) {
   return opened
 }
 
-const TO_THE_ORGANISATION = { type: 'navigate', to: '/org' }
+const TO_THE_ORGANISATION = { type: 'navigate', to: CONTRACT_ROUTES.organisation }
 const toast = (code: string) => ({
   type: 'show',
   anchor: 'app-shell.toast',
@@ -123,7 +128,7 @@ describe('the invitation page', () => {
 
     expect(state.context).toEqual({
       organisation: 'Acme',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
       error: undefined,
       message: undefined,
     })
@@ -138,7 +143,7 @@ describe('the invitation page', () => {
     expect(state.status).toBe('done')
     expect(state.context).toEqual({
       organisation: 'Acme',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
       error: undefined,
       message: 'sign-in-to-accept',
     })
@@ -154,7 +159,7 @@ describe('the invitation page', () => {
     expect(state.status).toBe('done')
     expect(state.context).toEqual({
       organisation: 'Acme',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
       error: 'other-account',
       message: undefined,
     })
@@ -253,7 +258,11 @@ describe('the invitation page', () => {
         (state) => state.matches('asking') && state.context.error !== undefined,
       )
 
-      expect(again.context).toMatchObject({ organisation: 'Acme', role: 'admin', error: shown })
+      expect(again.context).toMatchObject({
+        organisation: 'Acme',
+        role: CONTRACT_ROLES.admin,
+        error: shown,
+      })
       expect(again.can(ACCEPT)).toBe(true)
       expect(again.can(DECLINE)).toBe(true)
       expect(emitted).toEqual([])

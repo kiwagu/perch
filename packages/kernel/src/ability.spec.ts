@@ -8,19 +8,20 @@ import {
   ownerKeyOf,
   TENANT_ROLES,
 } from './ability'
+import { CONTRACT_ROLES } from './contract-terms.gen'
 
 const schema: AbilitySchema = {
   note: {
     owner: 'author',
     can: {
-      member: { create: 'any', update: 'own', delete: 'own' },
-      admin: { create: 'any', update: 'any', delete: 'any' },
+      [CONTRACT_ROLES.member]: { create: 'any', update: 'own', delete: 'own' },
+      [CONTRACT_ROLES.admin]: { create: 'any', update: 'any', delete: 'any' },
     },
   },
-  memo: { can: { admin: { create: 'any' } } },
+  memo: { can: { [CONTRACT_ROLES.admin]: { create: 'any' } } },
 }
-const ann = defineAbilityFor({ id: 'idn_ann', role: 'member' }, schema)
-const boss = defineAbilityFor({ id: 'idn_boss', role: 'admin' }, schema)
+const ann = defineAbilityFor({ id: 'idn_ann', role: CONTRACT_ROLES.member }, schema)
+const boss = defineAbilityFor({ id: 'idn_boss', role: CONTRACT_ROLES.admin }, schema)
 const annsNote = { author: 'member:idn_ann', text: 'hi' }
 const bobsNote = { author: 'member:idn_bob', text: 'yo' }
 
@@ -58,7 +59,7 @@ describe('defineAbilityFor', () => {
   })
 
   it('names the two roles and takes the key of an owner reference', () => {
-    expect(TENANT_ROLES).toEqual(['member', 'admin'])
+    expect(TENANT_ROLES).toEqual([CONTRACT_ROLES.member, CONTRACT_ROLES.admin])
     expect(ownerKeyOf('member:idn_a')).toBe('idn_a')
     expect(ownerKeyOf('idn_a')).toBe('idn_a')
     expect(ownerKeyOf('')).toBeUndefined()

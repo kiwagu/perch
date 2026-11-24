@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@workspace/kernel": "workspace:*",
     "@workspace/zod": "workspace:*"
   },
   "devDependencies": {

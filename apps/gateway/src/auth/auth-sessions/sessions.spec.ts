@@ -8,6 +8,7 @@ import {
   identityIdFactory,
   idSchemas,
 } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban, sessionState, setBanned } from '../__fixtures__/account-ban'
@@ -112,14 +113,14 @@ describe('AuthSessions', () => {
       await local.db.query(identityRoleSetStatement, { identity: user.id, role })
     }
 
-    await roleOf('operator')
-    expect(callerOf(await sessions.read(token)).roles).toEqual(['operator'])
+    await roleOf(CONTRACT_ROLES.operator)
+    expect(callerOf(await sessions.read(token)).roles).toEqual([CONTRACT_ROLES.operator])
 
     await roleOf('user')
     expect(callerOf(await sessions.read(token)).roles).toEqual([])
 
-    await roleOf('operator')
-    expect(callerOf(await sessions.read(token)).roles).toEqual(['operator'])
+    await roleOf(CONTRACT_ROLES.operator)
+    expect(callerOf(await sessions.read(token)).roles).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('reads no session for a token nobody holds, or one no header can carry', async () => {
@@ -384,6 +385,45 @@ describe("AuthSessions, a sign-in's admission and the ban", () => {
       ended_reason: 'banned',
     })
     expect(await opened.sessions.read(ann.phone)).toEqual(NONE)
+  })
+})
+
+describe('AuthSessions, a sign-in judged before its session is written', () => {
+  it("judges a device as the admission counts the account's devices: within the limit admitted, past it asked, a device signed in already and a sign-in still waiting taking no place", async () => {
+    const opened = await harness()
+    const ann = await annWaitingOnPhone(opened)
+    const judged = async (device: string) =>
+      (await opened.sessions.judge(ann.identity, device))._unsafeUnwrap()
+
+    for (const device of ['b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']) {
+      await opened.auth.api.signInEmail({
+        body: { email: 'ann@example.test', password: 'Pass-word-1' },
+        headers: deviceHeaders(device),
+      })
+    }
+
+    // Nine devices signed in, the phone's sign-in waiting: a tenth device still has its place.
+    expect(await judged('phone')).toBe('admitted')
+    expect(await judged('j')).toBe('admitted')
+    expect((await opened.sessions.admit(ann.identity, ann.phone, false))._unsafeUnwrap()).toEqual({
+      kind: 'admitted',
+    })
+    // Ten: an eleventh device is asked, as its admission would be; one signed in already is not.
+    expect(await judged('j')).toBe('asked')
+    expect(await judged('laptop')).toBe('admitted')
+  }, 30_000)
+
+  it('judges a sign-in of a banned account banned, writing nothing', async () => {
+    const opened = await harness()
+    const ann = await annWaitingOnPhone(opened)
+
+    await setBanned(opened.local, ann.identity, true)
+
+    expect((await opened.sessions.judge(ann.identity, 'desk'))._unsafeUnwrap()).toBe('banned')
+    expect(await sessionState(opened.local, ann.identity, ann.phone)).toMatchObject({
+      pending: true,
+      ended_at: undefined,
+    })
   })
 })
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatProblem } from '../files'
+import { formatProblem, withDerivedInputs } from '../files'
 
-import { anchorIn, sampleContract, screenIn } from './contract.fixture'
+import { anchorIn, flowStateIn, sampleContract, screenIn } from './contract.fixture'
 import { screensProblems } from './screens'
 
 const printed = (contract = sampleContract()): string[] =>
@@ -87,6 +87,19 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields["title-too-long"]: "sample.gone-input" is not an anchor of the screen',
     ])
   })
+  it("takes form in an error's fields for a code that concerns the form, never as an anchor", () => {
+    const contract = sampleContract()
+
+    screenIn(contract, 'sample').anchors['sample.save-error'] = {
+      kind: 'error',
+      codes: ['title-required', 'failed'],
+      fields: { 'title-required': 'form', missing: 'form' },
+    }
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields.missing: "missing" is not a code of the anchor',
+    ])
+  })
   it('says only a field holds input', () => {
     const contract = sampleContract()
 
@@ -134,6 +147,31 @@ describe('screensProblems', () => {
     expect(printed(contract)).toEqual([
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].marksState: only a field that holds input shows a state colour',
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.agree-checkbox"].marksState: only a field that holds input shows a state colour',
+    ])
+  })
+  it("refuses a dropped state colour on a select whose own change moves its screen's search", () => {
+    const contract = sampleContract()
+    const sample = screenIn(contract, 'sample')
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.on = {
+      ...editing.on,
+      'sample.mode-select': {
+        target: 'editing',
+        actions: [
+          {
+            type: 'navigate',
+            params: { to: '/sample/$key', search: { tab: { anchor: 'sample.mode-select' } } },
+          },
+        ],
+      },
+    }
+    sample.anchors = withDerivedInputs(sample).anchors
+    anchorIn(contract, 'sample.mode-select').marksState = false
+
+    expect(anchorIn(contract, 'sample.mode-select').holdsInput).toBe(false)
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].marksState: only a field that holds input shows a state colour',
     ])
   })
   it('takes a visibility-button on a secret input and refuses it on any other kind', () => {

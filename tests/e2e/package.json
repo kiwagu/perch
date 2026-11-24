@@ -10,8 +10,10 @@
     "test:e2e": "bun scripts/run-e2e.ts"
   },
   "devDependencies": {
+    "@better-auth/utils": "catalog:",
     "@playwright/test": "catalog:",
     "@types/bun": "catalog:",
+    "@workspace/kernel": "workspace:*",
     "@workspace/mailbox": "workspace:*",
     "@workspace/seed": "workspace:*",
     "@workspace/ui-contract": "workspace:*",

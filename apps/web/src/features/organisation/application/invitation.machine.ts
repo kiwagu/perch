@@ -2,6 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 import { emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import type { TenantRole } from '@workspace/replica/protocol'
 
 import { failureOf, settled } from '../../../platform/actor-outcome'
@@ -45,7 +46,10 @@ const ASKED = [
 const showError = (...codes: readonly string[]) =>
   ({ type: 'show', params: { anchor: ERROR, codes } }) as const
 
-const TO_THE_ORGANISATION = { type: 'navigate', params: { to: '/org' } } as const
+const TO_THE_ORGANISATION = {
+  type: 'navigate',
+  params: { to: CONTRACT_ROUTES.organisation },
+} as const
 const toast = (code: 'invitation-accepted' | 'invitation-declined') =>
   ({ type: 'show', params: { anchor: 'app-shell.toast', codes: [code] } }) as const
 
@@ -78,7 +82,7 @@ function linkOf(event: object): InvitationOnLink | undefined {
   const name = organisation['name']
 
   return typeof name === 'string' &&
-    (role === 'admin' || role === 'member') &&
+    (role === CONTRACT_ROLES.admin || role === CONTRACT_ROLES.member) &&
     typeof forYou === 'boolean'
     ? { organisation: { name }, role, forYou }
     : undefined

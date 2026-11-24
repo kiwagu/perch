@@ -4,7 +4,8 @@
  * confirm already answered a question) one of whose bindings runs an action of `leaving`. On a
  * branch the pre-commit hook sets `CONTRACT_AHEAD=1`: a business commit may add a leaving control
  * before it is rendered, so the list may lack one the contract added, never hold one it does not
- * say; `bun run check` and `main` want the whole list.
+ * say, and a navigating control may still lose the fields it lost at the branch's merge base
+ * (`held-leaves.ts`); `bun run check` and `main` want the whole list as the contract says it now.
  */
 
 import { join } from 'node:path'
@@ -13,6 +14,7 @@ import { describe, expect, it } from 'vitest'
 
 import { type AnchorDef, formatProblem, loadScreens } from '@workspace/ui-contract'
 
+import { heldLeaves, leavesAtBase, leavesOf } from './__fixtures__/held-leaves'
 import { LEAVE_POLICY, LEAVING_CONTROLS, NAVIGATING_CONTROLS } from './leaving'
 
 const ROOT = join(import.meta.dirname, '../../../..')
@@ -55,22 +57,13 @@ describe('the leaves of the contract', () => {
   })
 
   it('ask first at the controls whose flow leaves their screen, losing the fields the contract derives', () => {
-    const contract: Record<string, string[]> = Object.fromEntries(
-      (screens?.screens ?? []).flatMap((screen) =>
-        Object.entries(screen.anchors).flatMap(([anchor, def]) =>
-          def.leaves === undefined ? [] : [[anchor, [...def.leaves.loses]] as const],
-        ),
-      ),
-    )
+    const contract = leavesOf(screens?.screens ?? [])
     const app: Record<string, string[]> = Object.fromEntries(
       Object.entries(NAVIGATING_CONTROLS).map(([anchor, loses]) => [anchor, [...loses]]),
     )
+    const base = leavesAtBase(ROOT, process.env)
 
     expect(Object.keys(contract).length).toBeGreaterThan(0)
-    expect(app).toEqual(
-      AHEAD
-        ? Object.fromEntries(Object.entries(contract).filter(([anchor]) => anchor in app))
-        : contract,
-    )
+    expect(app).toEqual(heldLeaves({ app, now: contract, base, ahead: AHEAD }))
   })
 })

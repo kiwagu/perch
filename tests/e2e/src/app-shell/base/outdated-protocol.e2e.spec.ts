@@ -1,6 +1,10 @@
 // scenario: app-shell/base/outdated-protocol
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, signUp, test } from '../../support/fixtures'
 import { SyncNetwork } from '../../support/network'
+import { atRoute } from '../../support/routes'
 
 test.describe('Hear that the server no longer takes the protocol of this version', {
   tag: '@full',
@@ -45,7 +49,7 @@ test.describe('Hear that the server no longer takes the protocol of this version
       // Expected: After step 3 the page loads again on the version the server serves,
       //   [app-shell.status] reaches [state:ready] on [/me] and no [app-shell.update-message] shows
       await appReady(page)
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
         timeout: 15_000,
       })

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import {
   CLOSE,
   clientMessage,
@@ -12,7 +14,10 @@ import {
   serverMessage,
 } from './protocol'
 
-const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, role: 'admin' }
+const acme: Membership = {
+  tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' },
+  role: CONTRACT_ROLES.admin,
+}
 
 describe('sync protocol', () => {
   it('carries Loro bytes through JSON and back', () => {
@@ -146,7 +151,7 @@ describe('sync protocol', () => {
           { region: 'tenant:acme', head: 2 },
         ],
         memberships: [acme],
-        roles: ['operator'],
+        roles: [CONTRACT_ROLES.operator],
         time: 1,
       },
       {
@@ -193,7 +198,9 @@ describe('sync protocol', () => {
 
     expect(decodeMessage(serverMessage, welcome({ roles: [] })).isOk()).toBe(true)
     expect(decodeMessage(serverMessage, welcome({})).isErr()).toBe(true)
-    expect(decodeMessage(serverMessage, welcome({ roles: ['admin'] })).isErr()).toBe(true)
+    expect(decodeMessage(serverMessage, welcome({ roles: [CONTRACT_ROLES.admin] })).isErr()).toBe(
+      true,
+    )
   })
 
   it('parses a membership and refuses a role it does not know', () => {

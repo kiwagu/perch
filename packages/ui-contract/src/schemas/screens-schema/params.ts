@@ -47,5 +47,5 @@ export const actionParamsSchema = z
 export const sourceParamsSchema = z
   .record(z.string(), z.union([constantSchema, searchParameterSchema]))
   .describe(
-    'Per parameter of the action, a search parameter of the route `{ "search": "<name>" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route.',
+    'Per parameter of the action, a search parameter of the route `{ "search": "<name>" }`, which the list rereads when it changes while it renders, or a constant; never a field. See the rule `list-reads`.',
   )

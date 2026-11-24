@@ -1,7 +1,11 @@
 // scenario: user/base/taken-email
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { checkYourMail, expect, notice, signUp, test } from '../../support/fixtures'
 import { expectBoundedNonArrival } from '../../support/mailbox'
+import { atRoute } from '../../support/routes'
 
 test.describe('Sign up again with an email that has an account', { tag: '@smoke' }, () => {
   test('A sign-up with a taken email answers as a new one does, sends no mail, and the account keeps its own password', async ({
@@ -20,7 +24,7 @@ test.describe('Sign up again with an email that has an account', { tag: '@smoke'
       await signUp(page, data)
       await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
       await page.getByTestId('user.profile.sign-out-button').click()
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     })
 
     await test.step('2. Click [user.sign-in.toggle-button], enter the email, the other password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
@@ -38,7 +42,7 @@ test.describe('Sign up again with an email that has an account', { tag: '@smoke'
       // The page asks to check the mail once the gateway answered the sign-up.
       const answeredAt = Date.now()
 
-      await expect(page).toHaveURL(/\/sign-in$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']))
       // Within the delivery window after that answer the email still holds the mail of its first
       // sign-up alone (bounded non-arrival).
       await expectBoundedNonArrival(data.email, { mails: 1, answeredAt })
@@ -60,7 +64,7 @@ test.describe('Sign up again with an email that has an account', { tag: '@smoke'
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible()
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
     })
   })
 })

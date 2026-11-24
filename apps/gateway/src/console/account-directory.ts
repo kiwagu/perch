@@ -2,6 +2,7 @@ import { err, ok, type Result, type ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, fromDriverValue, type LocalDb } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { type TenantRole, tenantRole } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -90,7 +91,7 @@ function listed(row: z.output<typeof accountRow>): ListedAccount {
     email: row.email,
     emailVerified: row.email_verified,
     banned: row.banned,
-    operator: rolesOf(row.role).includes('operator'),
+    operator: rolesOf(row.role).includes(CONTRACT_ROLES.operator),
     createdAt: row.created_at,
   }
 }

@@ -5,6 +5,8 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { emit, fromPromise, setup } from 'xstate'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import { fakeServices, fakeSession } from './__fixtures__/session'
 import { type ConfirmGuard, ConfirmGuardContext } from './confirm-guard.port'
 import { type LeaveGuard, LeaveGuardContext } from './leave-guard.port'
@@ -220,9 +222,13 @@ const PageModule = defineModule({
   id: 'page',
   declarations: { Page, WatchedPage, There: () => <p>there</p> },
   routes: [
-    { path: '/here', page: 'Page', roles: ['guest', 'identity'] },
-    { path: '/watched', page: 'WatchedPage', roles: ['guest', 'identity'] },
-    { path: '/there', page: 'There', roles: ['guest', 'identity'] },
+    { path: '/here', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
+    {
+      path: '/watched',
+      page: 'WatchedPage',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+    },
+    { path: '/there', page: 'There', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
   ],
 })
 
@@ -617,6 +623,22 @@ describe('useScreenMachine', () => {
       false,
     )
     expect(screen.getByTestId('state').textContent).toBe('idle')
+  })
+
+  it('tells whether the state the machine is in takes an event, as the state moves, the check a send makes', async () => {
+    const { running } = await open(passing(), '/here', confirming())
+
+    expect(running.can({ type: 'x.save-button', fail: false })).toBe(true)
+    expect(running.can({ type: 'x.finish-button' })).toBe(true)
+
+    await act(async () => running.send({ type: 'organisation.notes.delete-button' }))
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
+
+    expect(running.can({ type: 'x.save-button', fail: false })).toBe(false)
+    expect(running.can({ type: 'x.finish-button' })).toBe(false)
+    // What the control shows and what a press does agree: the state takes neither.
+    expect(await act(() => running.submit({ type: 'x.finish-button' }))).toBe(false)
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
   })
 
   it("tells what the machine's state renders, read from its states' meta.renders", async () => {

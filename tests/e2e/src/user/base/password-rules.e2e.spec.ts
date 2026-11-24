@@ -1,6 +1,8 @@
 // scenario: user/base/password-rules
 import type { Locator } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, checkYourMail, expect, test } from '../../support/fixtures'
 import { expectDeclaredMail } from '../../support/mail-contract'
@@ -22,7 +24,7 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
       lowercaseOnly: 'abcdefghij',
       everyRule: 'Abcdefghij1!',
       withASpace: 'Abcdefg hij1!',
-      tooLong: 'Abcdefghij1!Abcdefghij1!Abcdefghij1!',
+      tooShort: 'Abcdef1!',
     }
     const list = page.getByTestId('user.sign-in.password-rule-list')
     const items: Readonly<Record<Rule, Locator>> = {
@@ -49,7 +51,7 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
     }
 
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       await expect(list).toHaveCount(0)
     })
@@ -92,8 +94,8 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
       await expect(submit).toBeDisabled()
     })
 
-    await test.step('6. Enter the too long into [user.sign-in.password-input]', async () => {
-      await password.fill(data.tooLong)
+    await test.step('6. Enter the too short into [user.sign-in.password-input]', async () => {
+      await password.fill(data.tooShort)
       // Expected: After step 6 [user.sign-in.password-rule-list.length-item] no longer carries
       //   [state:met], [user.sign-in.password-rule-list.characters-item] carries it again, and
       //   [user.sign-in.submit-button] is disabled
@@ -115,6 +117,7 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
       await expect(list).toHaveCount(0)
       expectDeclaredMail(await mailbox.next(data.email, 0), 'sign-up', {
         params: { email: data.email, locale: 'en' },
+        account: { email: data.email, language: 'en' },
       })
     })
   })

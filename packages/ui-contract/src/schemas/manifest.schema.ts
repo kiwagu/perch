@@ -4,8 +4,10 @@
  * scenario files of `tests/e2e/scenarios/`: the vocabulary as tables with instructions for an
  * agent, the platform's composites among them, the screens verbatim with an example link on
  * each binding, every declared anchor with its screen (a field's composite opt-in and the
- * anchors a composite derives marked so), the platform, the activities verbatim, the scenarios
- * parsed and the model.
+ * anchors a composite derives marked so, a text field with the value it takes), the platform, the
+ * activities verbatim, the scenarios parsed and the model, the platform's values and the model's
+ * fields with the default length taken, which the contract section names, and the text of each
+ * rule of the engine that the manifest or its schema names.
  */
 
 import { z } from '@workspace/zod'
@@ -15,6 +17,7 @@ import {
   anchorSchema,
   baseAnchorSchema,
   codeSchema,
+  errorFieldSchema,
   kebabNameSchema,
   roleSchema,
   screenNameSchema,
@@ -30,9 +33,15 @@ import {
   bindingSchema,
   derivedFromSchema,
   leavesSchema,
+  platformActionNameSchema,
+  platformDefaultsSchema,
+  platformInvariantSchema,
   platformSchema,
+  resolvedValueSchema,
   screenSchema,
+  withEntrySchema,
 } from './screens-schema'
+import { termsFileSchema } from './terms.schema'
 
 /** A table of the vocabulary: its key, then what the key means. */
 const tableOf = (key: z.ZodString, meaning: string, what: string) =>
@@ -58,7 +67,12 @@ const instructionsSchema = z
 
 const contractSchema = z
   .strictObject({
-    version: z.literal(1).describe('The version of the contract format.'),
+    version: z.int().min(1).describe('The version of the contract format the contract declares.'),
+    defaults: platformDefaultsSchema
+      .optional()
+      .describe(
+        "From version 6, what a value takes where it writes nothing of its own; the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
+      ),
     idAttribute: z.literal('data-testid').describe('The attribute that carries an anchor.'),
     idPattern: z.string().min(1).describe('The regular expression every rendered anchor matches.'),
     kinds: tableOf(kebabNameSchema, 'What an element of the kind is.', 'The kinds of anchors.'),
@@ -157,9 +171,11 @@ const idSchema = z
         'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it, and a clear of it, in any flow, takes away every code raised before it.',
       ),
     fields: z
-      .record(codeSchema, baseAnchorSchema)
+      .record(codeSchema, errorFieldSchema)
       .optional()
-      .describe("An error's codes, each with the field it concerns."),
+      .describe(
+        "An error's codes, each with the field it concerns, or `form`, the form as a whole.",
+      ),
     dataId: z.string().optional().describe('What the data-id of the element holds.'),
     dataValue: z
       .boolean()
@@ -175,6 +191,18 @@ const idSchema = z
       .optional()
       .describe("The roles that see the element, among those its screen's bindings serve."),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
+    with: z
+      .array(withEntrySchema)
+      .optional()
+      .describe(
+        'It renders only while each of these renders (an anchor, or one showing these codes).',
+      ),
+    without: z
+      .array(withEntrySchema)
+      .optional()
+      .describe(
+        'It renders only while none of these renders (an anchor, or one showing these codes).',
+      ),
     asks: asksSchema.optional(),
     leaves: leavesSchema.optional(),
     composite: kebabNameSchema
@@ -204,6 +232,11 @@ const idSchema = z
       .optional()
       .describe(
         'The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.',
+      ),
+    value: resolvedValueSchema
+      .optional()
+      .describe(
+        'On an `input` or a `textarea`, the value the field takes, derived: the loosest of the values of its model binding and of the action parameters that take it. See the rule `declared-values`.',
       ),
   })
   .describe('One declared anchor, as a test looks it up.')
@@ -244,6 +277,11 @@ export const manifestSchema = z
       })
       .describe('The product the manifest describes.'),
     contract: contractSchema,
+    terms: termsFileSchema
+      .optional()
+      .describe(
+        "`contract/domain/terms.yaml`, verbatim, when the contract writes it: the contexts, the platform's terms and the roles. See the rule `terms`.",
+      ),
     screens: z
       .array(manifestScreenSchema)
       .describe(
@@ -255,7 +293,27 @@ export const manifestSchema = z
     ids: z
       .record(baseAnchorSchema, idSchema)
       .describe('Every declared anchor by name; a derived one is its base plus a suffix.'),
-    platform: platformSchema,
+    platform: platformSchema
+      .extend({
+        invariants: z
+          .record(
+            kebabNameSchema,
+            platformInvariantSchema.extend({
+              actions: z
+                .array(platformActionNameSchema)
+                .describe(
+                  'Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`.',
+                ),
+            }),
+          )
+          .optional()
+          .describe(
+            'The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.',
+          ),
+      })
+      .describe(
+        'The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out.',
+      ),
     activities: z
       .array(activitySchema)
       .describe(
@@ -269,7 +327,25 @@ export const manifestSchema = z
     model: z
       .record(z.string(), z.unknown().describe('A keyword of the model document.'))
       .describe(
-        '`contract/domain/model.schema.json`, verbatim: the data model as JSON Schema 2020-12.',
+        '`contract/domain/model.schema.json`: the data model as JSON Schema 2020-12, verbatim but each field that names no limit with the default length taken (`contract.defaults`).',
+      ),
+    rules: z
+      .record(
+        kebabNameSchema,
+        z
+          .strictObject({
+            title: z.string().min(1).describe('The title of the rule.'),
+            text: z
+              .string()
+              .min(1)
+              .describe(
+                'The rule as the reference writes it, ending with a line "Keys it concerns": its links point into the reference, which the manifest does not carry, so read each key by its name.',
+              ),
+          })
+          .describe('One rule of the engine.'),
+      )
+      .describe(
+        'The texts of the rules this manifest and its schema name by id, each id in backticks after "rule" or "rules"; the reference is not shipped. A rule only these texts name is not carried.',
       ),
   })
   .describe('The UI manifest: the contract of the application for tests and agents.')

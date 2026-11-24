@@ -1,6 +1,10 @@
 // scenario: app-shell/base/open-before-data
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { holdEngines } from '../../support/engines'
 import { appReady, expect, signUp, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 
 test.describe('See the frame and the screen before the data opens', { tag: '@smoke' }, () => {
   test('A signed-in device shows its frame and the open screen while its data opens, then the data', async ({
@@ -29,7 +33,7 @@ test.describe('See the frame and the screen before the data opens', { tag: '@smo
         'data-state',
         'opening-data',
       )
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
 
       const nav = page.getByTestId('app-shell.nav')
 

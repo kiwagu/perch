@@ -23,6 +23,7 @@ import { openTestWorld, type TestWorld } from '../__fixtures__/session'
 import { keptAccountStart, savedSession } from '../storage'
 
 import { ensureAccount } from './accounts'
+import { seedSession } from './session'
 import type { AccountInput, Inbox, SeedDevice, SeedStarts } from './types'
 
 const ann: AccountInput = {
@@ -142,7 +143,7 @@ async function device(auth: FakeGatewayAuth, inbox: Inbox, beside?: Promise<bool
   }
 
   const seed: SeedDevice = {
-    session,
+    session: seedSession(session),
     profiles,
     settings,
     starts: seedStarts,

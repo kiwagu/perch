@@ -57,13 +57,14 @@ The call site passes the base and the code (`profile.view.tsx`):
 />
 ```
 
-The screen file lists what the base renders (`contract/domain/screens/me.yaml`):
+The screen file declares the base; its kind brings the two buttons, so it lists none
+(`contract/domain/screens/me.yaml`; before version 4 it listed
+`derived: [ confirm-button, cancel-button ]`):
 
 ```yaml
 user.profile.sign-out-dialog:
   kind: dialog
   codes: [ unsent-changes ]
-  derived: [ confirm-button, cancel-button ]
 ```
 
 ## 3. A part with a screen-level name of its own
@@ -523,14 +524,14 @@ it again: the derived `visibility-button`. It is presentation only. Whether the 
 its value is the one transient state a component keeps of its own, never a state of the flow:
 the eye is no event of the flow, the machine does not enable it, and it is always enabled. Its
 `data-value` says what a click does, `show` or `hide`, the suffix's own values, never rows of
-"Choice values". This example is illustrative, not a file of the app. The screen file lists
-the suffix on the input, which says it holds a secret, as only a secret input renders an eye:
+"Choice values". This example is illustrative, not a file of the app. The screen file says the
+input holds a secret and the loader derives the eye from that, as only a secret input renders
+one (before version 4 the file listed `derived: [ visibility-button ]` on it):
 
 ```yaml
 user.sign-in.password-input:
   kind: input
   secret: true
-  derived: [ visibility-button ]
 ```
 
 A kit composite takes the input's `testId` and derives the eye, as `ConfirmDialog` derives its
@@ -682,7 +683,8 @@ actions:
       size: { type: number, description: The entries a page holds. }
     paged: { sizes: [ 10, 25, 50 ], default: 25 }
     result: the page of accounts, the newest first, and how many the search finds
-    codes: [ failed ]
+    codes:
+      failed: the accounts cannot be read
     changes: []
 ```
 

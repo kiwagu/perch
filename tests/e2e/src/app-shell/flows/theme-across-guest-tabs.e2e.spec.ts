@@ -1,4 +1,7 @@
 // scenario: app-shell/flows/theme-across-guest-tabs
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, pageLoads, test } from '../../support/fixtures'
 
 test.describe("Follow a guest's theme in every tab of the browser", { tag: '@full' }, () => {
@@ -8,7 +11,7 @@ test.describe("Follow a guest's theme in every tab of the browser", { tag: '@ful
     const select = page.getByTestId('app-shell.theme-select')
 
     await test.step('1. In a first tab, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
 
@@ -16,7 +19,7 @@ test.describe("Follow a guest's theme in every tab of the browser", { tag: '@ful
       await test.step('2. In a second tab, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
-        await tab.goto('/sign-in')
+        await tab.goto(CONTRACT_ROUTES['user.sign-in'])
         await appReady(tab)
         // Expected: After step 2 [app-shell.theme-select] shows [value:system] in both tabs
         await expect(select).toHaveAttribute('data-value', 'system')

@@ -162,6 +162,7 @@ describe('diffContracts', () => {
       anchorCodes: { added: [], removed: [] },
       anchorStates: { added: [], removed: [] },
       anchorRoles: { added: [], removed: [] },
+      visibility: { added: [], removed: [], changed: [] },
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       stateColours: { added: [], removed: [] },
@@ -171,8 +172,10 @@ describe('diffContracts', () => {
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
       notices: { added: [], removed: [] },
+      defaults: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       routeAccess: { added: [], removed: [] },
+      routeSearch: { added: [], removed: [], changed: [] },
       sources: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -182,8 +185,10 @@ describe('diffContracts', () => {
         transitions: { thing: { added: [], removed: [] } },
       },
       flows: { sample: { added: [], removed: [] } },
+      values: { added: [], removed: [], changed: [] },
       actions: { added: [], removed: [] },
       actionLines: { 'sign-out': { added: [], removed: [] } },
+      invariantLines: {},
       modelActionLines: {
         'thing.createThing': { added: [], removed: [] },
         'thing.updateThing': { added: [], removed: [] },
@@ -237,6 +242,16 @@ describe('diffContracts', () => {
       added: ['sample.page spare -> sample.title-input'],
       removed: [],
     })
+    screen.anchors['sample.page'] = {
+      ...screen.anchors['sample.page'],
+      kind: 'page',
+      fields: { spare: 'form' },
+    }
+
+    const toForm = diffContracts(before, more)
+
+    expect(toForm.errorFields).toEqual({ added: ['sample.page spare -> form'], removed: [] })
+    expect(formatChanges(toForm)).toContain('error fields added: sample.page spare -> form')
     screen.anchors['sample.title-input'] = {
       ...screen.anchors['sample.title-input'],
       kind: 'input',
@@ -380,6 +395,27 @@ describe('diffContracts', () => {
     })
     expect(formatChanges(diffContracts(asking, quieter))).toContain(
       'unsaved-input entries added: unload: never',
+    )
+  })
+  it('lists the default length the platform declares, as it comes and changes', () => {
+    const defaulting = (maxLength: number): Contract => {
+      const contract = structuredClone(before)
+
+      contract.screens.platform.defaults = { maxLength }
+
+      return contract
+    }
+
+    expect(diffContracts(before, defaulting(80)).defaults).toEqual({
+      added: ['maxLength 80'],
+      removed: [],
+    })
+    expect(diffContracts(defaulting(80), defaulting(100)).defaults).toEqual({
+      added: ['maxLength 100'],
+      removed: ['maxLength 80'],
+    })
+    expect(formatChanges(diffContracts(before, defaulting(80)))).toContain(
+      'defaults added: maxLength 80',
     )
   })
   it('lists the notices each platform action declares, as they come and go', () => {
@@ -619,6 +655,37 @@ describe('diffContracts and the order and the inputs of a flow', () => {
     expect(
       flowsBetween(guarded('the network address tried too often'), guarded('it tried too often')),
     ).toEqual({ sample: { added: [], removed: [] } })
+  })
+  it('lists a guard a password pair derives, by what it holds', () => {
+    type Guard = NonNullable<NonNullable<Flow['meta']>['guards']>[string]
+    const guarded = (name: string, guard: Guard) => (flow: Flow) => {
+      flow.meta = { guards: { titleGiven: 'the title input holds a title', [name]: guard } }
+    }
+    const sentence = 'the password typed again is not the same as the password'
+
+    expect(
+      flowsBetween(
+        guarded('passwordsDiffer', sentence),
+        guarded('passwordsDiffer', { confirms: 'differs' }),
+      ),
+    ).toEqual({ sample: { added: ['guard passwordsDiffer: confirms differs'], removed: [] } })
+    expect(
+      flowsBetween(
+        guarded('passwordsDiffer', { confirms: 'differs' }),
+        guarded('passwordsDiffer', { confirms: 'strays' }),
+      ),
+    ).toEqual({
+      sample: {
+        added: ['guard passwordsDiffer: confirms strays'],
+        removed: ['guard passwordsDiffer: confirms differs'],
+      },
+    })
+    expect(
+      flowsBetween(
+        guarded('passwordBreaksRules', { composite: 'breaks' }),
+        guarded('passwordBreaksRules', 'the password breaks one of its rules'),
+      ),
+    ).toEqual({ sample: { added: [], removed: ['guard passwordBreaksRules: composite breaks'] } })
   })
   it('lists two entry effects swapped, as the last one decides what shows', () => {
     expect(
@@ -1147,5 +1214,202 @@ describe('diffContracts and the reads an action changes', () => {
       'model action lines added in thing.renameThing: changes things.read',
       'model action lines added in thing.updateThing: changes things.list, changes things.read',
     ])
+  })
+})
+
+describe('diffContracts and the platform values', () => {
+  const EMAIL = {
+    type: 'string',
+    format: 'email',
+    maxLength: 254,
+    description: 'An address.',
+  } as const
+
+  /** The fixture contract declaring the platform values `values`. */
+  const declaring = (values: NonNullable<Contract['screens']['platform']['values']>): Contract => {
+    const contract = fixtureContract()
+
+    contract.screens.platform.values = values
+
+    return contract
+  }
+
+  it('lists a value added or removed by its name', () => {
+    expect(diffContracts(fixtureContract(), declaring({ email: EMAIL })).values).toEqual({
+      added: ['email'],
+      removed: [],
+      changed: [],
+    })
+    expect(diffContracts(declaring({ email: EMAIL }), fixtureContract()).values).toEqual({
+      added: [],
+      removed: ['email'],
+      changed: [],
+    })
+  })
+  it('lists one line naming a value whose maxLength changes, its description aside', () => {
+    const before = declaring({ email: EMAIL })
+    const after = declaring({ email: { ...EMAIL, maxLength: 100, description: 'Shorter.' } })
+
+    expect(diffContracts(before, after).values).toEqual({
+      added: [],
+      removed: [],
+      changed: ['email maxLength 254 -> 100'],
+    })
+  })
+  it('names a keyword a value gains or loses with none on the side that lacks it', () => {
+    const before = declaring({ email: EMAIL })
+    const after = declaring({
+      email: { type: 'string', maxLength: 254, pattern: '^.+@.+$', description: 'An address.' },
+    })
+
+    expect(diffContracts(before, after).values.changed).toEqual([
+      'email format "email" -> none',
+      'email pattern none -> "^.+@.+$"',
+    ])
+  })
+  it('prints the values added, removed and changed', () => {
+    const before = declaring({ email: EMAIL, name: { type: 'string', description: 'A name.' } })
+    const after = declaring({
+      email: { ...EMAIL, maxLength: 100 },
+      code: { type: 'string', pattern: '^[0-9]{6}$', description: 'A code.' },
+    })
+
+    expect(formatChanges(diffContracts(before, after)).split('\n')).toEqual([
+      'contract changes: 1 platform value added, 1 platform value removed, 1 platform value changed',
+      'platform values added: code',
+      'platform values removed: name',
+      'platform values changed: email maxLength 254 -> 100',
+    ])
+  })
+  it('tells apart enums that print alike as text: one member with a comma, a number and a string', () => {
+    const kind = (values: Array<string | number>) => ({ enum: values, description: 'A kind.' })
+
+    expect(
+      diffContracts(declaring({ kind: kind(['a, b']) }), declaring({ kind: kind(['a', 'b']) }))
+        .values.changed,
+    ).toEqual(['kind enum ["a, b"] -> ["a","b"]'])
+    expect(
+      diffContracts(declaring({ kind: kind([1]) }), declaring({ kind: kind(['1']) })).values
+        .changed,
+    ).toEqual(['kind enum [1] -> ["1"]'])
+  })
+  it('tells apart the inline enums of a parameter that print alike as text', () => {
+    const withKind = (values: Array<string | number>): Contract => {
+      const contract = fixtureContract()
+      const signOut = contract.screens.platform.actions['sign-out']
+
+      if (signOut === undefined) {
+        throw new Error('the fixture has no sign-out')
+      }
+
+      signOut.params = { kind: { type: 'string', enum: values, description: 'A kind.' } }
+
+      return contract
+    }
+
+    expect(diffContracts(withKind(['a, b']), withKind(['a', 'b'])).actionLines['sign-out']).toEqual(
+      {
+        added: ['param kind: string, enum ["a","b"]'],
+        removed: ['param kind: string, enum ["a, b"]'],
+      },
+    )
+    expect(diffContracts(withKind([1]), withKind(['1'])).actionLines['sign-out']).toEqual({
+      added: ['param kind: string, enum ["1"]'],
+      removed: ['param kind: string, enum [1]'],
+    })
+  })
+})
+
+describe('diffContracts and the invariants', () => {
+  /** The fixture contract with the platform's `invariants` set as given. */
+  function withInvariants(invariants: Contract['screens']['platform']['invariants']): Contract {
+    const contract = fixtureContract()
+
+    contract.screens.platform.invariants = invariants
+
+    return contract
+  }
+
+  const LIMIT = { rule: 'Ten devices at most at once.', refuses: 'device-limit' }
+
+  it('lists the rule and the code of an invariant added, edited or removed, by its name', () => {
+    expect(
+      diffContracts(
+        withInvariants({ limit: LIMIT, gone: { rule: 'Old rule.', refuses: 'failed' } }),
+        withInvariants({
+          limit: { ...LIMIT, rule: 'Five devices at most at once.' },
+          fresh: { rule: 'A new rule.', refuses: 'rate-limited' },
+        }),
+      ).invariantLines,
+    ).toEqual({
+      fresh: { added: ['refuses rate-limited', 'rule: A new rule.'], removed: [] },
+      gone: { added: [], removed: ['refuses failed', 'rule: Old rule.'] },
+      limit: {
+        added: ['rule: Five devices at most at once.'],
+        removed: ['rule: Ten devices at most at once.'],
+      },
+    })
+  })
+  it('lists nothing for invariants that stay as they were, or a platform with none', () => {
+    expect(
+      diffContracts(withInvariants({ limit: LIMIT }), withInvariants({ limit: LIMIT }))
+        .invariantLines,
+    ).toEqual({
+      limit: { added: [], removed: [] },
+    })
+    expect(diffContracts(fixtureContract(), fixtureContract()).invariantLines).toEqual({})
+  })
+  it('prints the lines changed in each invariant', () => {
+    expect(
+      formatChanges(
+        diffContracts(
+          withInvariants({ limit: LIMIT }),
+          withInvariants({ limit: { ...LIMIT, rule: 'Five devices at most at once.' } }),
+        ),
+      ).split('\n'),
+    ).toEqual([
+      'contract changes: 1 invariant line added in limit, 1 invariant line removed in limit',
+      'invariant lines added in limit: rule: Five devices at most at once.',
+      'invariant lines removed in limit: rule: Ten devices at most at once.',
+    ])
+  })
+})
+
+describe("diffContracts and the order of an action's outcome lines", () => {
+  /** The fixture contract with `sign-out` answering the outcome lines given. */
+  function answering(result: Contract['screens']['platform']['actions'][string]['result']) {
+    const contract = fixtureContract()
+    const action = contract.screens.platform.actions['sign-out']
+
+    if (action === undefined) {
+      throw new Error('the fixture lost sign-out')
+    }
+
+    action.result = result
+
+    return contract
+  }
+
+  it('lists a reorder of the outcome lines, whose first is the plain success', () => {
+    expect(
+      diffContracts(
+        answering(['this device signs out', 'with unsent changes: asks first']),
+        answering(['with unsent changes: asks first', 'this device signs out']),
+      ).actionLines['sign-out'],
+    ).toEqual({
+      added: ['result #1: with unsent changes: asks first', 'result #2: this device signs out'],
+      removed: ['result #1: this device signs out', 'result #2: with unsent changes: asks first'],
+    })
+  })
+  it('lists a one-string result split into lines by position', () => {
+    expect(
+      diffContracts(
+        answering('this device signs out'),
+        answering(['this device signs out', 'with unsent changes: asks first']),
+      ).actionLines['sign-out'],
+    ).toEqual({
+      added: ['result #1: this device signs out', 'result #2: with unsent changes: asks first'],
+      removed: ['result: this device signs out'],
+    })
   })
 })

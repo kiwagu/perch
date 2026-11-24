@@ -1,4 +1,7 @@
 // scenario: user/base/delete-link-used
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import {
   accountDeleted,
   askToDeleteAccount,
@@ -42,7 +45,7 @@ test.describe('Open an account deletion link a second time', { tag: '@full' }, (
 
     await test.step('4. Open the same link again, click [user.delete-account.delete-button] and confirm with [app-shell.confirmation.confirm-button]', async () => {
       await openMailLink(page, mail, 'request-account-deletion')
-      await expectPathname(page, '/delete-account')
+      await expectPathname(page, CONTRACT_ROUTES['user.delete-account'])
       await deleteAccount(page)
       // Expected: After step 4 [user.delete-account.error] carries [code:link-invalid] and no
       //   [user.delete-account.delete-button] shows

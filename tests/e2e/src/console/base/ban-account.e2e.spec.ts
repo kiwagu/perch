@@ -1,4 +1,7 @@
 // scenario: console/base/ban-account
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
 import {
@@ -88,7 +91,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
           await expect(page.getByTestId('console.account.ban.unban-button')).toBeVisible()
           await expect(page.getByTestId('console.account.ban.ban-button')).toHaveCount(0)
         })(),
-        expectPathname(deviceB, '/sign-in', 5_000),
+        expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], 5_000),
         expect(signInNotice(deviceB, 'account-banned')).toBeVisible({ timeout: 5_000 }),
         expect
           .poll(() => databases(deviceB), {
@@ -110,7 +113,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
         'data-code',
         'account-banned',
       )
-      await expectPathname(deviceB, '/sign-in')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('6. On device A, click [console.account.ban.unban-button]', async () => {
@@ -131,7 +134,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
       // Expected: After step 7 device B is on [/me] and [app-shell.notice-message] carries
       //   [code:welcome]
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

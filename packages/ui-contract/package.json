@@ -18,6 +18,10 @@
     "./machines": {
       "types": "./src/machines/index.ts",
       "import": "./src/machines/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts"
     }
   },
   "scripts": {

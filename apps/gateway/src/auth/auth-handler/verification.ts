@@ -1,6 +1,7 @@
 import { match } from 'ts-pattern'
 
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -22,8 +23,8 @@ import {
   withoutCredentials,
 } from './requests'
 
-const verifyBody = z.object({ token: z.string().min(1).max(4096) })
-const resendBody = z.object({ email: z.string().min(1).max(320) })
+const verifyBody = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })
+const resendBody = z.object({ email: z.string().min(1).max(CONTRACT_VALUES.email.maxLength) })
 const linkRefusal = z.object({ code: z.string() })
 
 /**

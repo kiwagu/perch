@@ -4,9 +4,10 @@
  * the derived suffixes, the attributes, the app, container, row and field states, the codes, the
  * choice values, the screen names in use, the roles, the reserved anchors and the composites
  * the platform declares. The sections are fixed; a missing section (but the composites and the field
- * states, which a vocabulary written before them lacks), an unknown or repeated one, a row with the wrong number
- * of cells or with an empty cell (only the Playwright cell of a kind may stay empty), a key
- * listed twice and a missing `Contract version: N` line are problems.
+ * states, which a vocabulary written before them lacks, and the roles, which the terms file
+ * holds), an unknown or repeated one, a row with the wrong number of cells or with an empty cell
+ * (only the Playwright cell of a kind may stay empty) and a key listed twice are problems. The `Contract version: N` line is read when there is one: a contract
+ * at version 1 repeats its version there, and the check asks for the line by that version alone.
  */
 
 import { VOCABULARY_FILE } from './paths'
@@ -30,6 +31,8 @@ export interface Vocabulary {
   choiceValues: Record<string, Record<string, string>>
   screenNames: Record<string, string>
   roles: Record<string, string>
+  /** Whether the vocabulary writes the Roles section: a contract with a terms file keeps them there. */
+  writesRoles: boolean
   reserved: Record<string, string>
   composites: Record<string, string>
 }
@@ -80,11 +83,14 @@ const OPTIONAL_COLUMN = { section: 'Kinds', column: 'Playwright' } as const
 
 /**
  * The sections a vocabulary written before them may lack: a missing one reads as an empty
- * table, so an older contract still loads, and the check asks for it once a row is wanted.
+ * table, so an older contract still loads, and the check asks for it once a row is wanted. The
+ * roles may move out, into the terms file: a vocabulary without them reads none, and the terms
+ * check holds the contract to one place for them.
  */
-const LATER_SECTIONS: ReadonlySet<Section> = new Set(['Composites', 'Field states'])
+const LATER_SECTIONS: ReadonlySet<Section> = new Set(['Composites', 'Field states', 'Roles'])
 
-const VERSION_LINE = /^Contract version: (\d+)$/m
+/** The line a vocabulary at version 1 says the contract version in: `Contract version: 1`. */
+export const VERSION_LINE = /^Contract version: (\d+)$/m
 const SEPARATOR_ROW = /^\|[\s:|-]+\|$/
 
 const isSection = (heading: string): heading is Section =>
@@ -251,10 +257,6 @@ export function parseVocabulary(markdown: string): { vocabulary: Vocabulary; pro
     }
   }
 
-  if (version === undefined) {
-    problems.push({ file: VOCABULARY_FILE, message: 'no "Contract version: N" line' })
-  }
-
   const table = (section: Exclude<Section, 'Grammar'>) => tableOf(sections, section, problems)
   const simple = (section: Exclude<Section, 'Grammar'>) =>
     keyed(table(section), section, problems, meaningOf)
@@ -275,6 +277,7 @@ export function parseVocabulary(markdown: string): { vocabulary: Vocabulary; pro
     choiceValues: choiceValuesOf(table('Choice values'), problems),
     screenNames: simple('Screen names in use'),
     roles: simple('Roles'),
+    writesRoles: sections.has('Roles'),
     reserved: simple('Reserved anchors'),
     composites: simple('Composites'),
   }

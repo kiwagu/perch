@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { signedIn } from '../__fixtures__/signed-in'
 
@@ -50,12 +51,12 @@ describe("the account's platform roles on the device", () => {
     const storage = memoryStorage()
     const { annFirst } = owners()
 
-    saveRoles(storage, annFirst, ['operator'])
+    saveRoles(storage, annFirst, [CONTRACT_ROLES.operator])
 
-    expect(savedRoles(storage, annFirst)).toEqual(['operator'])
+    expect(savedRoles(storage, annFirst)).toEqual([CONTRACT_ROLES.operator])
     expect(JSON.parse(storage.get(rolesKeyOf(annFirst.signIn)) ?? 'null')).toEqual({
       identity: ann,
-      roles: ['operator'],
+      roles: [CONTRACT_ROLES.operator],
     })
 
     saveRoles(storage, annFirst, [])
@@ -69,7 +70,7 @@ describe("the account's platform roles on the device", () => {
 
     expect(savedRoles(storage, annFirst)).toEqual([])
 
-    saveRoles(storage, annFirst, ['operator'])
+    saveRoles(storage, annFirst, [CONTRACT_ROLES.operator])
 
     expect(savedRoles(storage, annAgain)).toEqual([])
   })
@@ -78,11 +79,11 @@ describe("the account's platform roles on the device", () => {
     const storage = memoryStorage()
     const { annFirst, annAgain, bobs } = owners()
 
-    saveRoles(storage, annFirst, ['operator'])
+    saveRoles(storage, annFirst, [CONTRACT_ROLES.operator])
     saveRoles(storage, bobs, [])
     saveRoles(storage, annAgain, [])
 
-    expect(savedRoles(storage, annFirst)).toEqual(['operator'])
+    expect(savedRoles(storage, annFirst)).toEqual([CONTRACT_ROLES.operator])
     expect(savedRoles(storage, bobs)).toEqual([])
     expect(savedRoles(storage, annAgain)).toEqual([])
   })
@@ -95,7 +96,7 @@ describe("the account's platform roles on the device", () => {
       'not json',
       '[]',
       '["operator"]',
-      JSON.stringify({ identity: ann, roles: 'operator' }),
+      JSON.stringify({ identity: ann, roles: CONTRACT_ROLES.operator }),
       JSON.stringify({ identity: ann, roles: ['root'] }),
     ]) {
       storage.set(rolesKeyOf(annFirst.signIn), value)
@@ -108,7 +109,7 @@ describe("the account's platform roles on the device", () => {
     const storage = memoryStorage()
     const { annFirst, bobs } = owners()
 
-    saveRoles(storage, bobs, ['operator'])
+    saveRoles(storage, bobs, [CONTRACT_ROLES.operator])
     storage.set(
       rolesKeyOf(annFirst.signIn),
       storage.get(rolesKeyOf(bobs.signIn)) ?? expect.unreachable('a record'),
@@ -123,32 +124,32 @@ describe("the account's platform roles on the device", () => {
     const storage = memoryStorage()
     const { annFirst, annAgain, bobs } = owners()
 
-    saveRoles(storage, annFirst, ['operator'])
-    saveRoles(storage, annAgain, ['operator'])
-    saveRoles(storage, bobs, ['operator'])
-    dropRole(storage, annFirst, 'operator')
+    saveRoles(storage, annFirst, [CONTRACT_ROLES.operator])
+    saveRoles(storage, annAgain, [CONTRACT_ROLES.operator])
+    saveRoles(storage, bobs, [CONTRACT_ROLES.operator])
+    dropRole(storage, annFirst, CONTRACT_ROLES.operator)
 
     expect(storage.get(rolesKeyOf(annFirst.signIn))).toBeDefined()
     expect(savedRoles(storage, annFirst)).toEqual([])
-    expect(savedRoles(storage, annAgain)).toEqual(['operator'])
-    expect(savedRoles(storage, bobs)).toEqual(['operator'])
+    expect(savedRoles(storage, annAgain)).toEqual([CONTRACT_ROLES.operator])
+    expect(savedRoles(storage, bobs)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it("leaves a sign-in's record as it is when the drop is asked for another identity", () => {
     const storage = memoryStorage()
     const { annFirst } = owners()
 
-    saveRoles(storage, annFirst, ['operator'])
-    dropRole(storage, { signIn: annFirst.signIn, identity: bob }, 'operator')
+    saveRoles(storage, annFirst, [CONTRACT_ROLES.operator])
+    dropRole(storage, { signIn: annFirst.signIn, identity: bob }, CONTRACT_ROLES.operator)
 
-    expect(savedRoles(storage, annFirst)).toEqual(['operator'])
+    expect(savedRoles(storage, annFirst)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('creates no record when it drops a role of a sign-in without one', () => {
     const storage = memoryStorage()
     const { annFirst } = owners()
 
-    dropRole(storage, annFirst, 'operator')
+    dropRole(storage, annFirst, CONTRACT_ROLES.operator)
 
     expect(storage.get(rolesKeyOf(annFirst.signIn))).toBeUndefined()
   })
@@ -157,14 +158,14 @@ describe("the account's platform roles on the device", () => {
     const storage = memoryStorage()
     const { annFirst, annAgain, bobs } = owners()
 
-    saveRoles(storage, annFirst, ['operator'])
-    saveRoles(storage, annAgain, ['operator'])
-    saveRoles(storage, bobs, ['operator'])
+    saveRoles(storage, annFirst, [CONTRACT_ROLES.operator])
+    saveRoles(storage, annAgain, [CONTRACT_ROLES.operator])
+    saveRoles(storage, bobs, [CONTRACT_ROLES.operator])
     forgetRoles(storage, annFirst.signIn)
 
     expect(storage.get(rolesKeyOf(annFirst.signIn))).toBeUndefined()
-    expect(savedRoles(storage, annAgain)).toEqual(['operator'])
-    expect(savedRoles(storage, bobs)).toEqual(['operator'])
+    expect(savedRoles(storage, annAgain)).toEqual([CONTRACT_ROLES.operator])
+    expect(savedRoles(storage, bobs)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it("forgetting a sign-in removes its record beside its memberships, and no other sign-in's", () => {
@@ -175,9 +176,9 @@ describe("the account's platform roles on the device", () => {
       token: 't',
     })
 
-    saveRoles(storage, session, ['operator'])
-    saveRoles(storage, annAgain, ['operator'])
-    saveRoles(storage, bobs, ['operator'])
+    saveRoles(storage, session, [CONTRACT_ROLES.operator])
+    saveRoles(storage, annAgain, [CONTRACT_ROLES.operator])
+    saveRoles(storage, bobs, [CONTRACT_ROLES.operator])
 
     expect(storage.get(membershipsKeyOf(session.signIn))).toBeDefined()
 
@@ -186,7 +187,7 @@ describe("the account's platform roles on the device", () => {
     expect(storage.get(rolesKeyOf(session.signIn))).toBeUndefined()
     expect(storage.get(membershipsKeyOf(session.signIn))).toBeUndefined()
     // A record of another sign-in, of the same account or of another one, is no part of it.
-    expect(savedRoles(storage, annAgain)).toEqual(['operator'])
-    expect(savedRoles(storage, bobs)).toEqual(['operator'])
+    expect(savedRoles(storage, annAgain)).toEqual([CONTRACT_ROLES.operator])
+    expect(savedRoles(storage, bobs)).toEqual([CONTRACT_ROLES.operator])
   })
 })

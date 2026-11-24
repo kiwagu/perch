@@ -1,4 +1,7 @@
 // scenario: app-shell/base/toast-before-data
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { holdEngines } from '../../support/engines'
 import { expect, expectPathname, signUp, test, toast } from '../../support/fixtures'
@@ -27,7 +30,7 @@ test.describe('See a toast before the data opens', { tag: '@smoke' }, () => {
       await page.reload({ waitUntil: 'commit' })
       // Expected: After step 3 [app-shell.status] reaches [state:opening-data] on [/settings]
       await expect(status).toHaveAttribute('data-state', 'opening-data')
-      await expectPathname(page, '/settings')
+      await expectPathname(page, CONTRACT_ROUTES['user.settings'])
     })
 
     await test.step('4. Enter the password into [user.settings.password.current-password-input], the new password into [user.settings.password.new-password-input] and [user.settings.password.password-confirmation-input], and click [user.settings.password.save-button]', async () => {

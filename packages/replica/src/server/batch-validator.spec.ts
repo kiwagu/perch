@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { recordRef } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
-import { defineAbilityFor } from '@workspace/kernel'
+import { CONTRACT_ROLES, defineAbilityFor } from '@workspace/kernel'
 
 import {
   noteCreate,
@@ -384,8 +384,9 @@ describe('a tenant region', () => {
   const region = { kind: 'tenant', id: 'tenant:acme' } as const
   const ann = 'idn_ann000000000000.0000000000'
   const bob = 'idn_bob000000000000.0000000000'
-  const member = (id: string) => defineAbilityFor({ id, role: 'member' }, replicaSchema)
-  const admin = (id: string) => defineAbilityFor({ id, role: 'admin' }, replicaSchema)
+  const member = (id: string) =>
+    defineAbilityFor({ id, role: CONTRACT_ROLES.member }, replicaSchema)
+  const admin = (id: string) => defineAbilityFor({ id, role: CONTRACT_ROLES.admin }, replicaSchema)
 
   it('accepts a note whose author is the pushing member', () => {
     const doc = new LoroDoc()
@@ -527,7 +528,7 @@ describe('a tenant region', () => {
       doc: new LoroDoc(),
       region,
       actor: ann,
-      ability: defineAbilityFor({ id: ann, role: 'admin' }, closed),
+      ability: defineAbilityFor({ id: ann, role: CONTRACT_ROLES.admin }, closed),
       schema: closed,
       updates: [noteCreate(new LoroDoc(), { id, author: ann, text: 'hello' })],
     })

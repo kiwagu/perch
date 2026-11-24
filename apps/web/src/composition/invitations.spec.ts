@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dataError } from '@workspace/data'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { identityIdFactory, invitationIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { OrganisationService } from '../features/organisation/application/organisation.service'
@@ -36,18 +37,18 @@ const bob: KeptDevice = {
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const globex: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const received: ReceivedInvitation = {
   id: invitationIdFactory.create(),
   organisation: { name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /** The gateway's invitation routes as they answer Ann, invited to Acme. */
@@ -57,7 +58,7 @@ function answering() {
     read: (token) => {
       calls.push(['read', token])
 
-      return okAsync({ organisation: { name: 'Acme' }, role: 'member', forYou: true })
+      return okAsync({ organisation: { name: 'Acme' }, role: CONTRACT_ROLES.member, forYou: true })
     },
     mine: () => {
       calls.push(['mine'])
@@ -204,7 +205,7 @@ describe('createInvitations', () => {
 
     expect((await invitations.read('link-token'))._unsafeUnwrap()).toEqual({
       organisation: { name: 'Acme' },
-      role: 'member',
+      role: CONTRACT_ROLES.member,
       forYou: true,
     })
     expect((await invitations.mine())._unsafeUnwrap()).toEqual([received])
