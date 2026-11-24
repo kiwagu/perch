@@ -58,6 +58,16 @@ export const CONTRACT_VALUES = {
     "minLength": 1,
     "maxLength": 80
   },
+  "organisation_settings.id": {
+    "type": "string",
+    "readOnly": true
+  },
+  "organisation_settings.locale": {
+    "enum": [
+      "en",
+      "es"
+    ]
+  },
   "password": {
     "type": "string",
     "minLength": 10,

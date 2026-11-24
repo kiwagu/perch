@@ -16,9 +16,17 @@ on the replica schema are applied on the device before a command runs
 - Routes: `/org` (guard `authenticated`) renders `OrganisationPage`; `/invitation?token` (open to
   anyone) renders `InvitationPage`, the page the link of an invitation mail opens.
 - Shape `organisation.shape.surql`: the notes of the current organisation (`note`, tenant
-  region), oldest first.
+  region), oldest first. Shape `organisation-settings.shape.surql`
+  (`application/organisation-settings/`): the organisation's one settings row
+  (`organisation_settings:ost_<key>`, `organisationSettingsIdOf`), with its default language or
+  none.
 - Commands `organisation.commands.surql`: `createNote`, `updateNote`, `deleteNote`, all in
-  the tenant region. Creating an organisation, inviting an email with a role, listing and
+  the tenant region. Commands `organisation-settings.commands.surql`:
+  `createOrganisationSettings` (the row with no language), `updateLocale`, `clearLocale`; an
+  admin's change (`OrganisationSettingsService`) goes through the `TENANT_COMMANDS` port to the
+  organisation acted on, whichever is current when it is admitted, and only while the account is
+  still that organisation's admin, and the row itself is created by the composition's
+  organisation starts (`composition/organisation-starts.ts`), in the tab that leads the sync. Creating an organisation, inviting an email with a role, listing and
   revoking the pending invitations, changing a member's role and removing a member go through
   the gateway's `/organisations` routes via the `ORGANISATIONS` port, not through the replica;
   reading the invitation a link carries, listing the invitations to the account, accepting and
@@ -29,15 +37,18 @@ on the replica schema are applied on the device before a command runs
   members card: each member's role select and remove button), `OrganisationInvite` (the form
   that invites an email with a role, under the members), `OrganisationSent` (the invitations
   not accepted yet, with the link to copy and the revoke button), `OrganisationReceived` (the
-  invitations for the account, with accept and decline) and `OrganisationErrorLine` (a
-  refused change as its contract code and its copy), in `presentation/components/`;
+  invitations for the account, with accept and decline), `OrganisationDefaultLanguage` (the
+  admin's card of the organisation's default language: its select, which shows none until one is
+  chosen and takes a choice once the settings row is on this device, the button that removes it
+  and its error) and `OrganisationErrorLine` (a refused change as its contract code and its
+  copy), in `presentation/components/`;
   `roleShown` (the role a member's row shows), `useInviteDraft` (the invitation form's fields)
   and `useOrganisationDraft` (the create form's fields and the new note's, which the page holds
   for the organisation it shows) sit beside the page's view, whose flow empties those fields
   once their action is done, and which reads the members, the invitations sent and the
   invitations for the account through the platform's `useListed` (a list as last read, and the
   change it settled after).
-- Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
+- Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`, `ORGANISATION_SETTINGS_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screens `organisation` in `contract/domain/screens/org.yaml` and
   `organisation.invitation` in `contract/domain/screens/invitation.yaml`.

@@ -87,7 +87,14 @@ modeling stage.
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
   another one created. The ending of that sign-in forgets the start (`forgetSignIn`); a session
   that only closes (a tab that goes) keeps it. A start that a sign-out left unfinished
-  stays so until a sign-in learns of it. The first verification's answer (`{ name, locale }` of the
+  stays so until a sign-in learns of it. The settings row of each organisation the account
+  administers (`organisation_settings:ost_<key>`, with no default language) is ensured the same
+  way by `composition/organisation-starts.ts`: in the tab that leads, once the engine says that
+  organisation's region caught up, under the Web Lock `perch.session.organisation-start.<identity>.<key>`,
+  importing what the other tabs appended and flushing before it reads, creating only what is still
+  missing, and writing into that organisation whichever is current (`SessionService.tenantWritePath`,
+  under the identity's write lock, refused once the space, the engine, the admin role or the open
+  database changed). The first verification's answer (`{ name, locale }` of the
   sign-up), and a sign-in's answer that carries `start` (the account has no settings or profile at
   the gateway yet, because a reset verified its email or the device that verified it has not
   synced its start), keep that start before the device is saved
@@ -333,7 +340,10 @@ modeling stage.
   container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
+  and correlation ids). `TENANT_COMMANDS` (`forTenant(key, admitted)`) gives a command bus over
+  one organisation's region, named by its key (`SessionService.tenantWritePath`), whichever is
+  current, refused once its database is not open or `admitted` no longer holds when the write is
+  admitted. The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes
@@ -352,8 +362,21 @@ modeling stage.
   the browser's storage, written on each change of its channel and every two seconds while it
   leads (it says synced only once a read of the outbox, asked in its current leading period and
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
-  (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
-  away. The leading tab's sync channel hears the same network (`browser.ts` hands it to
+  (`onOnlineChange`). The browser may hold back a hidden tab's timers (Chrome, after minutes
+  hidden, to one wake-up a minute), and a hidden leader's two seconds with them, but not the
+  storage events it hears: a tab that does not lead and has not heard the leader write its record
+  for three seconds asks for a beat (`perch.sync.ask`) when it opens, on each of its own two
+  seconds and when it comes back into view, and the leading tab answers by writing its record
+  and reading its outbox again. In a tab that does not lead, a leader not heard for six seconds
+  went away, unless the tab's first ask that no fresh word answered was made less than two seconds
+  ago (a tab that opens or comes back into view is not told "connecting" while its ask is on the
+  way). Those times run on the tab's steady clock (`steady`, `performance.now()`), which setting
+  the system's clock does not move. A write the tab hears of is dated by the record's own time,
+  read off the wall clock as it hears it, so the late news of an old write is no fresh word (one
+  dated after now was written as the clock was set back: just now); a removed record is no word.
+  The record a tab finds when it opens is dated the same way, and one dated after now has no known
+  age until the leader is heard. Each record a leading tab writes carries a time later than its
+  last one, so every write changes the record and the other tabs hear of it. The leading tab's sync channel hears the same network (`browser.ts` hands it to
   `WebSocketTransport`): once the browser is back online it connects within a second, not after
   its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
   screens' machines and the frame's, from the facts of this browser no account owns, each a key

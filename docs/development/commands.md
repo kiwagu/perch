@@ -8,7 +8,9 @@
   (`contract:coverage:check`); the gate for a change.
   `bun run check --force` runs every task afresh instead of replaying turbo's cache. It runs its
   tasks four at a time, at low CPU priority and with vitest's workers capped, for the reasons
-  `bun run test` gives below.
+  `bun run test` gives below. It always holds the code to the contract as it is now: it drops the
+  pre-commit hook's ahead mode (`CONTRACT_AHEAD`, `CONTRACT_AHEAD_BASE`, `CONTRACT_AHEAD_HEAD`,
+  `CONTRACT_AHEAD_MERGE`) even when the shell exports it, so nothing declared ahead waits there.
 - `bun run test:db` with the `e2e` stand up (`mcproc start e2e`): the schema permission suites,
   the seed and the gateway smoke test against the e2e stand. The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,

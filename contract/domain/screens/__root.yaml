@@ -49,7 +49,7 @@ anchors:
     roles: [ guest ]
   app-shell.locale-select:
     kind: select
-    description: The language of the app for a guest, and the one a new account starts with.
+    description: "The language of the app for a guest, and the one a new account starts with, unless an organisation's pending invitation to its email gives it a default language."
     binding:
       - model: settings.locale
       - action: settings.updateLocale

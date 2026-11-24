@@ -112,6 +112,7 @@ test.describe('Sign up with the password typed again differently', { tag: '@smok
       await expect(error).toHaveCount(0)
       expectDeclaredMail(await mailbox.next(data.email, 0), 'sign-up', {
         params: { email: data.email, locale: 'en' },
+        account: { email: data.email, language: 'en' },
       })
     })
   })

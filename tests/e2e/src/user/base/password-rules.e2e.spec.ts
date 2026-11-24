@@ -117,6 +117,7 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
       await expect(list).toHaveCount(0)
       expectDeclaredMail(await mailbox.next(data.email, 0), 'sign-up', {
         params: { email: data.email, locale: 'en' },
+        account: { email: data.email, language: 'en' },
       })
     })
   })

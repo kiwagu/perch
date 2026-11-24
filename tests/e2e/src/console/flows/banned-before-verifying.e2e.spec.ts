@@ -74,7 +74,15 @@ test.describe('Ban an account before it verified its email', { tag: '@full' }, (
 
     await test.step('5. On device B, open the link of [mail:sign-up]', async () => {
       // The email's first mail, the sign-up's, which device B left unopened.
-      await openDeclaredMail(deviceB, 'sign-up', { params: { email: data.email, locale: 'en' } }, 0)
+      await openDeclaredMail(
+        deviceB,
+        'sign-up',
+        {
+          params: { email: data.email, locale: 'en' },
+          account: { email: data.email, language: 'en' },
+        },
+        0,
+      )
       // Expected: After step 5 [user.verify-email.error] carries [code:account-banned] on device
       //   B, no [user.verify-email.form] shows, and device B is not signed in: its URL stays
       //   [/verify-email]

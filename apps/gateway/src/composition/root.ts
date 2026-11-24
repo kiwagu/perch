@@ -36,6 +36,7 @@ import { PasskeyRows } from '../auth/passkey-rows'
 import { ProfileEmails } from '../auth/profile-emails'
 import { accountChoicePolicy } from '../auth/second-factor-policy.account-choice'
 import type { SecondFactorPolicy } from '../auth/second-factor-policy.port'
+import { STARTING_LANGUAGE_BUDGET_MS, type StartingLanguage } from '../auth/starting-language.port'
 import { TwoFactorRows } from '../auth/two-factor-rows'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
 import { AccountBans, AccountDirectory, ProfileNames } from '../console'
@@ -45,6 +46,7 @@ import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
 import { AccountDeparture } from '../tenants/account-departure'
 import { InvitationMails, invitationLink, PendingInvitations } from '../tenants/invitations'
+import { InvitedLanguage } from '../tenants/invited-language'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
@@ -133,6 +135,11 @@ export interface GatewayRoot {
   readonly accountTurns: KeyedTurns<string>
   /** The front's public origin, which the gateway's own calls of Better Auth's endpoints name. */
   readonly publicUrl: string
+  /**
+   * The language an account an invitation creates starts in: the inviting organisation's default,
+   * read from the directory's invitations and the organisation's database within its budget.
+   */
+  readonly startingLanguage: StartingLanguage
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -308,6 +315,13 @@ export function createGatewayRoot(
       limits: new RequestLimits({ clock: options.clock }),
       accountTurns,
       publicUrl: options.publicUrl,
+      startingLanguage: new InvitedLanguage({
+        directory: local,
+        databases,
+        clock: options.clock,
+        log: authLog,
+        budgetMs: STARTING_LANGUAGE_BUDGET_MS,
+      }),
       clock: options.clock,
       close: async () => {
         // The re-tells stop first, the one running awaited, before anything they read or tell

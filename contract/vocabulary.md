@@ -233,7 +233,7 @@ code tells the user; when an action answers with it is the action's condition in
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than its value allows |
 | `bio-too-long` | `user.profile.error` | the bio is longer than its value allows |
-| `failed` | `user.sign-in.error`, `user.sign-in.code.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.passkeys.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.sign-in.code.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.passkeys.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.settings.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
@@ -243,7 +243,7 @@ code tells the user; when an action answers with it is the action's condition in
 | `account-gone` | `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the account was removed meanwhile, or never existed, so there is nothing to show or to act on |
 | `email-taken` | `console.account.email.error` | the new email has an account already |
 | `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error`, `console.account.removal.error` | the account is an organisation's only admin: another member must be made one first, or, to delete or remove it, the others must leave or be removed; the organisation page shows them |
-| `forbidden` | `organisation.notes.error` | only the author of a note or an admin may change it |
+| `forbidden` | `organisation.notes.error`, `organisation.settings.error` | only the author of a note or an admin may change it; only an admin, the organisation's settings |
 | `text-required` | `organisation.notes.error` | the note is empty |
 | `text-too-long` | `organisation.notes.error` | the note is longer than its value allows |
 | `no-notes` | `organisation.notes.empty-message` | the organisation has no notes yet |
@@ -276,6 +276,8 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 | `app-shell.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.settings.locale-select.option` | `en` | the option makes the account speak English |
 | `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
+| `organisation.settings.locale-select.option` | `en` | the option makes English the organisation's default language |
+| `organisation.settings.locale-select.option` | `es` | the option makes Spanish the organisation's default language |
 | `user.settings.theme-select.option` | `light` | the option shows the account light, in each of its tabs and on each of its devices |
 | `user.settings.theme-select.option` | `dark` | the option shows the account dark, in each of its tabs and on each of its devices |
 | `user.settings.theme-select.option` | `system` | the option shows the account as each device's own setting says, following it as it changes |

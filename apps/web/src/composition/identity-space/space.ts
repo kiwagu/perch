@@ -58,6 +58,12 @@ export interface IdentitySpace {
   currentTenant(): string | undefined
   /** The organisations the identity belongs to, as the space was last told. */
   memberships(): readonly Membership[]
+  /**
+   * The open database of the organisation `key`, whichever is current: its reads, its writes (told
+   * to the other tabs and reloaded when stale, as every write), its flush and the import of what the
+   * browser's other tabs appended to its region. None while that database is not open.
+   */
+  tenant(key: string): TenantView | undefined
   /** The keys of the organisations whose databases are open, in order. */
   tenants(): readonly string[]
   /** The tab's visibility: the leader's cadence follows it; a follower coming to the front tells the leader. */
@@ -83,6 +89,17 @@ export interface IdentitySpace {
    * reported and stays counted.
    */
   destroy(): Promise<void>
+}
+
+/** One open organisation database of the space, reached by its key. */
+export interface TenantView {
+  readonly runner: ShapeRunnerPort
+  readonly writePath: WritePathPort
+  flush(): ResultAsync<void, DataError>
+  /** Imports what the browser's other tabs appended to the region since this tab last did. */
+  catchUpLocal(): ResultAsync<void, DataError>
+  /** The region's document now: another one once a reset or a reopen replaced it. */
+  readonly document: object
 }
 
 export class Space implements IdentitySpace {
@@ -115,13 +132,7 @@ export class Space implements IdentitySpace {
 
     const path = new RoutingWritePath(own.writePath, () => tenants.currentSpace()?.writePath)
 
-    this.writePath = {
-      run: (command, params, meta) =>
-        path
-          .run(command, params, meta)
-          .andTee(() => this.#tabSync.wrote())
-          .orTee((error) => this.#stale(error)),
-    }
+    this.writePath = this.#told(path)
     this.#leading = new LeadingEngine({
       regions: () => this.#spaces().map((space) => space.region),
       transport: options.transport,
@@ -197,6 +208,20 @@ export class Space implements IdentitySpace {
     return this.#tenants.memberships()
   }
 
+  tenant(key: string): TenantView | undefined {
+    const space = this.#tenants.space(key)
+
+    return space === undefined
+      ? undefined
+      : {
+          runner: space.runner,
+          writePath: this.#told(space.writePath),
+          flush: () => space.flush(),
+          catchUpLocal: () => space.region.catchUpLocal().map(() => undefined),
+          document: space.region,
+        }
+  }
+
   tenants(): readonly string[] {
     return this.#tenants.keys()
   }
@@ -233,6 +258,17 @@ export class Space implements IdentitySpace {
       this.#memberships.deleteCounted(),
     ])
     this.#options.tenantDatabases.drop(this.#tenants.keys())
+  }
+
+  /** Writes through `path`, telling the other tabs of each write and reloading a stale region. */
+  #told(path: WritePathPort): WritePathPort {
+    return {
+      run: (command, params, meta) =>
+        path
+          .run(command, params, meta)
+          .andTee(() => this.#tabSync.wrote())
+          .orTee((error) => this.#stale(error)),
+    }
   }
 
   /** The identity's own region first, then each organisation's. */
