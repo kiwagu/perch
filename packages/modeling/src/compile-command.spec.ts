@@ -8,12 +8,16 @@ const schema: SchemaModel = {
     identity: {
       replicate: 'none',
       idPrefix: 'idn',
+      asserts: {},
+      indexes: {},
       fields: { name: { kind: 'scalar', name: 'string' } },
     },
     profile: {
       region: 'private',
       idPrefix: 'prf',
       crdt: { bio: 'text', tags: 'list' },
+      asserts: {},
+      indexes: {},
       fields: {
         identity: { kind: 'record', tables: ['identity'] },
         name: { kind: 'scalar', name: 'string' },

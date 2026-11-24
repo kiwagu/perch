@@ -22,6 +22,12 @@ export interface SessionHost {
   serially<T>(run: (generation: number) => ResultAsync<T, DataError>): ResultAsync<T, DataError>
   /** Closes the open space, if any, and tells the subscribers that nobody is signed in. */
   leaveAndTell(): void
+  /**
+   * The identity this tab shows without its space (the start opening it, or done without opening
+   * it) is no longer the one the browser keeps: nobody is current from now on, at once, and the
+   * subscribers are told.
+   */
+  leaveUnopened(): void
   /** Work that outlives the space it ends; closing the session waits for it. */
   retire(work: Promise<void>): void
   /** Tells the subscribers who is signed in now. */

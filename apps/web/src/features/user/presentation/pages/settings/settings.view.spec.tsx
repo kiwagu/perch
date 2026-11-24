@@ -10,14 +10,7 @@ function renderView(props: Partial<SettingsViewProps> = {}) {
   const handlers = { onTheme: vi.fn(), onLocale: vi.fn() }
 
   renderWithProviders(
-    <SettingsView
-      theme="system"
-      locale="en"
-      canChooseTheme
-      canChooseLocale
-      {...handlers}
-      {...props}
-    />,
+    <SettingsView theme="system" locale="en" can={() => true} {...handlers} {...props} />,
   )
 
   return handlers
@@ -33,9 +26,25 @@ describe('SettingsView', () => {
   })
 
   it('takes no language while the flow takes none', () => {
-    renderView({ canChooseLocale: false })
+    renderView({ can: (event) => event.type !== 'user.settings.locale-select' })
 
     expect(screen.getByTestId('user.settings.locale-select').hasAttribute('disabled')).toBe(true)
     expect(screen.getByTestId('user.settings.theme-select').hasAttribute('disabled')).toBe(false)
+  })
+
+  it('takes no theme while the flow takes none', () => {
+    renderView({ can: (event) => event.type !== 'user.settings.theme-select' })
+
+    expect(screen.getByTestId('user.settings.theme-select').hasAttribute('disabled')).toBe(true)
+    expect(screen.getByTestId('user.settings.locale-select').hasAttribute('disabled')).toBe(false)
+  })
+
+  it('asks the flow about each choice with the value it shows', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ theme: 'dark', locale: 'es', can })
+
+    expect(can).toHaveBeenCalledWith({ type: 'user.settings.theme-select', theme: 'dark' })
+    expect(can).toHaveBeenCalledWith({ type: 'user.settings.locale-select', locale: 'es' })
   })
 })

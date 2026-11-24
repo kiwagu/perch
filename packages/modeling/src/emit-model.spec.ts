@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import type { CommandFile, ShapeFile } from './collect'
 import { emitModel, emitReplicaSchema } from './emit-model'
 import type { SchemaModel } from './schema-structure'
@@ -10,12 +12,17 @@ const schema: SchemaModel = {
     identity: {
       replicate: 'none',
       idPrefix: 'idn',
+      asserts: {},
+      indexes: {},
       fields: { email: { kind: 'scalar', name: 'string' } },
     },
     profile: {
       region: 'private',
       idPrefix: 'prf',
       crdt: { bio: 'text' },
+      readonlyFields: ['identity', 'created_at'],
+      asserts: {},
+      indexes: {},
       fields: {
         identity: { kind: 'record', tables: ['identity'] },
         name: { kind: 'scalar', name: 'string' },
@@ -27,6 +34,9 @@ const schema: SchemaModel = {
       region: 'tenant',
       idPrefix: 'nte',
       crdt: { text: 'text' },
+      readonlyFields: ['author', 'created_at'],
+      asserts: {},
+      indexes: {},
       fields: {
         author: { kind: 'record', tables: ['member'] },
         text: { kind: 'scalar', name: 'string' },
@@ -35,8 +45,8 @@ const schema: SchemaModel = {
       abilities: {
         owner: 'author',
         can: {
-          member: { create: 'any', update: 'own', delete: 'own' },
-          admin: { create: 'any', update: 'any', delete: 'any' },
+          [CONTRACT_ROLES.member]: { create: 'any', update: 'own', delete: 'own' },
+          [CONTRACT_ROLES.admin]: { create: 'any', update: 'any', delete: 'any' },
         },
       },
     },
@@ -129,14 +139,19 @@ describe('emitReplicaSchema', () => {
     const text = emitReplicaSchema(schema)
 
     expect(text).toContain(
-      "  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, name: { kind: 'plain' }, bio: { kind: 'text' }, created_at: { kind: 'datetime' } } },",
+      "  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity', readonly: true }, name: { kind: 'plain' }, bio: { kind: 'text' }, created_at: { kind: 'datetime', readonly: true } } },",
     )
     expect(text).not.toContain('  identity:')
   })
 
   it('emits the owner field and the abilities of a table after its fields', () => {
     expect(emitReplicaSchema(schema)).toContain(
-      "  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member' }, text: { kind: 'text' }, created_at: { kind: 'datetime' } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },",
+      "  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member', readonly: true }, text: { kind: 'text' }, created_at: { kind: 'datetime', readonly: true } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },",
     )
+  })
+
+  it('marks the fields a device sets only when it creates the record, and no other', () => {
+    expect(emitReplicaSchema(schema)).toContain("name: { kind: 'plain' }")
+    expect(emitReplicaSchema(schema)).toContain("created_at: { kind: 'datetime', readonly: true }")
   })
 })

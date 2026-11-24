@@ -18,8 +18,9 @@ import {
 
 /**
  * A device's channel to the stub: like the gateway's sync connection, without a network. It
- * is welcomed with the identity's own region, where it may do anything as the owner, and the
- * region of each of the stub's memberships, where it may do what the membership's role allows;
+ * is welcomed with the identity's own region, where it may do anything as the owner, the region of
+ * each of the stub's memberships, where it may do what the membership's role allows, and no
+ * platform role;
  * it hands subscriptions, pulls, pushes and compactions in those regions to the hub, answers
  * probes with the hub's heads and delivers what the hub sends, each message through the
  * protocol's encoding both ways.

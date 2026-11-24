@@ -20,6 +20,9 @@ export const registry = defineEntityPrefixes({
   settings: 'stg',
   account: 'acc',
   verification: 'vrf',
+  invitation: 'inv',
+  two_factor: 'tfa',
+  passkey: 'pkey',
 } as const)
 
 export type EntityKind = keyof typeof registry.prefixes
@@ -42,6 +45,12 @@ export type AccountId = EntityIdOf<typeof registry.prefixes, 'account'>
 
 export type VerificationId = EntityIdOf<typeof registry.prefixes, 'verification'>
 
+export type InvitationId = EntityIdOf<typeof registry.prefixes, 'invitation'>
+
+export type TwoFactorId = EntityIdOf<typeof registry.prefixes, 'two_factor'>
+
+export type PasskeyId = EntityIdOf<typeof registry.prefixes, 'passkey'>
+
 export const {
   identityIdFactory,
   profileIdFactory,
@@ -52,6 +61,9 @@ export const {
   settingsIdFactory,
   accountIdFactory,
   verificationIdFactory,
+  invitationIdFactory,
+  two_factorIdFactory,
+  passkeyIdFactory,
 } = registry.factories
 
 export const idSchemas = withSchemas(registry)

@@ -1,0 +1,292 @@
+import { VersionVector } from 'loro-crdt'
+import { errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
+
+import { type DataError, dataError } from '@workspace/data'
+
+import type { Clock } from '../../clock'
+import { COMPACTION_LOG_LIMIT } from '../../compaction-limit'
+import type { ServerMessage } from '../../protocol'
+import type { RegionRef } from '../../region-doc'
+import { privateRegionId } from '../../region-ref'
+import type { ReplicaSchema } from '../../schema'
+import type { FieldValue, RecordWrite } from '../record-write'
+import type { RegionDatabases } from '../region-databases'
+import { storedHeads } from '../stored-heads'
+
+import { changeActor } from './actor-change'
+import { type BatchIntake, takeInBatch } from './batch-intake'
+import { type CompactionIntake, takeInCompaction } from './compaction-intake'
+import { exportFrom } from './export-from'
+import { HeldRegions } from './held-regions'
+import { type Actor, deliver, type Subscriber } from './subscription'
+import { takeInSubscription } from './subscription-intake'
+import { takeInWrite } from './write-intake'
+
+export type { Actor, FieldValue, RecordWrite, Subscriber }
+
+export interface RegionHubOptions {
+  /** Where each region's log and projection live: held while the region is loaded. */
+  readonly databases: RegionDatabases
+  readonly schema: ReplicaSchema
+  readonly clock: Clock
+  /** How long a region nobody subscribes to stays in memory; 60 s by default. */
+  readonly idleUnloadMs?: number
+  /** How many log rows after the snapshot make an ack ask for a compaction; 200 by default. */
+  readonly compactionLogLimit?: number
+  /**
+   * Hears of each failure of a region's work: one the device was answered with an internal
+   * error for, a compaction snapshot the log refused to read, and a send that threw.
+   */
+  readonly onError: (error: DataError) => void
+}
+
+const decodeVersion = Result.fromThrowable(
+  (bytes: Uint8Array) => VersionVector.decode(bytes),
+  (): ServerMessage => ({
+    type: 'error',
+    code: 'protocol',
+    message: 'the version vector does not decode',
+  }),
+)
+
+/**
+ * The server's copy of every region a device subscribes to: the region's log and its
+ * authoritative document in memory, from the region's own database, held while the region is
+ * loaded. The work asked of one region (subscriptions, pulls, pushes and compactions, the load
+ * that comes first) runs one piece at a time, in the order it was asked. A pushed batch is
+ * checked on a fork of the document against the identity of the device that pushed it, and its
+ * peers against the identities they write as, accepted by the log with its projection, then
+ * imported and sent to the region's other subscribers. The server's own change to a record takes
+ * the same way, as the server's peer. A region nobody subscribes to or writes any more is dropped
+ * from memory after an idle time, and its database released; a retired region, at once.
+ */
+export class RegionHub {
+  readonly #held: HeldRegions
+  readonly #databases: RegionDatabases
+  readonly #onError: (error: DataError) => void
+  readonly #intake: BatchIntake
+  readonly #compactions: CompactionIntake
+
+  constructor(options: RegionHubOptions) {
+    this.#databases = options.databases
+    this.#onError = options.onError
+    this.#held = new HeldRegions({
+      databases: options.databases,
+      clock: options.clock,
+      idleUnloadMs: options.idleUnloadMs ?? 60_000,
+      onError: options.onError,
+    })
+    this.#intake = {
+      schema: options.schema,
+      compactionLogLimit: options.compactionLogLimit ?? COMPACTION_LOG_LIMIT,
+      send: (subscriber, message) => this.#send(subscriber, message),
+    }
+    this.#compactions = { send: this.#intake.send, onError: options.onError }
+  }
+
+  /**
+   * Subscribes a device to a region, loading the region first when the hub does not hold it,
+   * and answers with what the device lacks: the updates after `vv`, or a full snapshot when
+   * it has no version. From then on the device receives every batch the others push, and the
+   * batches it pushes are checked against `actor`, the identity id of the device and its ability,
+   * until `changeActor` names another. Once the hub is closed any subscription is answered with an internal error, before anything
+   * else; a private region is subscribed only by its own identity, `forbidden-region` for any
+   * other. Neither holds the region.
+   */
+  subscribe(
+    region: RegionRef,
+    actor: Actor,
+    subscriber: Subscriber,
+    vv: Uint8Array | null,
+  ): ResultAsync<void, DataError> {
+    if (this.#held.closed) {
+      this.#send(subscriber, { type: 'error', code: 'internal', message: 'the hub is closed' })
+
+      return okAsync(undefined)
+    }
+
+    const from = vv === null ? ok(null) : decodeVersion(vv)
+
+    if (from.isErr()) {
+      this.#send(subscriber, from.error)
+
+      return okAsync(undefined)
+    }
+
+    if (region.kind === 'private' && region.id !== privateRegionId(actor.id)) {
+      this.#send(subscriber, {
+        type: 'error',
+        code: 'forbidden-region',
+        message: `${region.id} is not the private region of ${actor.id}`,
+      })
+
+      return okAsync(undefined)
+    }
+
+    const state = this.#held.get(region.id) ?? this.#held.hold(region)
+
+    state.unload?.()
+    state.unload = undefined
+    state.joining.set(subscriber.id, { subscriber, actor })
+
+    return this.#held.answer(state, subscriber, () =>
+      this.#held
+        .load(state)
+        .andThen((loaded) =>
+          takeInSubscription(
+            this.#intake,
+            { regionId: region.id, subscriber, from: from.value },
+            state,
+            loaded,
+          ),
+        )
+        .mapErr((error) => {
+          // A device whose region could not be loaded is not subscribed.
+          state.joining.delete(subscriber.id)
+          this.#held.unloadWhenIdle(state)
+
+          return error
+        }),
+    )
+  }
+
+  /** Ends a device's subscription; the region unloads once nobody has subscribed for the idle time. */
+  unsubscribe(regionId: string, subscriberId: string): void {
+    const state = this.#held.get(regionId)
+
+    if (!state) {
+      return
+    }
+
+    state.joining.delete(subscriberId)
+    state.subscribers.delete(subscriberId)
+    this.#held.unloadWhenIdle(state)
+  }
+
+  /**
+   * Judges the batches of a device subscribed to a region by `actor` from now on, at once: a
+   * subscription still waiting for its answer takes it too, and is answered as `actor`. A batch
+   * already queued in the region is judged by the actor the hub holds when it takes the batch in.
+   * A region the hub does not hold, or a device that did not subscribe to it, changes nothing.
+   */
+  changeActor(regionId: string, subscriberId: string, actor: Actor): void {
+    const state = this.#held.get(regionId)
+
+    if (state) {
+      changeActor(state, subscriberId, actor)
+    }
+  }
+
+  /** Answers a subscribed device with the updates the region holds after `vv`. */
+  pull(regionId: string, subscriber: Subscriber, vv: Uint8Array): ResultAsync<void, DataError> {
+    const from = decodeVersion(vv)
+
+    if (from.isErr()) {
+      this.#send(subscriber, from.error)
+
+      return okAsync(undefined)
+    }
+
+    return this.#held.subscribed(regionId, subscriber, (_, { log, doc }) => {
+      this.#send(subscriber, {
+        type: 'updates',
+        region: regionId,
+        bytes: exportFrom(doc, from.value),
+        head: log.head(),
+        snapshot: false,
+      })
+
+      return okAsync(undefined)
+    })
+  }
+
+  /** Takes in a batch a subscribed device pushed; the contract is `takeInBatch`'s. */
+  push(
+    regionId: string,
+    subscriber: Subscriber,
+    batch: number,
+    updates: readonly Uint8Array[],
+  ): ResultAsync<void, DataError> {
+    return this.#held.subscribed(regionId, subscriber, (state, loaded, actor) =>
+      takeInBatch(this.#intake, { regionId, subscriber, batch, updates }, state, loaded, actor),
+    )
+  }
+
+  /**
+   * Makes a change of the server's own to one record of a region, as the server's Loro peer,
+   * and resolves to its number in the region's log: it runs in the region's queue between the
+   * devices' batches, and is logged, projected and sent to every subscriber as theirs are. A
+   * region the hub does not hold is loaded for it and unloads after the idle time when nobody
+   * subscribes. The contract of the write itself is `takeInWrite`'s; once the hub is closed a
+   * write fails, holding nothing.
+   */
+  writeRecord(region: RegionRef, write: RecordWrite): ResultAsync<number, DataError> {
+    if (this.#held.closed) {
+      return errAsync(dataError('data:WRITE_FAILED', 'the hub is closed'))
+    }
+
+    return this.#held.write(region, (state, loaded) =>
+      takeInWrite(this.#intake, write, state, loaded),
+    )
+  }
+
+  /**
+   * The head of each region asked: a loaded region's from its log, any other's from its own
+   * database, and 0 for a region without a log or one the hub does not know.
+   */
+  heads(
+    regionIds: readonly string[],
+  ): ResultAsync<ReadonlyArray<{ readonly region: string; readonly head: number }>, DataError> {
+    const inMemory = (region: string) => this.#held.get(region)?.loaded?.log.head()
+    // A region may unload while the others are read, so the heads in memory are taken now.
+    const held = new Map(regionIds.map((region) => [region, inMemory(region)]))
+    const unloaded = regionIds.filter((region) => held.get(region) === undefined)
+
+    return storedHeads(this.#databases, unloaded).map((heads) =>
+      regionIds.map((region) => ({
+        region,
+        head: inMemory(region) ?? held.get(region) ?? heads.get(region) ?? 0,
+      })),
+    )
+  }
+
+  /** Takes in a subscribed device's compaction proposal; the contract is `takeInCompaction`'s. */
+  compact(
+    regionId: string,
+    subscriber: Subscriber,
+    covers: number,
+    proposal: Uint8Array,
+  ): ResultAsync<void, DataError> {
+    return this.#held.subscribed(regionId, subscriber, (_, loaded) =>
+      takeInCompaction(this.#compactions, { regionId, subscriber, covers, proposal }, loaded),
+    )
+  }
+
+  /**
+   * Retires a region the caller has done with (its database removed, or about to be): the hub
+   * lets it go at once, and a subscription or a write asked from then on loads the region afresh
+   * from its database, never from the retired document. The caller ends the devices'
+   * connections to the region first; the contract is `HeldRegions.retire`'s.
+   */
+  retire(regionId: string): ResultAsync<void, DataError> {
+    return this.#held.retire(regionId)
+  }
+
+  /** How many regions have their document in memory. */
+  loadedRegions(): number {
+    return this.#held.loadedRegions()
+  }
+
+  /**
+   * Cancels the scheduled unloads, drops every region, waits for the work under way, then
+   * releases the databases of the regions it held.
+   */
+  close(): Promise<void> {
+    return this.#held.close()
+  }
+
+  /** Hands a message to a device; a send that throws is reported, and the work goes on. */
+  #send(subscriber: Subscriber, message: ServerMessage): void {
+    deliver(subscriber, message, this.#onError)
+  }
+}

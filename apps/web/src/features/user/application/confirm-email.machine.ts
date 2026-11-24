@@ -105,6 +105,7 @@ export function createConfirmEmailMachine(deps: ConfirmEmailMachineDeps) {
     context: { error: undefined, message: undefined },
     states: {
       confirming: {
+        meta: { renders: ['user.confirm-email.status'] },
         invoke: {
           src: 'platform.confirm-email',
           input: () => ({ token: deps.token }),
@@ -127,8 +128,8 @@ export function createConfirmEmailMachine(deps: ConfirmEmailMachineDeps) {
           },
         },
       },
-      'done-here': { type: 'final' },
-      done: { type: 'final' },
+      'done-here': { type: 'final', meta: { renders: ['user.confirm-email.profile-link'] } },
+      done: { type: 'final', meta: { renders: ['user.confirm-email.sign-in-link'] } },
       'done-elsewhere': { type: 'final' },
       failed: { type: 'final' },
     },

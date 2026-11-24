@@ -10,7 +10,7 @@ import { createConfirmEmailMachine } from '../../../application/confirm-email.ma
 import { useLinkExchange } from '../../components/link-exchange/link-exchange'
 import { RouterLink } from '../../components/page-link/page-link'
 
-import { type ConfirmEmailOnward, ConfirmEmailView } from './confirm-email.view'
+import { ConfirmEmailView } from './confirm-email.view'
 
 /** The search of the address, which the route's own schema checked already. */
 const search = z.object({ token: z.string().optional() })
@@ -41,18 +41,12 @@ function TokenConfirmation(props: { readonly token: string }) {
       }),
     [confirm, session, props.token],
   )
-  const { state } = useScreenMachine(machine)
-  const onward: ConfirmEmailOnward = state.matches('done-here')
-    ? 'profile'
-    : state.matches('done')
-      ? 'sign-in'
-      : 'none'
+  const { state, renders } = useScreenMachine('user.confirm-email', machine)
 
   return (
     <ConfirmEmailView
-      confirming={state.matches('confirming')}
+      renders={renders}
       message={state.context.message}
-      onward={onward}
       error={state.context.error}
       link={RouterLink}
     />

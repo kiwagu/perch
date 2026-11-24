@@ -23,7 +23,7 @@ const schema: ReplicaSchema = {
     fields: {
       identity: { kind: 'record', table: 'identity' },
       name: { kind: 'plain' },
-      email: { kind: 'plain' },
+      email: { kind: 'plain', readonly: true },
       bio: { kind: 'text' },
     },
   },
@@ -107,7 +107,7 @@ function ownerEdits(server: LoroDoc, device: LoroDoc, edit: (profile: LoroMap) =
 }
 
 describe('a write of the server to a record', () => {
-  it("sets the fields as the server's peer and plans the record's projection, leaving the region's document as it was", () => {
+  it("sets a field devices may not change as the server's peer, planning the record's projection and leaving the region's document as it was", () => {
     const doc = regionWithProfile()
     const before = doc.version()
 

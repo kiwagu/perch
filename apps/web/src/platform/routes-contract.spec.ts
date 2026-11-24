@@ -1,6 +1,6 @@
 /**
  * The routes of the modules are the bindings of the UI contract, one to one: the
- * same path, guard, history and retained parameters, and the same search schema
+ * same path, guard, roles (as a set), history and retained parameters, and the same search schema
  * once both sides are reduced to what the router enforces (`__fixtures__/route-bindings.ts`).
  * On a branch the pre-commit hook sets `CONTRACT_AHEAD=1`: a business commit may add or change
  * a binding before its route, so a binding may wait for its route, and a route may still equal
@@ -14,6 +14,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { bindingSchema, flatJsonSchema, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { z } from '@workspace/zod'
 
@@ -100,13 +101,13 @@ describe('the binding a route is held to', () => {
   })
   const was = {
     screen: 'sample',
-    binding: bindingSchema.parse({ path: '/list', roles: ['identity'] }),
+    binding: bindingSchema.parse({ path: '/list', roles: [CONTRACT_ROLES.identity] }),
   }
   const now = {
     screen: 'sample',
     binding: bindingSchema.parse({
       path: '/list',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       guard: 'guest',
       search: searchOf({ q: { type: 'string' } }),
     }),
@@ -117,6 +118,7 @@ describe('the binding a route is held to', () => {
       path: '/list',
       page,
       guard: 'guest',
+      roles: [CONTRACT_ROLES.identity],
       search: z.object({ q: z.string().optional() }),
     }
 
@@ -124,23 +126,49 @@ describe('the binding a route is held to', () => {
   })
 
   it('is the binding at the base when the route still equals that one', () => {
-    const route: RouteDef = { path: '/list', page }
+    const route: RouteDef = { path: '/list', page, roles: [CONTRACT_ROLES.identity] }
 
     expect(heldTo(route, now, [was])).toBe(was)
     expect(heldTo(route, now, [{ ...was, screen: 'other' }])).toBe(now)
     expect(
       heldTo(route, now, [
-        { ...was, binding: bindingSchema.parse({ path: '/other', roles: ['identity'] }) },
+        {
+          ...was,
+          binding: bindingSchema.parse({ path: '/other', roles: [CONTRACT_ROLES.identity] }),
+        },
       ]),
     ).toBe(now)
     expect(heldTo(route, now, [])).toBe(now)
   })
 
   it('is the binding now, which it fails, when the route equals neither', () => {
-    const route: RouteDef = { path: '/list', page, guard: 'authenticated' }
+    const route: RouteDef = {
+      path: '/list',
+      page,
+      guard: 'authenticated',
+      roles: [CONTRACT_ROLES.identity],
+    }
 
     expect(heldTo(route, now, [was])).toBe(now)
     expect(bindingReading(now.binding)).not.toEqual(routeReading(route))
+  })
+
+  it('reads the roles as a set: their order and a repeat do not count, another role does', () => {
+    const binding = bindingSchema.parse({
+      path: '/list',
+      roles: [CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
+    })
+
+    expect(
+      routeReading({
+        path: '/list',
+        page,
+        roles: [CONTRACT_ROLES.admin, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
+      }),
+    ).toEqual(bindingReading(binding))
+    expect(routeReading({ path: '/list', page, roles: [CONTRACT_ROLES.admin] })).not.toEqual(
+      bindingReading(binding),
+    )
   })
 })
 
@@ -171,6 +199,7 @@ describe('the routes of the modules', () => {
       const app = routeReading(route)
 
       expect(binding?.guard, `${screen}: guard of ${path}`).toBe(app.guard)
+      expect(binding?.roles, `${screen}: roles of ${path}`).toEqual(app.roles)
       expect(binding?.history, `${screen}: history of ${path}`).toBe(app.history)
       expect(binding?.retain, `${screen}: retain of ${path}`).toEqual(app.retain)
       expect(binding?.search, `${screen}: search of ${path}`).toEqual(app.search)

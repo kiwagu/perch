@@ -1,12 +1,19 @@
 /**
  * The contract tooling, run from the repository root.
  *
- *   ui-contract check [--sources [--ahead]] [--consumers [--tests=<dir>]]
- *     checks the contract files under `contract/` (the activities included) and the scenario
- *     files under `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
- *     of the web app and the UI kit against them (with `--ahead`, an anchor declared but not
- *     rendered yet is allowed: the contract runs ahead of the app on a branch); with `--consumers`, then the anchors, codes,
+ *   ui-contract check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]
+ *     checks the contract files under `contract/` (the activities included, and every
+ *     description they write against its budget) and the scenario files under
+ *     `tests/e2e/scenarios/` against each other, by the rules of the version the contract
+ *     declares (a version older than this engine's is said in one line; with `--current`, it
+ *     is a problem); with `--sources`, then the anchors and codes of the web app and the UI kit
+ *     against them (with `--ahead`, an anchor declared but not rendered yet is allowed: the
+ *     contract runs ahead of the app on a branch); with `--consumers`, then the anchors, codes,
  *     states and values the e2e tests under `tests/e2e/src` (or `<dir>`) name as literals.
+ *   ui-contract migrate [--write]
+ *     prints each step that moves the contract from the version `platform.yaml` declares to
+ *     the one this engine reads, `N -> N+1: <note>` with the files it changes and the work it
+ *     leaves by hand; with `--write`, rewrites those files.
  *   ui-contract schemas
  *     writes the JSON Schemas of the contract files under `contract/` from their Zod sources.
  *   ui-contract schemas --check
@@ -16,17 +23,33 @@
  *     with its schema and the model's beside it, into `<dir>` (default `ui-manifest`,
  *     relative to the working directory; its last segment is `ui-manifest`). Runs from the
  *     root or any folder under it.
+ *   ui-contract emit values|fields|terms --out <file>
+ *     writes the module of plain data a layer below the contract reads into `<file>`, relative
+ *     to the working directory: `values`, every value of the platform and every field of the
+ *     model as the contract resolves it (`CONTRACT_VALUES`); `fields`, what the element of each
+ *     field carries that the contract decides (`FIELD_FACTS`). The caller names the file; a
+ *     contract that fails the contract check is not emitted. Runs from the root or any folder
+ *     under it.
  *   ui-contract diff <ref> [--json]
  *     prints what the contract of the working tree adds, removes and renames against the
  *     contract at the git ref `<ref>` (all of it as added when the ref has no `contract/`),
  *     the codes and error fields of the anchors both hold, derived ones included, and the
  *     activities with the transitions changed in each: the hand-over block of a change, or the
  *     changes as JSON.
- *   ui-contract coverage [--write] [--json] [--unmarked] [--descriptions]
+ *   ui-contract inflight
+ *     loads the contract of `contract/trunk` and of every local branch named `feat/*`, `fix/*`,
+ *     `chore/*` or `refactor/*` with this engine, reading the refs only, and prints each branch
+ *     as OK or with the problems the rules find in it (a contract that does not load is its
+ *     problem; a branch without `contract/` has none to break); exits 1 when any branch has
+ *     one. A contract older than this engine passes while the engine reads that version. A
+ *     branch with nothing unlanded (its tree is that of its one merge base with `main`) is
+ *     left out, printed as such and not counted as checked.
+ *   ui-contract coverage [--write | --check] [--json] [--unmarked] [--descriptions]
  *     prints the coverage block (the fields and actions of the model bound by anchors, the
  *     transitions of each activity its scenarios walk, the controls marked per module,
  *     anchors and scenarios per screen), writes it between the
- *     markers of `contract/COVERAGE.md`, prints the measure as JSON, lists the unmarked
+ *     markers of `contract/COVERAGE.md`, fails when the block there is not what it would
+ *     write (`--check`), prints the measure as JSON, lists the unmarked
  *     and the ignored controls as `file:line: <element>`, or lists the written descriptions
  *     the engine would say itself as `<anchor>: <description>`. A coverage-ignore marker it cannot
  *     apply, or that ignores no control, is printed as a problem, and nothing is written.
@@ -47,8 +70,11 @@
 import { check } from './check'
 import { coverage } from './coverage'
 import { diff } from './diff'
+import { emit } from './emit'
 import { flow } from './flow'
+import { inflight } from './inflight'
 import { manifest } from './manifest'
+import { migrate } from './migrate'
 import { routes } from './routes'
 import { schemas } from './schemas'
 
@@ -58,12 +84,18 @@ function dispatch(argv: readonly string[]): number {
   switch (command) {
     case 'check':
       return check(rest)
+    case 'migrate':
+      return migrate(rest)
     case 'schemas':
       return schemas(rest)
     case 'manifest':
       return manifest(rest)
+    case 'emit':
+      return emit(rest)
     case 'diff':
       return diff(rest)
+    case 'inflight':
+      return inflight(rest)
     case 'coverage':
       return coverage(rest)
     case 'routes':
@@ -72,7 +104,7 @@ function dispatch(argv: readonly string[]): number {
       return flow(rest)
     default:
       console.error(
-        'ui-contract: use "check [--sources [--ahead]] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
+        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "emit values|fields|terms --out <file>", "diff <ref> [--json]", "inflight", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
       )
 
       return 1

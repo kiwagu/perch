@@ -1,3 +1,4 @@
+import { listedBy } from '../../anchors'
 import { entriesOf, isRecord, listOf, recordOf } from '../../records'
 
 export interface ProjectedEffect {
@@ -20,6 +21,8 @@ export interface ProjectedInvoke {
 /** What the comparison holds of a plain state, of the root or of a region. */
 export interface ProjectedState {
   readonly final: boolean
+  /** The anchors it lists in `meta.renders`, sorted: the list is a set. */
+  readonly renders: readonly string[]
   readonly entry: readonly ProjectedEffect[]
   readonly exit: readonly ProjectedEffect[]
   readonly on: Readonly<Record<string, readonly ProjectedTransition[]>>
@@ -37,12 +40,25 @@ export interface Projection {
   readonly states: Readonly<Record<string, ProjectedState>>
 }
 
-/** The contract's effects among actions: the app's own (`assign`, a named action) left out. */
+/**
+ * The contract's effects among actions: the app's own (`assign`, a named action) left out. An
+ * invoke's `read: false`, or a branch's, is no effect and no key the projection reads
+ * (`transitionsIn` picks a branch's target, guard and effects): the check holds it.
+ */
 const effectsIn = (actions: unknown): ProjectedEffect[] =>
   listOf(actions)
     .filter(isRecord)
-    .filter(({ type }) => type === 'show' || type === 'clear' || type === 'navigate')
+    .filter(
+      ({ type }) => type === 'show' || type === 'clear' || type === 'read' || type === 'navigate',
+    )
     .map(({ type, params }) => ({ type, params }))
+
+/**
+ * The anchors a state lists in `meta.renders`, read as `renderedAt` reads them (`listedBy`),
+ * each once and in one order whatever order it lists them in: the list is a set.
+ */
+const rendersIn = (state: Readonly<Record<string, unknown>>): string[] =>
+  [...new Set(listedBy(state))].sort((a, b) => a.localeCompare(b))
 
 const transitionsIn = (value: unknown): ProjectedTransition[] =>
   listOf(value).map((each) =>
@@ -56,6 +72,7 @@ function plainOf(state: Readonly<Record<string, unknown>>): ProjectedState {
 
   return {
     final: state['type'] === 'final',
+    renders: rendersIn(state),
     entry: effectsIn(state['entry']),
     exit: effectsIn(state['exit']),
     on: Object.fromEntries(entriesOf(state['on']).map(([event, of]) => [event, transitionsIn(of)])),
@@ -78,9 +95,10 @@ const regionOf = (region: Readonly<Record<string, unknown>>): ProjectedRegion =>
 
 /**
  * What the comparison holds of a machine config: its initial state and, per state, whether
- * it is final, its entry and exit effects, each event's transitions (target, guard, effects)
- * and its invoke's source and outcomes; for a parallel state, also its regions, each with its
- * initial state and its states, held as plain states are.
+ * it is final, what it renders (`meta.renders`, as a set), its entry and exit effects, each
+ * event's transitions (target, guard, effects) and its invoke's source and outcomes; for a
+ * parallel state, also its regions, each with its initial state and its states, held as plain
+ * states are.
  */
 export function projected(config: unknown): Projection {
   const root = recordOf(config)

@@ -2,13 +2,22 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
-import { ConfirmEmailView, type ConfirmEmailViewProps } from './confirm-email.view'
+import {
+  type ConfirmEmailListed,
+  ConfirmEmailView,
+  type ConfirmEmailViewProps,
+} from './confirm-email.view'
+
+/** What a state renders of the anchors only some render: `anchor` alone. */
+const only = (anchor: ConfirmEmailListed) => (asked: ConfirmEmailListed) => asked === anchor
 
 function renderView(props: Partial<ConfirmEmailViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  renderWithProviders(<ConfirmEmailView confirming={false} onward="none" {...props} />, {
+  renderWithProviders(<ConfirmEmailView renders={() => false} {...props} />, {
     locale,
     es,
   })
@@ -16,7 +25,7 @@ function renderView(props: Partial<ConfirmEmailViewProps> = {}, locale: 'en' | '
 
 describe('ConfirmEmailView', () => {
   it('says the link is being checked', () => {
-    renderView({ confirming: true })
+    renderView({ renders: only('user.confirm-email.status') })
 
     expect(screen.getByTestId('user.confirm-email.status').getAttribute('data-state')).toBe(
       'loading',
@@ -25,10 +34,10 @@ describe('ConfirmEmailView', () => {
   })
 
   it.each([
-    ['profile', 'user.confirm-email.profile-link', '/me'],
-    ['sign-in', 'user.confirm-email.sign-in-link', '/sign-in'],
-  ] as const)('says the email is the new one, leading to the %s', (onward, link, to) => {
-    renderView({ message: 'email-changed', onward })
+    ['profile', 'user.confirm-email.profile-link', CONTRACT_ROUTES['user.profile']],
+    ['sign-in', 'user.confirm-email.sign-in-link', CONTRACT_ROUTES['user.sign-in']],
+  ] as const)('says the email is the new one, leading to the %s', (_onward, link, to) => {
+    renderView({ message: 'email-changed', renders: only(link) })
 
     expect(screen.getByTestId('user.confirm-email.message').getAttribute('data-code')).toBe(
       'email-changed',
@@ -38,7 +47,7 @@ describe('ConfirmEmailView', () => {
   })
 
   it('leads nowhere while another account is signed in here', () => {
-    renderView({ message: 'email-changed', onward: 'none' })
+    renderView({ message: 'email-changed' })
 
     expect(screen.queryByTestId('user.confirm-email.profile-link')).toBeNull()
     expect(screen.queryByTestId('user.confirm-email.sign-in-link')).toBeNull()

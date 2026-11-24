@@ -1,12 +1,23 @@
 export { activitySchema } from './activity.schema'
+export {
+  BEHAVIOUR_PURPOSES,
+  type BehaviourKind,
+  DESCRIPTION_BUDGET,
+  DESCRIPTION_PURPOSES,
+  type DescriptionKind,
+  descriptionLength,
+} from './description-purposes'
 export { entityDefinitionSchema, entityFieldSchema } from './entity.schema'
 export { flatJsonSchema } from './flat-json-schema'
 export { manifestSchema } from './manifest.schema'
 export {
   ACCOUNT,
+  type ActionCodes,
+  type ActionResult,
   actionParamsSchema,
   anchorBindingSchema,
   anchorDefSchema,
+  authoredAnchorDefSchema,
   authoredFlowSchema,
   authoredScreenFileSchema,
   bindingRefSchema,
@@ -18,16 +29,28 @@ export {
   effectSchema,
   flowSchema,
   type PlatformComposite,
+  type PlatformDefaults,
+  type PlatformInvariant,
   type PlatformMail,
   type PlatformNotice,
+  type PlatformParameter,
   paramValueSchema,
   platformCompositeSchema,
+  platformDefaultsSchema,
   platformFileSchema,
+  platformInvariantSchema,
   platformMailSchema,
   platformNoticeSchema,
   platformSchema,
+  RECIPIENT,
+  renderSetsSchema,
+  resolvedValueSchema,
   screenFileSchema,
   screenSchema,
   sourceSchema,
   transitionSchema,
+  VALUE_FORMATS,
+  valueRefSchema,
+  valueSchema,
 } from './screens-schema'
+export { termsFileSchema } from './terms.schema'

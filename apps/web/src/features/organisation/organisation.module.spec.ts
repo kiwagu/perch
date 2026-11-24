@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { dataError, SHAPE_RUNNER } from '@workspace/data'
 import { Container } from '@workspace/di'
 import { tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { type FakeGatewayAuth, fakeGatewayAuth } from '../../composition/__fixtures__/gateway-auth'
@@ -13,6 +14,7 @@ import {
   type TestWorld,
 } from '../../composition/__fixtures__/session'
 import { COMMANDS } from '../../platform/commands.port'
+import { INVITATIONS, type InvitationsPort } from '../../platform/invitations.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../../platform/organisations.port'
 import { SESSION } from '../../platform/session.port'
 
@@ -22,7 +24,7 @@ import { OrganisationModule } from './organisation.module'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const offline = () => errAsync(dataError('data:OFFLINE', 'the gateway is out of reach'))
@@ -32,7 +34,17 @@ const unreachable: OrganisationsPort = {
   create: offline,
   members: offline,
   invite: offline,
+  invitations: offline,
+  revokeInvitation: offline,
+  setRole: offline,
   remove: offline,
+}
+
+const noInvitations: InvitationsPort = {
+  read: offline,
+  mine: offline,
+  accept: offline,
+  decline: offline,
 }
 
 let world: TestWorld
@@ -48,6 +60,7 @@ beforeEach(async () => {
     .singleton(COMMANDS, () => world.commands)
     .singleton(SESSION, () => world.session)
     .singleton(ORGANISATIONS, () => unreachable)
+    .singleton(INVITATIONS, () => noInvitations)
 
   container = root.child()
 
@@ -87,10 +100,31 @@ describe('OrganisationModule', () => {
     expect(world.tenantsOpened()).toEqual(['acme'])
   })
 
-  it('routes signed-in users to the organisation page', () => {
-    expect(OrganisationModule.routes).toEqual([
-      { path: '/org', page: 'OrganisationPage', guard: 'authenticated' },
+  it('routes signed-in users to the organisation page, and anyone to the invitation page', () => {
+    expect(
+      OrganisationModule.routes.map(({ path, page, guard, roles }) => ({
+        path,
+        page,
+        guard,
+        roles,
+      })),
+    ).toEqual([
+      {
+        path: CONTRACT_ROUTES.organisation,
+        page: 'OrganisationPage',
+        guard: 'authenticated',
+        roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
+      },
+      {
+        path: CONTRACT_ROUTES['organisation.invitation'],
+        page: 'InvitationPage',
+        guard: undefined,
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+      },
     ])
-    expect(Object.keys(OrganisationModule.declarations)).toEqual(['OrganisationPage'])
+    expect(Object.keys(OrganisationModule.declarations)).toEqual([
+      'OrganisationPage',
+      'InvitationPage',
+    ])
   })
 })

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { Form } from '@workspace/ui/components/ui/form'
 import {
   Select,
   SelectContent,
@@ -10,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@workspace/ui/components/ui/select'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 const ITEMS = [
@@ -300,5 +302,140 @@ describe('Select', () => {
     // A strict style policy refuses an inline <style>; the class it would define is the kit's.
     expect(document.querySelectorAll('style')).toHaveLength(0)
     expect(document.querySelector('.base-ui-disable-scrollbar')).not.toBeNull()
+  })
+})
+
+describe('the state a Select trigger shows on its own border', () => {
+  const STORED = new Set(['x.kind-select'])
+
+  function Marked(props: { readonly marksState?: boolean }) {
+    const [value, setValue] = useState<string | null>('a')
+
+    return (
+      <UnsavedInputScope stores={(anchor) => STORED.has(anchor)}>
+        <Form onSubmit={() => true}>
+          <Select
+            items={ITEMS}
+            value={value}
+            onValueChange={setValue}
+            anchor="x.kind-select"
+            marksState={props.marksState}
+          >
+            <SelectTrigger aria-label="kind" data-testid="x.kind-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button type="submit">save</button>
+        </Form>
+      </UnsavedInputScope>
+    )
+  }
+
+  it('has no state untouched, unsaved once another is chosen, saved once a submit saved it', async () => {
+    render(<Marked />)
+
+    const trigger = screen.getByLabelText('kind')
+
+    expect(trigger.hasAttribute('data-state')).toBe(false)
+    await choose('Beta')
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    await userEvent.click(screen.getByText('save'))
+    expect(trigger.getAttribute('data-state')).toBe('saved')
+  })
+
+  it('colors its border by the state, and loses the colors with marksState={false}, keeping data-state', async () => {
+    const { rerender } = render(<Marked />)
+    const trigger = screen.getByLabelText('kind')
+
+    expect(trigger.className).toContain('data-[state=unsaved]:not-aria-invalid:border-warning')
+    expect(trigger.className).toContain('data-[state=saved]:not-aria-invalid:border-success')
+    expect(trigger.className).not.toMatch(/(^| )focus-visible:border-ring/)
+
+    rerender(<Marked marksState={false} />)
+    await choose('Beta')
+    expect(trigger.className).not.toContain('border-warning')
+    expect(trigger.className).toMatch(/(^| )focus-visible:border-ring/)
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+  })
+})
+
+describe('a Select inside a provider of facts', () => {
+  const FACTS = {
+    'x.once-select': { holdsInput: false },
+    'x.plain-select': { marksState: false },
+  }
+
+  /** A controlled select rendering `anchor`, with the says of its own that are given. */
+  function Anchored(props: {
+    readonly anchor: string
+    readonly holdsInput?: boolean
+    readonly marksState?: boolean
+  }) {
+    const [value, setValue] = useState<string | null>('a')
+
+    return (
+      <FieldFactsProvider facts={FACTS}>
+        <UnsavedInputScope>
+          <Select
+            items={ITEMS}
+            value={value}
+            onValueChange={setValue}
+            anchor={props.anchor}
+            holdsInput={props.holdsInput}
+            marksState={props.marksState}
+          >
+            <SelectTrigger aria-label="kind" data-testid={props.anchor}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Probe />
+        </UnsavedInputScope>
+      </FieldFactsProvider>
+    )
+  }
+
+  it('holds no unsaved input when its facts say it holds none, its own say winning', async () => {
+    render(<Anchored anchor="x.once-select" />)
+    await chooseBeta()
+    expect(probe()).toBe('false')
+
+    cleanup()
+    render(<Anchored anchor="x.once-select" holdsInput />)
+    await chooseBeta()
+    expect(probe()).toBe('true')
+  })
+
+  it('holds unsaved input for an anchor its facts say nothing of', async () => {
+    render(<Anchored anchor="x.other-select" />)
+    await chooseBeta()
+    expect(probe()).toBe('true')
+  })
+
+  it('loses the state colours by its facts, keeping data-state, its own say winning', async () => {
+    render(<Anchored anchor="x.plain-select" />)
+
+    const trigger = screen.getByLabelText('kind')
+
+    await chooseBeta()
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    expect(trigger.className).not.toContain('border-warning')
+
+    cleanup()
+    render(<Anchored anchor="x.plain-select" marksState />)
+    expect(screen.getByLabelText('kind').className).toContain('border-warning')
   })
 })

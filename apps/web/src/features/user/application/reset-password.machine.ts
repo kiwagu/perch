@@ -131,6 +131,15 @@ export function createResetPasswordMachine(deps: ResetPasswordMachineDeps) {
       // The list marks the rules the password keeps; the password typed again waits to be judged,
       // and the submit is not taken.
       'password-weak': {
+        meta: {
+          renders: [
+            'user.reset-password.form',
+            'user.reset-password.password-input',
+            'user.reset-password.password-rule-list',
+            'user.reset-password.password-confirmation-input',
+            'user.reset-password.submit-button',
+          ],
+        },
         on: {
           'user.reset-password.password-input': [
             { guard: 'passwordBreaksRules' },
@@ -140,6 +149,15 @@ export function createResetPasswordMachine(deps: ResetPasswordMachineDeps) {
         },
       },
       kept: {
+        meta: {
+          renders: [
+            'user.reset-password.form',
+            'user.reset-password.password-input',
+            'user.reset-password.password-rule-list',
+            'user.reset-password.password-confirmation-input',
+            'user.reset-password.submit-button',
+          ],
+        },
         on: {
           'user.reset-password.password-input': [
             { target: 'password-weak', guard: 'passwordBreaksRules' },
@@ -156,6 +174,15 @@ export function createResetPasswordMachine(deps: ResetPasswordMachineDeps) {
         },
       },
       'passwords-differ': {
+        meta: {
+          renders: [
+            'user.reset-password.form',
+            'user.reset-password.password-input',
+            'user.reset-password.password-rule-list',
+            'user.reset-password.password-confirmation-input',
+            'user.reset-password.submit-button',
+          ],
+        },
         entry: [showError('passwords-differ')],
         exit: [clearError],
         on: {
@@ -170,6 +197,15 @@ export function createResetPasswordMachine(deps: ResetPasswordMachineDeps) {
         },
       },
       resetting: {
+        meta: {
+          renders: [
+            'user.reset-password.form',
+            'user.reset-password.password-input',
+            'user.reset-password.password-rule-list',
+            'user.reset-password.password-confirmation-input',
+            'user.reset-password.submit-button',
+          ],
+        },
         entry: [clearError],
         invoke: {
           src: 'platform.reset-password',
@@ -184,8 +220,8 @@ export function createResetPasswordMachine(deps: ResetPasswordMachineDeps) {
           ],
         },
       },
-      'link-dead': { type: 'final' },
-      done: { type: 'final' },
+      'link-dead': { type: 'final', meta: { renders: ['user.reset-password.forgot-link'] } },
+      done: { type: 'final', meta: { renders: ['user.reset-password.sign-in-link'] } },
     },
   })
 }

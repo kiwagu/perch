@@ -15,28 +15,40 @@ import { z } from '@workspace/zod'
 import { kebabNameSchema, screenNameSchema } from '../../names.schema'
 
 /**
- * The account, as the recipient of a mail or a notice or the source of its language: a reserved
- * word, so an action that sends either has no parameter of that name (`check/mails.ts`).
+ * The account the action acts on, as the recipient of a mail or a notice or the source of its
+ * language: the signed-in account for an action on its own account, else, whoever is signed in,
+ * the account its parameters name (the email of a password reset's request, the token of a
+ * link). A reserved word, so an action that sends either has no parameter of that name
+ * (`check/mails.ts`).
  */
 export const ACCOUNT = 'account'
+
+/**
+ * The account a mail goes to, as the source of its language: the account whose email the mail's
+ * `to` names, and the signed-in account when no account has that email. A mail's language alone,
+ * never a notice's, and a reserved word on an action that sends a mail (`check/mails.ts`).
+ */
+export const RECIPIENT = 'recipient'
 
 const nameSchema = z.string().regex(/^[a-z][a-zA-Z0-9]*$/)
 
 const languageSchema = nameSchema.describe(
-  "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in.",
+  "Where the mail's language comes from: a language parameter of the action, or `account` (the account the action acts on). See the rule `mail-recipients`.",
 )
 
 export const platformMailSchema = z
   .strictObject({
     to: nameSchema.describe(
-      "The parameter of the action whose value the mail goes to, or `account`: the signed-in account's own email.",
+      'The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`.',
     ),
-    language: languageSchema,
+    language: nameSchema.describe(
+      "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`.",
+    ),
     link: z
       .strictObject({
         screen: screenNameSchema.describe('The screen the link opens, at the path of its route.'),
         search: nameSchema.describe(
-          "The search parameter of that screen's route the link carries its token in.",
+          "The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`.",
         ),
       })
       .describe("Where the mail's link leads."),
@@ -51,7 +63,7 @@ export const platformNoticeSchema = z
       'The name of the notice, unique within the action: `password-changed`; a scenario names it `[notice:<action>.<name>]`.',
     ),
     to: nameSchema.describe(
-      'The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address).',
+      'The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`.',
     ),
     language: languageSchema,
     link: z

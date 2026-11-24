@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite build --watch --mode development --outDir dist-dev",
     "build": "vite build && ui-contract manifest --out dist/ui-manifest",
+    "emit": "ui-contract emit fields --out src/platform/field-facts.gen.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
@@ -20,6 +21,7 @@
     "i18n:check": "i18n-check --root src"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@workspace/cqrs": "workspace:*",
     "@workspace/data": "workspace:*",
@@ -41,6 +43,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "ts-pattern": "catalog:",
+    "uqr": "catalog:",
     "workbox-window": "catalog:",
     "xstate": "catalog:"
   },

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.sign-in
 title: Sign in or create an account
-description: "Where a visitor signs in with an existing account, or creates one and is asked to open the link of the mail that verifies its email: the only screen a guest sees, and where a signed-out device returns."
+description: Where a guest signs in with an existing account or creates one, and where a signed-out device returns.
 flag: null
 bindings:
   - path: /sign-in
@@ -24,8 +24,9 @@ anchors:
     description: The form, in the mode sign-in or sign-up; its heading names the mode.
   user.sign-in.notice-message:
     kind: message
-    description: Why the last session on this device ended; shown once, while the page stays open.
-    codes: [ resend-after-sign-in, signed-out-elsewhere, password-changed-elsewhere, password-reset-elsewhere, delete-pending ]
+    description: Why the last session on this device ended, even while it was offline, if it connects again within 30 days of the end; shown once, while the page stays open.
+    ranked: true
+    codes: [ account-banned, resend-after-sign-in, delete-pending, password-reset-elsewhere, signed-out-elsewhere, password-changed-elsewhere, device-limit-elsewhere ]
   user.sign-in.mail-message:
     kind: message
     description: Asks to open the link of the verification mail, once a sign-up or a resend went through.
@@ -33,10 +34,12 @@ anchors:
   user.sign-in.error:
     kind: error
     fields:
+      sign-up-rejected: form
       passwords-differ: user.sign-in.password-confirmation-input
   user.sign-in.email-input:
     kind: input
-    description: "The email of the account (type email); it starts with the email a page carried over, when there is one."
+    description: "The email of the account; it starts with the email a page carried over, when there is one."
+    marksState: false
     binding:
       - search: email
       - action: platform.sign-in
@@ -51,6 +54,7 @@ anchors:
   user.sign-in.password-input:
     kind: input
     secret: true
+    marksState: false
     composite: password-rules
     description: The password of the account.
     binding:
@@ -60,15 +64,16 @@ anchors:
       - action: platform.sign-up
         params:
           password: user.sign-in.password-input
-    derived: [ visibility-button ]
   user.sign-in.password-confirmation-input:
     kind: input
     secret: true
+    marksState: false
     description: The password typed again; never sent.
-    derived: [ visibility-button ]
+    confirms: user.sign-in.password-input
   user.sign-in.name-input:
     kind: input
     description: The name of the new account.
+    marksState: false
     binding:
       action: platform.sign-up
       params:
@@ -85,6 +90,10 @@ anchors:
     kind: button
     description: Switches between signing in and creating an account.
     dataValue: true
+  user.sign-in.passkey-button:
+    kind: button
+    description: Signs in with a passkey of the account, which the browser asks for; no password and no code.
+    binding: { action: platform.sign-in-passkey }
   user.sign-in.forgot-link:
     kind: link
     description: Leads to asking for a mail that sets a new password.
@@ -92,6 +101,40 @@ anchors:
     kind: button
     description: Sends the verification mail again.
     binding: { action: platform.resend-verification }
+  user.sign-in.code.dialog:
+    kind: dialog
+    description: Asks for a code of the account's second factor once its password is right; nothing is signed in until a code is taken.
+    binding:
+      action: platform.confirm-sign-in
+      params:
+        code: user.sign-in.code.code-input
+    codes: [ code-required ]
+  user.sign-in.code.code-input:
+    kind: input
+    description: A code the account's authenticator app shows now, or one of its backup codes.
+    marksState: false
+    binding:
+      action: platform.confirm-sign-in
+      params:
+        code: user.sign-in.code.code-input
+  user.sign-in.code.error:
+    kind: error
+    codes: [ invalid-code, failed ]
+    fields:
+      invalid-code: user.sign-in.code.code-input
+  user.sign-in.device-limit-dialog:
+    kind: dialog
+    description: Asks whether to sign in all the same and sign out the account's device seen least recently.
+    binding:
+      - action: platform.sign-in
+        params:
+          signOutOldest:
+            value: true
+      - action: platform.sign-in-passkey
+        params:
+          signOutOldest:
+            value: true
+    codes: [ device-limit ]
 states:
   ready: The form in the mode sign-in, with the notice of the last session above it when there is one.
 flow:
@@ -99,15 +142,15 @@ flow:
   meta:
     guards:
       emailNotVerified: { codes: [ email-not-verified ] }
-      passwordBreaksRules: the password breaks one of the rules of user.sign-in.password-rule-list
-      passwordsDiffer: the password typed again is not the same as the password
-      confirmationStrays: "the password typed again is no longer how the password begins: a character differs, or it is longer"
-      confirmationFollows: the password typed again is how the password begins, all of it or a part, or is empty
+      atDeviceLimit: the account is signed in on as many devices as it may be at once, so this device was not signed in
+      codeRequired: the account's second factor is on, so the right password signed nothing in and a code is asked
+      codeStepEnded: { codes: [ code-expired, account-banned, rate-limited, other-account ] }
   states:
     sign-in:
       description: The form in the mode sign-in.
-      meta: { renders: [ user.sign-in.forgot-link ] }
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button ] }
       on:
+        user.sign-in.passkey-button: signing-in-passkey
         user.sign-in.forgot-link:
           target: forgot-password
           actions:
@@ -186,10 +229,18 @@ flow:
         src: platform.sign-in
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
         onDone:
-          target: done
-          actions:
-            - show: { app-shell.notice-message: [ welcome ] }
-            - navigate: /me
+          - target: code
+            guard: codeRequired
+            actions:
+              - show: { user.sign-in.code.dialog: [ code-required ] }
+          - target: device-limit
+            guard: atDeviceLimit
+            actions:
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
         onError:
           - target: unverified
             guard: emailNotVerified
@@ -197,7 +248,154 @@ flow:
               - show: user.sign-in.error
           - target: sign-in
             actions:
+              - show: { user.sign-in.error: [ invalid-credentials, account-banned, rate-limited, other-account, failed ] }
+    device-limit:
+      description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.device-limit-dialog ] }
+      on:
+        user.sign-in.device-limit-dialog.confirm-button: signing-in-anyway
+        user.sign-in.device-limit-dialog.cancel-button: sign-in
+    signing-in-anyway:
+      meta: { renders: [ user.sign-in.forgot-link ] }
+      invoke:
+        src: platform.sign-in
+        input: { email: user.sign-in.email-input, password: user.sign-in.password-input, signOutOldest: { value: true } }
+        onDone:
+          - target: code-anyway
+            guard: codeRequired
+            actions:
+              - show: { user.sign-in.code.dialog: [ code-required ] }
+          - target: done
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          - target: unverified
+            guard: emailNotVerified
+            actions:
               - show: user.sign-in.error
+          - target: sign-in
+            actions:
+              - show: { user.sign-in.error: [ invalid-credentials, account-banned, rate-limited, other-account, failed ] }
+    code:
+      description: The form in the mode sign-in with the dialog of the code.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      on:
+        user.sign-in.code.dialog.confirm-button: confirming-code
+        user.sign-in.code.dialog.cancel-button:
+          target: sign-in
+          description: The sign-in starts again from the password.
+          actions:
+            - clear: user.sign-in.code.code-input
+            - clear: user.sign-in.code.error
+    confirming-code:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      entry:
+        - clear: user.sign-in.code.error
+      invoke:
+        src: platform.confirm-sign-in
+        input: { code: user.sign-in.code.code-input }
+        onDone:
+          - target: device-limit
+            guard: atDeviceLimit
+            description: "Past the limit of devices, before the code is checked: nothing is signed in and no code spent; the confirmation signs in again from the password, asking a code again."
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          - target: sign-in
+            guard: codeStepEnded
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: user.sign-in.error
+          - target: code
+            actions:
+              - show: { user.sign-in.code.error: [ invalid-code, failed ] }
+    code-anyway:
+      description: The form in the mode sign-in with the dialog of the code; the device-limit dialog was confirmed already.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      on:
+        user.sign-in.code.dialog.confirm-button: confirming-code-anyway
+        user.sign-in.code.dialog.cancel-button:
+          target: sign-in
+          description: The sign-in starts again from the password.
+          actions:
+            - clear: user.sign-in.code.code-input
+            - clear: user.sign-in.code.error
+    confirming-code-anyway:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      entry:
+        - clear: user.sign-in.code.error
+      invoke:
+        src: platform.confirm-sign-in
+        input: { code: user.sign-in.code.code-input, signOutOldest: { value: true } }
+        onDone:
+          - target: done
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          - target: sign-in
+            guard: codeStepEnded
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: user.sign-in.error
+          - target: code-anyway
+            actions:
+              - show: { user.sign-in.code.error: [ invalid-code, failed ] }
+    signing-in-passkey:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button ] }
+      entry:
+        - clear: user.sign-in.error
+      invoke:
+        src: platform.sign-in-passkey
+        onDone:
+          - target: passkey-device-limit
+            guard: atDeviceLimit
+            actions:
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          target: sign-in
+          actions:
+            - show: { user.sign-in.error: [ passkey-cancelled, passkey-unknown, account-banned, other-account, failed ] }
+    passkey-device-limit:
+      description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed, and its confirmation asks for the passkey again.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button, user.sign-in.device-limit-dialog ] }
+      on:
+        user.sign-in.device-limit-dialog.confirm-button: signing-in-passkey-anyway
+        user.sign-in.device-limit-dialog.cancel-button: sign-in
+    signing-in-passkey-anyway:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button ] }
+      invoke:
+        src: platform.sign-in-passkey
+        input: { signOutOldest: { value: true } }
+        onDone:
+          - target: passkey-device-limit
+            guard: atDeviceLimit
+            description: A passkey of another account was picked, which is at its limit too; the dialog asks about it afresh.
+            actions:
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          target: sign-in
+          actions:
+            - show: { user.sign-in.error: [ passkey-cancelled, passkey-unknown, account-banned, other-account, failed ] }
     signing-up:
       meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
@@ -210,8 +408,12 @@ flow:
             - show: { user.sign-in.mail-message: [ check-your-mail ] }
     check-mail:
       description: The form in the mode sign-in with the email kept.
-      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button, user.sign-in.passkey-button ] }
       on:
+        user.sign-in.passkey-button:
+          target: signing-in-passkey
+          actions:
+            - clear: user.sign-in.mail-message
         user.sign-in.forgot-link:
           target: forgot-password
           actions:
@@ -236,8 +438,9 @@ flow:
               - clear: user.sign-in.mail-message
     unverified:
       description: The form in the mode sign-in with the error.
-      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button, user.sign-in.passkey-button ] }
       on:
+        user.sign-in.passkey-button: signing-in-passkey
         user.sign-in.forgot-link:
           target: forgot-password
           actions:
@@ -286,4 +489,5 @@ wireframe: |-
   - textbox "Email"
   - textbox "Password"
   - button "Sign in"
+  - button "Sign in with a passkey"
   - button "Create account"

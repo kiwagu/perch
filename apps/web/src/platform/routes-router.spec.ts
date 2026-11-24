@@ -12,7 +12,8 @@
  * its route, so only the bindings the app has a route for are walked, each as the contract says
  * it now, or as it had it at the branch's merge base with `main` (`CONTRACT_AHEAD_BASE`) while
  * the route still equals that one (`heldTo` of `__fixtures__/route-bindings.ts`); `bun run
- * check` and `main` walk every binding as it is now.
+ * check` and `main` walk every binding as it is now. Each binding is walked on a router over a
+ * device that holds the roles it serves: a device it refuses never has its search read.
  */
 
 import { join } from 'node:path'
@@ -20,6 +21,7 @@ import { join } from 'node:path'
 import { trimPathRight } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import {
   type Binding,
   bindingSchema,
@@ -262,7 +264,12 @@ const bindings: readonly (readonly [string, Binding])[] = heldBindings(
   allModules(modules).flatMap((module) => module.routes),
   'bindings' in AT_BASE ? AT_BASE.bindings : [],
 ).map(({ binding }) => [binding.path, binding] as const)
-const router = routerOf(modules)
+/**
+ * The application's router over a device that holds the roles a binding serves, which its route
+ * admits: a refused device's search is never read (`router.tsx`), so each binding is walked as
+ * a device it serves.
+ */
+const routerFor = (binding: Binding): AppRouter => routerOf(modules, binding.roles)
 
 const Page = () => null
 
@@ -271,17 +278,23 @@ const SampleModule = defineModule({
   id: 'sample',
   declarations: { Page },
   routes: [
-    { path: '/org/$key', page: 'Page' },
-    { path: '/notes/{-$tab}', page: 'Page' },
-    { path: '/files/$', page: 'Page' },
+    { path: '/org/$key', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
+    {
+      path: '/notes/{-$tab}',
+      page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+    },
+    { path: '/files/$', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
     {
       path: '/list',
       page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ tab: z.enum(['a', 'b']).default('a'), page: z.int().min(1) }),
     },
     {
       path: '/range',
       page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({
         below: z.number().max(-2),
         between: z.int().min(-5).max(-1),
@@ -292,6 +305,7 @@ const SampleModule = defineModule({
     {
       path: '/find',
       page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({
         q: z.string().max(5),
         name: z.string().min(3),
@@ -315,10 +329,10 @@ describe('the round trip', () => {
   it('builds an optional parameter in both forms and a splat across segments', () => {
     const optional = bindingSchema.parse({
       path: '/notes/{-$tab}',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: stringParams('tab'),
     })
-    const splat = bindingSchema.parse({ path: '/files/$', roles: ['identity'] })
+    const splat = bindingSchema.parse({ path: '/files/$', roles: [CONTRACT_ROLES.identity] })
 
     expect(
       paramForms(optional.path).forms.map((params) =>
@@ -350,7 +364,7 @@ describe('the round trip', () => {
   it('sends a value per required parameter and reads the defaults back', ({ skip }) => {
     const list = bindingSchema.parse({
       path: '/list',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -373,7 +387,7 @@ describe('the round trip', () => {
   it('sends a number within the bounds of its schema', ({ skip }) => {
     const range = bindingSchema.parse({
       path: '/range',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -396,7 +410,7 @@ describe('the round trip', () => {
   it('sends a string within the lengths and the pattern of its schema', ({ skip }) => {
     const find = bindingSchema.parse({
       path: '/find',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -420,7 +434,7 @@ describe('the round trip', () => {
   it('builds a parameter with its first example, before any sample', ({ skip }) => {
     const org = bindingSchema.parse({
       path: '/org/$key',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: {
         type: 'object',
         properties: { key: { type: 'string', examples: ['org_01hzx9k2', 'org_01hzxa7q'] } },
@@ -429,7 +443,7 @@ describe('the round trip', () => {
     })
     const find = bindingSchema.parse({
       path: '/find',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -458,7 +472,7 @@ describe('the round trip', () => {
   it('builds a parameter without an example within its schema', () => {
     const org = bindingSchema.parse({
       path: '/org/$key',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: {
         type: 'object',
         properties: { key: { type: 'string', pattern: '^org_[a-z0-9]+$' } },
@@ -484,7 +498,7 @@ describe('the round trip', () => {
   /** An optional segment whose pattern is beyond plain characters and one repeated class. */
   const notes = bindingSchema.parse({
     path: '/notes/{-$tab}',
-    roles: ['identity'],
+    roles: [CONTRACT_ROLES.identity],
     params: {
       type: 'object',
       properties: { tab: { type: 'string', pattern: '^[a-z]+-\\d+$' } },
@@ -512,7 +526,7 @@ describe('the round trip', () => {
   /** A pattern beyond plain characters and one repeated class. */
   const odd = bindingSchema.parse({
     path: '/odd',
-    roles: ['identity'],
+    roles: [CONTRACT_ROLES.identity],
     search: {
       type: 'object',
       properties: { q: { type: 'string', pattern: '^[a-z]+-\\d+$' } },
@@ -532,11 +546,14 @@ describe('the round trip', () => {
   })
 
   it('tells a path parameter the binding forgot or invented', () => {
-    const forgot = bindingSchema.parse({ path: '/org/$key', roles: ['identity'] })
-    const forgotOptional = bindingSchema.parse({ path: '/notes/{-$tab}', roles: ['identity'] })
+    const forgot = bindingSchema.parse({ path: '/org/$key', roles: [CONTRACT_ROLES.identity] })
+    const forgotOptional = bindingSchema.parse({
+      path: '/notes/{-$tab}',
+      roles: [CONTRACT_ROLES.identity],
+    })
     const invented = bindingSchema.parse({
       path: '/org/$key',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: {
         type: 'object',
         properties: { key: { type: 'string' }, tab: { type: 'string' } },
@@ -562,8 +579,8 @@ describe('the round trip', () => {
   })
 
   it('tells a splat the binding left out of its path', () => {
-    const splat = bindingSchema.parse({ path: '/files/$', roles: ['identity'] })
-    const unsplat = bindingSchema.parse({ path: '/files', roles: ['identity'] })
+    const splat = bindingSchema.parse({ path: '/files/$', roles: [CONTRACT_ROLES.identity] })
+    const unsplat = bindingSchema.parse({ path: '/files', roles: [CONTRACT_ROLES.identity] })
 
     expect(parameterNames(sampleRouter, splat)).toEqual({
       path: ['_splat'],
@@ -593,14 +610,14 @@ describe('the bindings of the contract on the router', () => {
   it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s matches its route again with its parameters',
     ([, binding], { skip }) => {
-      roundTrip(router, binding, skip)
+      roundTrip(routerFor(binding), binding, skip)
     },
   )
 
   it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s declares the path parameters the router reports',
     ([path, binding], { skip }) => {
-      const names = parameterNames(router, binding)
+      const names = parameterNames(routerFor(binding), binding)
 
       // A splat is declared by its `$` alone: a `params` property cannot be named `_splat`.
       expect(names.declared, `the params ${path} declares`).toEqual(
@@ -618,7 +635,7 @@ describe('the bindings of the contract on the router', () => {
   it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s builds its search and reads it back with the defaults',
     ([, binding], { skip }) => {
-      searchCase(router, binding, skip)
+      searchCase(routerFor(binding), binding, skip)
     },
   )
 })

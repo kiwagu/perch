@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
@@ -39,8 +40,9 @@ function open(
     declarations: { Confirm: ConfirmEmailContainer },
     routes: [
       {
-        path: '/confirm-email',
+        path: CONTRACT_ROUTES['user.confirm-email'],
         page: 'Confirm',
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
     ],
@@ -65,7 +67,7 @@ function open(
 
 describe('ConfirmEmailContainer', () => {
   it('confirms the token of its address once, and leads this account to its profile', async () => {
-    const { confirmEmail } = open('/confirm-email?token=the-token', ann)
+    const { confirmEmail } = open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, ann)
 
     expect(await screen.findByTestId('user.confirm-email.profile-link')).toBeTruthy()
     expect(confirmEmail).toHaveBeenCalledTimes(1)
@@ -73,13 +75,13 @@ describe('ConfirmEmailContainer', () => {
   })
 
   it('leads a guest to the sign-in page', async () => {
-    open('/confirm-email?token=the-token', undefined)
+    open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, undefined)
 
     expect(await screen.findByTestId('user.confirm-email.sign-in-link')).toBeTruthy()
   })
 
   it('leads nowhere while another account is signed in here', async () => {
-    open('/confirm-email?token=the-token', bob)
+    open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, bob)
 
     expect(
       (await screen.findByTestId('user.confirm-email.message')).getAttribute('data-code'),
@@ -90,7 +92,7 @@ describe('ConfirmEmailContainer', () => {
 
   it('says why a refused link changed nothing', async () => {
     open(
-      '/confirm-email?token=used',
+      `${CONTRACT_ROUTES['user.confirm-email']}?token=used`,
       ann,
       errAsync({ code: 'data:LINK_INVALID' as const, message: 'used' }),
     )

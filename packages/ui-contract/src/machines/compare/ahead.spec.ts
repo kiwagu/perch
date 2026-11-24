@@ -137,6 +137,26 @@ describe('a machine that lags its flow', () => {
     expect(app).toEqual(aheadOf(app, flow))
   })
 
+  it('may lack an anchor a state of the flow renders, and renders none the flow does not list', () => {
+    const renders = (anchors: readonly string[]) => ({
+      initial: 'editing',
+      states: { editing: { meta: { renders: anchors } } },
+    })
+    const flow = projected(renders(['sample.name-input', 'sample.rule-list']))
+
+    for (const lagging of [[], ['sample.rule-list']]) {
+      const app = projected(renders(lagging))
+
+      expect(app).toEqual(aheadOf(app, flow))
+    }
+
+    for (const beyond of [['sample.email-input'], ['sample.email-input', 'sample.rule-list']]) {
+      const app = projected(renders(beyond))
+
+      expect(app).not.toEqual(aheadOf(app, flow))
+    }
+  })
+
   it('is the whole flow when the machine lacks nothing', () => {
     const flow = projected(FLOW)
 

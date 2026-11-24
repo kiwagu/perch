@@ -117,3 +117,59 @@ describe('a composite on an anchor', () => {
     expect(anchorDefSchema.safeParse({ kind: 'input', composite: 'Password' }).success).toBe(false)
   })
 })
+
+describe('a source', () => {
+  const list = (source: unknown) => ({ kind: 'list', source })
+
+  it('takes params from the search or as constants, and pages, on a platform source alone', () => {
+    expect(
+      anchorDefSchema.safeParse(
+        list({
+          platform: 'accounts.list',
+          params: { q: { search: 'q' }, kind: { value: 'all' } },
+          paged: true,
+        }),
+      ).success,
+    ).toBe(true)
+    expect(anchorDefSchema.safeParse(list({ platform: 'accounts.list' })).success).toBe(true)
+  })
+  it('refuses a param from a field, a paged that is not true, and either on an entity source', () => {
+    for (const source of [
+      { platform: 'accounts.list', params: { q: 'console.users.search-input' } },
+      { platform: 'accounts.list', params: { q: { anchor: 'console.users.search-input' } } },
+      { platform: 'accounts.list', paged: false },
+      { platform: 'accounts.list', paged: { size: 25 } },
+      { entity: 'note', paged: true },
+      { entity: 'note', params: { q: { search: 'q' } } },
+    ]) {
+      expect(anchorDefSchema.safeParse(list(source)).success, JSON.stringify(source)).toBe(false)
+    }
+  })
+})
+
+describe('with and without', () => {
+  const shows = (key: 'with' | 'without', entries: unknown) => ({ kind: 'button', [key]: entries })
+
+  it('takes anchors and one anchor with its codes, on both schemas', () => {
+    const entries = ['app-shell.update-message', { 'app-shell.install-message': ['install-ready'] }]
+
+    for (const key of ['with', 'without'] as const) {
+      expect(anchorDefSchema.safeParse(shows(key, entries)).success).toBe(true)
+      expect(authoredAnchorDefSchema.safeParse(shows(key, entries)).success).toBe(true)
+    }
+  })
+  it('refuses an empty list, a code entry of two anchors or of no code, and a name no anchor has', () => {
+    for (const key of ['with', 'without'] as const) {
+      expect(anchorDefSchema.safeParse(shows(key, [])).success).toBe(false)
+      expect(
+        anchorDefSchema.safeParse(shows(key, [{ 'x.y.a-message': ['a'], 'x.y.b-message': ['b'] }]))
+          .success,
+      ).toBe(false)
+      expect(anchorDefSchema.safeParse(shows(key, [{ 'x.y.a-message': [] }])).success).toBe(false)
+      expect(anchorDefSchema.safeParse(shows(key, [{}])).success).toBe(false)
+      expect(
+        anchorDefSchema.safeParse(shows(key, ['x.y.name-input.visibility-button.extra'])).success,
+      ).toBe(false)
+    }
+  })
+})

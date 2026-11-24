@@ -2,15 +2,15 @@ import { okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-import type { SignInOutcome } from '../../limits/request-limits'
+import { until } from '../../floor'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
-import { bearerRefused } from '../bearer-caller'
 
-import { until } from './floor'
 import type { AuthMountDeps } from './mount'
+import { confirmPassword } from './password-confirmation'
 import { badRequest, internal, refused } from './requests'
 import { type MountCaller, signedIn } from './signed-in'
 
@@ -23,26 +23,28 @@ import { type MountCaller, signedIn } from './signed-in'
  */
 export const CHANGE_EMAIL_FLOOR_MS = 800
 
+/** The password is confirmed as typed: one of no account's length is a wrong one. */
 const changeBody = z.object({ email: z.string(), password: z.string() })
-/** A new email as the change takes it: an email of at most 320 characters, trimmed. */
-const newEmailShape = z.email().max(320)
-const confirmBody = z.object({ token: z.string().min(1).max(4096) })
+/** A new email as the change takes it: an email of at most the `email` value's length, trimmed. */
+const newEmailShape = z.email().max(CONTRACT_VALUES.email.maxLength)
+const confirmBody = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })
 
 /**
  * Asks to change the caller's email (`{ email, password }`, with the device's token and
  * `X-Perch-Device`). After the caller is read (`signedIn`), it takes one of the client address's
- * credential checks (429); a body it cannot read answers 400 `bad-request`, a new email that is
- * not an email (empty, longer than 320 characters, or of any other shape) 400 `email-invalid`.
- * Then one of the address's mails and one of the account's three changes in a quarter of an hour
- * are taken (`RequestLimits.emailChangeMail`, 429). Everything after runs in the account's turn,
- * so no reset or change of its password runs in between: the caller's session is read again (401
- * `unauthorized` when it ended meanwhile) with the account's email as it is now, the password must
- * find a place among that email's failed sign-ins (429) and match the credential row, a wrong one
- * keeping its place: 400 `invalid-credentials`. With the right password the earlier pending change
- * ends and, when no account has the new email (the account's own email counts as taken), a new
- * change is kept and the mail to the new email starts, its link carrying the change's token; a
- * taken email gets no mail. Both answer `202` with no body, no sooner than `CHANGE_EMAIL_FLOOR_MS`
- * after the request began. The account keeps its email until the link is opened.
+ * credential checks (429); a body it cannot read, or one with no password, answers 400
+ * `bad-request`, a new email that is not an email (empty, longer than the `email` value's length,
+ * or of any other shape) 400 `email-invalid`. Then one of the address's mails and one of the
+ * account's three changes in a quarter of an hour are taken (`RequestLimits.emailChangeMail`, 429).
+ * Everything after runs in the account's turn, so no reset or change of its password runs in
+ * between: the caller's session is read again (401 `unauthorized` when it ended meanwhile) with the
+ * account's email as it is now, the password must find a place among that email's failed sign-ins
+ * (429) and match the credential row, a wrong one keeping its place: 400 `invalid-credentials`.
+ * With the right password the earlier pending change ends and, when no account has the new email
+ * (the account's own email counts as taken), a new change is kept and the mail to the new email
+ * starts, its link carrying the change's token; a taken email gets no mail. Both answer `202` with
+ * no body, no sooner than `CHANGE_EMAIL_FLOOR_MS` after the request began. The account keeps its
+ * email until the link is opened.
  */
 export function changeEmail(
   deps: AuthMountDeps,
@@ -99,9 +101,8 @@ async function asked(
 }
 
 /**
- * In the account's turn: the caller's session read again, with the account's email as it is now,
- * then its password checked against its failed sign-ins and the credential row, then the change
- * kept (`keepChange`): `kept`, or the answer that refuses it.
+ * In the account's turn: the caller's password confirmed (`confirmPassword`), with the account's
+ * email as it is now, then the change kept (`keepChange`): `kept`, or the answer that refuses it.
  */
 async function authenticated(
   deps: AuthMountDeps,
@@ -109,46 +110,13 @@ async function authenticated(
   password: string,
   newEmail: string,
 ): Promise<Response | 'kept'> {
-  const read = await deps.sessions.read(caller.token)
+  const confirmed = await confirmPassword(deps, caller, password)
 
-  if (read.kind === 'failed') {
-    return internal()
+  if (confirmed instanceof Response) {
+    return confirmed
   }
 
-  if (
-    read.kind === 'none' ||
-    read.caller.identity !== caller.identity ||
-    read.caller.device !== caller.device
-  ) {
-    return bearerRefused()
-  }
-
-  const email = read.caller.email.toLowerCase()
-  const attempt = deps.limits.signInAttempt(email)
-
-  if (!attempt.allowed) {
-    return tooMany(attempt)
-  }
-
-  let outcome: SignInOutcome = 'unjudged'
-
-  try {
-    const matches = await deps.passwords.matches(caller.identity, password)
-
-    if (matches.isErr()) {
-      return internal()
-    }
-
-    outcome = matches.value ? 'succeeded' : 'failed'
-  } finally {
-    attempt.settle(outcome)
-  }
-
-  if (outcome === 'failed') {
-    return refused(400, 'invalid-credentials')
-  }
-
-  const kept = await keepChange(deps, caller.identity, email, newEmail)
+  const kept = await keepChange(deps, caller.identity, confirmed.email, newEmail)
 
   return kept.isOk() ? 'kept' : internal()
 }

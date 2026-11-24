@@ -28,10 +28,15 @@ async function harness() {
 
   closers.push(opened.close)
 
-  const { emailChanges } = accountServicesOf(opened)
+  const { emailChanges, accountDeletions } = accountServicesOf(opened)
   const { user } = await signUpOn(opened.auth, ANN, deviceHeaders('laptop'))
 
-  return { ...opened, emailChanges, identity: idSchemas.identity.schema.parse(user.id) }
+  return {
+    ...opened,
+    emailChanges,
+    accountDeletions,
+    identity: idSchemas.identity.schema.parse(user.id),
+  }
 }
 
 describe('EmailChanges', () => {
@@ -106,5 +111,25 @@ describe('EmailChanges', () => {
     expect((await emailChanges.move(identity, ANN, 'third@example.test'))._unsafeUnwrap()).toBe(
       false,
     )
+  })
+
+  it('ends the pending deletion of the account when it moves the email, and only then', async () => {
+    const { emailChanges, accountDeletions, identity } = await harness()
+    const claimsOf = async (token: string) => {
+      const read = (await accountDeletions.read(token))._unsafeUnwrap()
+
+      return read.kind === 'deletion' ? read.claims : expect.unreachable('a deletion')
+    }
+    const kept = await claimsOf((await accountDeletions.ask(identity))._unsafeUnwrap())
+
+    expect(
+      (await emailChanges.move(identity, 'someone@example.test', NEW_EMAIL))._unsafeUnwrap(),
+    ).toBe(false)
+    expect((await accountDeletions.claim(kept))._unsafeUnwrap()).toBe(true)
+
+    const ended = await claimsOf((await accountDeletions.ask(identity))._unsafeUnwrap())
+
+    expect((await emailChanges.move(identity, ANN, NEW_EMAIL))._unsafeUnwrap()).toBe(true)
+    expect((await accountDeletions.claim(ended))._unsafeUnwrap()).toBe(false)
   })
 })

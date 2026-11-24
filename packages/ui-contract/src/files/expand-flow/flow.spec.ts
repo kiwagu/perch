@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VERSION } from '../../anchors'
 import { flowSchema } from '../../schemas'
 import { type Failure, flowSourcesOf } from '../derive'
 
@@ -22,6 +23,7 @@ const LOOKUPS: FlowLookups = {
   screen: 'sample',
   toast: undefined,
   platformToasts: {},
+  edition: CONTRACT_VERSION,
 }
 
 /** A flow of one plain state `idle` whose transition on `sample.form.save-button` is `on`. */
@@ -101,12 +103,13 @@ describe('expandFlow', () => {
     })
   })
 
-  it('writes clear and navigate by their names in full', () => {
+  it('writes clear, read and navigate by their names in full', () => {
     expect(
       expandedOn({
         target: 'saving',
         actions: [
           { clear: 'sample.form.error' },
+          { read: 'sample.list' },
           { navigate: '/me' },
           { navigate: { to: '/org', search: { view: 'read' } } },
         ],
@@ -115,10 +118,17 @@ describe('expandFlow', () => {
       target: 'saving',
       actions: [
         { type: 'clear', params: { anchor: 'sample.form.error' } },
+        { type: 'read', params: { anchor: 'sample.list' } },
         { type: 'navigate', params: { to: '/me' } },
         { type: 'navigate', params: { to: '/org', search: { view: 'read' } } },
       ],
     })
+  })
+
+  it('leaves a read that is not an anchor as written, for the schema to refuse', () => {
+    const read = { read: { 'sample.list': ['failed'] } }
+
+    expect(expandedOn({ actions: [read] }).transition).toEqual({ actions: [read] })
   })
 
   it('names an anchor no screen declares, or one that declares no codes, for show: <anchor>', () => {

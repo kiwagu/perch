@@ -1,8 +1,9 @@
 /**
  * The bindings of the UI contract the app's routes are held to, for the specs that hold them
- * (`routes-contract`, `routes-router` and `routes-examples`). A route reads as its binding once
- * both are reduced to what the router enforces: the same guard, history, retained parameters
- * and search schema. On a branch the pre-commit hook sets `CONTRACT_AHEAD=1` and names the
+ * (`routes-contract`, `routes-router`, `routes-examples` and `routes-roles`). A route reads as its
+ * binding once both are reduced to what the router enforces: the same guard, roles (as a set),
+ * history, retained parameters and search schema. On a branch the pre-commit hook sets
+ * `CONTRACT_AHEAD=1` and names the
  * branch's merge base with `main` (`CONTRACT_AHEAD_BASE`): a business commit may add or change
  * a binding before its route, so a binding may wait for its route, and a route that still reads
  * as its binding did at the base (the same screen, the same path) is held to that binding as it
@@ -84,9 +85,13 @@ export function bare(schema: unknown): unknown {
 export const routeSearch = (search: RouteDef['search']): unknown =>
   search ? bare(z.toJSONSchema(search, { target: 'draft-2020-12', io: 'input' })) : undefined
 
+/** The roles a route serves, as a set: each once, in one order. */
+const roleSet = (roles: readonly string[]): readonly string[] => [...new Set(roles)].sort()
+
 /** What a route and a binding are compared by. */
 export interface Reading {
   readonly guard: Binding['guard']
+  readonly roles: readonly string[]
   readonly history: Binding['history']
   readonly retain: readonly string[] | undefined
   readonly search: unknown
@@ -95,6 +100,7 @@ export interface Reading {
 /** A route of the app, read as a binding reads. */
 export const routeReading = (route: RouteDef): Reading => ({
   guard: route.guard,
+  roles: roleSet(route.roles),
   history: route.history ?? 'push',
   retain: route.retain,
   search: routeSearch(route.search),
@@ -103,6 +109,7 @@ export const routeReading = (route: RouteDef): Reading => ({
 /** A binding of the contract, reduced to what the router enforces. */
 export const bindingReading = (binding: Binding): Reading => ({
   guard: binding.guard,
+  roles: roleSet(binding.roles),
   history: binding.history,
   retain: binding.retain,
   search: bare(binding.search),

@@ -18,3 +18,8 @@ DEFINE FIELD OVERWRITE created_at ON membership TYPE datetime
 
 DEFINE INDEX OVERWRITE membership_identity_tenant ON membership FIELDS identity, tenant
   UNIQUE;
+
+-- The members list, the admins' count and the invite's email check read the memberships of one
+-- organisation. The unique index above leads with the identity, so it cannot serve them: without
+-- this one each is a scan of every membership of every organisation.
+DEFINE INDEX OVERWRITE membership_tenant ON membership FIELDS tenant;

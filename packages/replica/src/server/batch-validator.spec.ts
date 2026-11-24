@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { recordRef } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
-import { defineAbilityFor } from '@workspace/kernel'
+import { CONTRACT_ROLES, defineAbilityFor } from '@workspace/kernel'
 
 import {
   noteCreate,
@@ -16,7 +16,7 @@ import {
 import type { ReplicaSchema } from '../schema'
 import { invert } from '../sync'
 
-import { documentWithProfile, exportSince, forkOf, input } from './__fixtures__/batch'
+import { documentWithProfile, exportSince, forkOf, input, owner } from './__fixtures__/batch'
 import { validateBatch } from './batch-validator'
 
 /** The inverse a device commits for a refused update, as the bytes it pushes behind it. */
@@ -270,14 +270,123 @@ describe('batch validation', () => {
       detail: 'writes outside records: cid:root-junk:Map',
     })
   })
+
+  describe('read-only fields', () => {
+    it('refuses setting a read-only field the record lacks, naming the record and the field', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+
+      client.recordMap('profile/prf_1').set('email', 'ann@new.example.test')
+
+      expect(
+        validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr(),
+      ).toEqual({
+        reason: 'readonly-field',
+        detail: 'profile/prf_1.email',
+      })
+    })
+
+    it('refuses changing a read-only field', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+
+      client.recordMap('profile/prf_1').set('created_at', '2026-11-04T09:00:00.000Z')
+
+      expect(
+        validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr().detail,
+      ).toBe('profile/prf_1.created_at')
+    })
+
+    it('refuses unsetting a read-only field', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+
+      client.recordMap('profile/prf_1').delete('created_at')
+
+      expect(
+        validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr().reason,
+      ).toBe('readonly-field')
+    })
+
+    it('lets a device set read-only fields when it creates the record', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+      const created = client.records().setContainer('profile/prf_2', new LoroMap())
+
+      created.set('identity', owner)
+      created.set('name', 'Ann again')
+      created.set('email', 'ann@example.test')
+      created.set('created_at', '2026-11-04T09:00:00.000Z')
+
+      const plan = validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrap().plan
+
+      expect(plan.upserts.map((row) => row.entry)).toEqual(['profile/prf_2'])
+      expect(plan.upserts[0]?.data).toMatchObject({ email: 'ann@example.test' })
+    })
+
+    it('accepts a change of a read-only field followed by its inverse: no change', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+
+      client.recordMap('profile/prf_1').set('created_at', '2026-11-04T09:00:00.000Z')
+      client.commit()
+      client.recordMap('profile/prf_1').set('created_at', '2026-10-16T09:00:00.000Z')
+
+      const plan = validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrap().plan
+
+      expect(plan.upserts).toEqual([])
+    })
+
+    it('accepts an edit that leaves the read-only fields as they were', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+
+      client.recordMap('profile/prf_1').set('name', 'Ana')
+
+      const plan = validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrap().plan
+
+      expect(plan.upserts.map((row) => row.entry)).toEqual(['profile/prf_1'])
+    })
+
+    it('refuses a record deleted and created again with another read-only value', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+
+      client.records().delete('profile/prf_1')
+      client.commit()
+
+      const again = client.records().setContainer('profile/prf_1', new LoroMap())
+
+      again.set('identity', owner)
+      again.set('name', 'Ann')
+      again.set('created_at', '2026-11-04T09:00:00.000Z')
+      again.ensureMergeableText('bio').insert(0, 'Hello')
+
+      expect(
+        validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr().detail,
+      ).toBe('profile/prf_1.created_at')
+    })
+
+    it('judges the owner rule before the read-only fields', () => {
+      const server = documentWithProfile('Ann')
+      const client = forkOf(server)
+
+      client.recordMap('profile/prf_1').set('identity', 'identity:idn_other')
+
+      expect(
+        validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr().reason,
+      ).toBe('foreign-owner')
+    })
+  })
 })
 
 describe('a tenant region', () => {
   const region = { kind: 'tenant', id: 'tenant:acme' } as const
   const ann = 'idn_ann000000000000.0000000000'
   const bob = 'idn_bob000000000000.0000000000'
-  const member = (id: string) => defineAbilityFor({ id, role: 'member' }, replicaSchema)
-  const admin = (id: string) => defineAbilityFor({ id, role: 'admin' }, replicaSchema)
+  const member = (id: string) =>
+    defineAbilityFor({ id, role: CONTRACT_ROLES.member }, replicaSchema)
+  const admin = (id: string) => defineAbilityFor({ id, role: CONTRACT_ROLES.admin }, replicaSchema)
 
   it('accepts a note whose author is the pushing member', () => {
     const doc = new LoroDoc()
@@ -419,7 +528,7 @@ describe('a tenant region', () => {
       doc: new LoroDoc(),
       region,
       actor: ann,
-      ability: defineAbilityFor({ id: ann, role: 'admin' }, closed),
+      ability: defineAbilityFor({ id: ann, role: CONTRACT_ROLES.admin }, closed),
       schema: closed,
       updates: [noteCreate(new LoroDoc(), { id, author: ann, text: 'hello' })],
     })

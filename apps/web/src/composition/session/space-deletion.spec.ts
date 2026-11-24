@@ -5,16 +5,19 @@ import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { FakeLocks, manualClock } from '@workspace/replica/testing'
 
+import { signedIn } from '../__fixtures__/signed-in'
 import type { TenantDatabaseInventory } from '../retained-tenant-databases'
-import { memoryStorage, saveDevice } from '../storage'
+import { addLeftoverIdentity, leftoverIdentities, memoryStorage } from '../storage'
 
-import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
 import { DELETE_GRACE_MS, SpaceDeletion } from './space-deletion'
 
 const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
 const bob = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+/** The sign-in an ended session came after, on a browser where nobody signed in yet. */
+const ENDED = '0'
 
 /** A promise and the functions that settle it. */
 function deferred() {
@@ -83,7 +86,7 @@ describe('SpaceDeletion', () => {
   it('answers `deleted` once the space is gone within the grace, listing the identity only meanwhile', async () => {
     const { storage, deletion } = harness()
     const deleting = deferred()
-    const answer = deletion.destroy(spaceOf(ann, deleting.promise))
+    const answer = deletion.destroy(spaceOf(ann, deleting.promise), ENDED)
 
     expect(leftoverIdentities(storage)).toEqual([ann.id])
     await settle()
@@ -97,7 +100,7 @@ describe('SpaceDeletion', () => {
   it('answers `pending` when another tab still holds the delete after the grace, and lists the identity until it ends', async () => {
     const { storage, clock, deletion } = harness()
     const deleting = deferred()
-    const answer = deletion.destroy(spaceOf(ann, deleting.promise))
+    const answer = deletion.destroy(spaceOf(ann, deleting.promise), ENDED)
 
     await settle()
 
@@ -131,6 +134,7 @@ describe('SpaceDeletion', () => {
     const { storage, deletion, failures } = harness()
     const answer = await deletion.destroy(
       spaceOf(ann, Promise.reject(new Error('the store is broken'))),
+      ENDED,
     )
 
     expect(answer._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
@@ -141,7 +145,7 @@ describe('SpaceDeletion', () => {
   it('reports a delete that fails once the grace passed, as nobody waits for it any more', async () => {
     const { clock, deletion, failures } = harness()
     const deleting = deferred()
-    const answer = deletion.destroy(spaceOf(ann, deleting.promise))
+    const answer = deletion.destroy(spaceOf(ann, deleting.promise), ENDED)
 
     await settle()
 
@@ -173,7 +177,7 @@ describe('SpaceDeletion', () => {
       onError: () => {},
     })
     const deleting = deferred()
-    const answer = deletion.destroy(spaceOf(ann, deleting.promise))
+    const answer = deletion.destroy(spaceOf(ann, deleting.promise), ENDED)
 
     await settle()
     await clock.advance(DELETE_GRACE_MS)
@@ -199,17 +203,20 @@ describe('SpaceDeletion', () => {
     const { storage, deletion } = harness()
     let destroyed = false
 
-    saveDevice(storage, { identity: ann, token: 't', memberships: [] })
+    signedIn(storage, { identity: ann, token: 't' })
 
-    const answer = await deletion.destroy({
-      identity: ann,
-      close: () => Promise.resolve(),
-      destroy: () => {
-        destroyed = true
+    const answer = await deletion.destroy(
+      {
+        identity: ann,
+        close: () => Promise.resolve(),
+        destroy: () => {
+          destroyed = true
 
-        return Promise.resolve()
+          return Promise.resolve()
+        },
       },
-    })
+      ENDED,
+    )
 
     expect(answer._unsafeUnwrap()).toBe('in-use')
     expect(destroyed).toBe(false)
@@ -220,9 +227,9 @@ describe('SpaceDeletion', () => {
   it('keeps listed an identity whose delete it skipped for a sign-in whose open then failed', async () => {
     const { storage, deletion } = harness()
 
-    saveDevice(storage, { identity: ann, token: 't', memberships: [] })
+    signedIn(storage, { identity: ann, token: 't' })
 
-    expect((await deletion.deleteUnopened(ann.id))._unsafeUnwrap()).toBe('in-use')
+    expect((await deletion.deleteUnopened(ann.id, ENDED))._unsafeUnwrap()).toBe('in-use')
 
     const opened = await deletion.open(ann.id, () =>
       ResultAsync.fromPromise(Promise.reject(new Error('broken')), () =>
@@ -239,7 +246,7 @@ describe('SpaceDeletion', () => {
 
     inventory(ann.id).add(['acme'])
 
-    const answer = await deletion.destroy(spaceOf(ann, Promise.resolve()))
+    const answer = await deletion.destroy(spaceOf(ann, Promise.resolve()), ENDED)
 
     expect(answer._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect(leftoverIdentities(storage)).toEqual([ann.id])
@@ -248,11 +255,10 @@ describe('SpaceDeletion', () => {
   it('starts the grace once the space closed: a slow close is no held-up delete', async () => {
     const { clock, deletion } = harness()
     const closing = deferred()
-    const answer = deletion.destroy({
-      identity: ann,
-      close: () => closing.promise,
-      destroy: () => closing.promise,
-    })
+    const answer = deletion.destroy(
+      { identity: ann, close: () => closing.promise, destroy: () => closing.promise },
+      ENDED,
+    )
 
     await clock.advance(DELETE_GRACE_MS * 2)
     closing.resolve()
@@ -290,7 +296,7 @@ describe('SpaceDeletion', () => {
     addLeftoverIdentity(storage, ann.id)
     addLeftoverIdentity(storage, bob.id)
     inventory(ann.id).add(['acme', 'globex'])
-    saveDevice(storage, { identity: bob, token: 't', memberships: [] })
+    signedIn(storage, { identity: bob, token: 't' })
 
     await deletion.deleteLeftovers()
 

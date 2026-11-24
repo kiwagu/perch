@@ -1,14 +1,16 @@
 /**
  * The seed client's organisations: one created as the signed-in account, its administrator, a
- * member invited into it, and one read back as a member's device sees it.
+ * member invited into it and joining it by accepting the invitation, and one read back as a
+ * member's device sees it.
  */
 
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import { dataError, type SignInInput } from '@workspace/data'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
-import type { OrganisationView, SeedError, SeedOrganisationDevice } from './types'
+import type { Invited, OrganisationView, SeedError, SeedOrganisationDevice } from './types'
 
 const membershipOf = (device: SeedOrganisationDevice, key: string): Membership | undefined =>
   device.session.memberships().find((membership) => membership.tenant.key === key)
@@ -27,25 +29,42 @@ export function ensureOrganisation(
       const found = error.code === 'data:WRITE_REJECTED' && error.message === 'key-taken'
       const existing = found ? membershipOf(device, input.key) : undefined
 
-      return existing?.role === 'admin' ? okAsync(existing) : errAsync(error)
+      return existing?.role === CONTRACT_ROLES.admin ? okAsync(existing) : errAsync(error)
     })
     .andThen((membership) => device.settle().map(() => membership))
 }
 
-/** Invites the existing account at `email` into the organisation; a member already in it is found. */
-export function ensureMember(
-  device: SeedOrganisationDevice,
+/**
+ * Invites the existing account at `email` into the organisation as a member and answers the
+ * invitation's id; an account that is a member already is found, with no invitation to accept.
+ */
+export function ensureInvited(
+  device: Pick<SeedOrganisationDevice, 'organisations'>,
   key: string,
   email: string,
-): ResultAsync<void, SeedError> {
+): ResultAsync<Invited, SeedError> {
   return device.organisations
-    .invite(key, email)
-    .map(() => undefined)
+    .invite(key, email, CONTRACT_ROLES.member)
+    .map((invitation): Invited => ({ kind: 'invited', invitation: invitation.id }))
     .orElse((error) =>
       error.code === 'data:WRITE_REJECTED' && error.message === 'already-member'
-        ? okAsync(undefined)
+        ? okAsync<Invited, SeedError>({ kind: 'already-member' })
         : errAsync(error),
     )
+}
+
+/**
+ * Accepts the invitation by its id as the signed-in account, never by finding one by the
+ * organisation's name (names are not unique), and waits until the gateway acknowledged the
+ * membership and the organisation's region arrived.
+ */
+export function ensureJoined(
+  device: Pick<SeedOrganisationDevice, 'invitations' | 'settle'>,
+  invitation: string,
+): ResultAsync<Membership, SeedError> {
+  return device.invitations
+    .accept(invitation)
+    .andThen((membership) => device.settle().map(() => membership))
 }
 
 /** Signs in, makes the organisation current and reads its notes once the gateway's copy arrived. */

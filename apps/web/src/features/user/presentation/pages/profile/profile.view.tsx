@@ -9,17 +9,14 @@ import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
-import type { ProfileFields } from '../../../application/profile.machine'
-import { PROFILE_BIO_MAX } from '../../../domain/profile.entity'
+import { concernsOf } from '../../../../../platform/concerns'
+import type { ProfileEvent, ProfileFields } from '../../../application/profile-machine'
 
 export interface ProfileViewData {
   readonly name: string
   readonly email: string
   readonly bio?: string | undefined
 }
-
-/** The buttons the profile's flow handles: each is enabled while the machine's state does. */
-export type ProfileControl = 'user.profile.save-button' | 'user.profile.sign-out-button'
 
 export interface ProfileViewProps {
   readonly status: 'idle' | 'loading' | 'ready'
@@ -29,20 +26,29 @@ export interface ProfileViewProps {
   readonly form: ProfileFields
   /** The code of the last refused save. */
   readonly error?: string | undefined
-  /** Whether the flow's state handles a button's event: the button is enabled while it does. */
-  readonly can: (control: ProfileControl) => boolean
+  /** Whether the flow takes the event now: a button is enabled exactly while it does. */
+  readonly can: (event: ProfileEvent) => boolean
   readonly onType: (field: keyof ProfileFields, value: string) => void
   /** Saves the form: resolves whether it saved, and the fields then hold no unsaved input. */
   readonly onSave: () => Promise<boolean>
   readonly onSignOut: () => void
-  /** The flow asks before signing out: this device holds changes it could not send. */
+  /**
+   * Whether the flow's state renders the dialog that asks before signing out: this device holds
+   * changes it could not send.
+   */
   readonly confirmSignOut?: boolean
   readonly onConfirmSignOut: () => void
   readonly onCancelSignOut: () => void
 }
 
+/** The codes of `user.profile.error`. */
+type ProfileErrorCode = 'name-required' | 'name-too-long' | 'bio-too-long' | 'failed'
+
 /** The contract code of a refused change, with its text. */
-function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
+function errorOf(
+  t: ReturnType<typeof useT>,
+  code: string,
+): { code: ProfileErrorCode; text: string } {
   switch (code) {
     case 'profile:NAME_REQUIRED':
       return { code: 'name-required', text: t('user.profile.error.name-required') }
@@ -55,8 +61,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
   }
 }
 
-/** The field each code of `user.profile.error` concerns, as the screen's `fields` say; others concern the form. */
-const ERROR_FIELDS: Readonly<Record<string, keyof ProfileFields>> = {
+/** The field each code of `user.profile.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<ProfileErrorCode, 'name' | 'bio'>> = {
   'name-required': 'name',
   'name-too-long': 'name',
   'bio-too-long': 'bio',
@@ -67,7 +73,7 @@ function ProfileForm(props: ProfileViewProps) {
   const nameId = useId()
   const bioId = useId()
   const error = props.error ? errorOf(t, props.error) : undefined
-  const concerns = error ? ERROR_FIELDS[error.code] : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
   // One message: under the field its code concerns, or above Save when it concerns the form.
   const message = error ? (
     <FieldError data-testid="user.profile.error" data-code={error.code}>
@@ -96,17 +102,16 @@ function ProfileForm(props: ProfileViewProps) {
             id={bioId}
             value={props.form.bio}
             onChange={(event) => props.onType('bio', event.target.value)}
-            maxLength={PROFILE_BIO_MAX}
             aria-invalid={concerns === 'bio' ? true : undefined}
             data-testid="user.profile.bio-textarea"
           />
           {concerns === 'bio' ? message : null}
         </Field>
-        <Field data-invalid={error && !concerns ? true : undefined}>
+        <Field>
           {concerns ? null : message}
           <Button
             type="submit"
-            disabled={!props.can('user.profile.save-button')}
+            disabled={!props.can({ type: 'user.profile.save-button' })}
             data-testid="user.profile.save-button"
           >
             {t('user.profile.save')}
@@ -157,7 +162,7 @@ export function ProfileView(props: ProfileViewProps) {
           <Button
             type="button"
             variant="outline"
-            disabled={!props.can('user.profile.sign-out-button')}
+            disabled={!props.can({ type: 'user.profile.sign-out-button' })}
             onClick={() => props.onSignOut()}
             data-testid="user.profile.sign-out-button"
           >

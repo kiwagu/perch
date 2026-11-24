@@ -6,8 +6,8 @@ The only package that depends on the SurrealDB driver. It opens the local databa
 (applying the schema only when its text changed since the last opening), runs shapes and
 commands compiled from `.surql` files, announces table changes so watched shapes rerun, and
 gives the gateway's accounts their database through SurrealDB's Better Auth adapter. The
-account types (`AuthUser`, `SignUpInput`, `SignInInput`) are shared by the gateway and the web
-application. Above this package ids are entity id strings and times are `Date`s; driver record
+account types (`AuthUser`, `SignUpInput`, `SignInInput`, `CodeStep`) are shared by the gateway and
+the web application. Above this package ids are entity id strings and times are `Date`s; driver record
 ids and datetimes do not leave it.
 
 ## Key exports
@@ -15,7 +15,13 @@ ids and datetimes do not leave it.
 - Ports with tokens: `ShapeRunnerPort` / `SHAPE_RUNNER`, `WritePathPort` / `WRITE_PATH`,
   `LocalDbPort` / `LOCAL_DB`.
 - Account types: `AuthUser` (an identity's id and email), `SignUpInput` (email, password, the
-  account's own name and its language), `SignInInput`.
+  account's own name and its language), `SignInInput` (email, password, and `signOutOldest`, which
+  confirms a sign-in past the account's limit of devices; unconfirmed, such a sign-in signs nothing
+  in and answers the outcome `device-limit` at the gateway and session boundaries, which the seed
+  client's facade keeps as the error `data:DEVICE_LIMIT`), `CodeStep` (the challenge a password step answered and the email typed
+  there, which the code step of the sign-in carries). The second factor and the passkeys have
+  their codes: `data:INVALID_CODE`, `data:CODE_EXPIRED`, `data:TWO_FACTOR_CHANGED`,
+  `data:PASSKEY_UNKNOWN` and `data:PASSKEY_CANCELLED`.
 - Adapters: `openLocalDb`, `applySchema`, `ShapeRunner`, `runCommand`, `SurrealWritePath`.
   `applySchema(local, schema)` applies a schema to an open database and remembers it, as
   `openLocalDb` does when the schema changed, failing with `data:QUERY_FAILED`. A
@@ -46,8 +52,11 @@ ids and datetimes do not leave it.
 - `./better-auth-adapter`: `surrealAuthAdapter(local)`, Better Auth's database on an open
   connection through SurrealDB's adapter (Bun and Node; the adapter is patched under `patches/`
   to use the connection's driver classes, to give each transaction a handle of its own, so
-  concurrent requests never run inside each other's transactions, and to leave a failed join's
-  error to its caller instead of printing it whole, the query's bindings with it, to stderr).
+  concurrent requests never run inside each other's transactions, to leave a failed join's
+  error to its caller instead of printing it whole, the query's bindings with it, to stderr, and
+  to add the single-row `consumeOne` and `incrementOne` Better Auth calls, each one statement, so
+  of two callers racing for a row exactly one finds it as it was; a statement the database refuses
+  for a conflict runs again, a transaction it refuses fails with the conflict and is not run again).
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
 - `./testing`: `openTestDb({ schema?, namespace?, database? })` (in-memory database with the
   directory schema by default), `readSchema(database)`,

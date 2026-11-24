@@ -12,18 +12,18 @@ data:
   Note by B, edited by B: generate
   Note by B, edited by A: generate
 ---
-# Edit only your own notes; an administrator edits any
+# Edit only your own notes; an admin edits any
 
-Where: [/org] on device A (user A, administrator) and [/org] on device B (user B, member, another browser)
+Where: [/org] on device A (user A, admin) and [/org] on device B (user B, member, another browser)
 
-## Scenario: A member changes only its own notes, an administrator any, and both see every change
+## Scenario: A member changes only its own notes, an admin any, and both see every change
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
 2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]
 4. On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
-5. On device B, open [/org]
+5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]
 6. On device B, enter the note by B into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 7. On device B, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by B into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]
 8. On device A, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by A into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]

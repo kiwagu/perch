@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: not-found
+title: Page not found
+description: What an address no other route takes opens, and what a route opens for an account its roles miss.
+flag: null
+bindings: [ { path: /$, roles: [ guest, identity ], history: push } ]
+entry: [ not-found.page ]
+anchors:
+  not-found.page:
+    kind: page

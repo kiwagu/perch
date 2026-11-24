@@ -106,6 +106,46 @@ describe('AccountMails', () => {
     expect(`${mail.text}${mail.html}`).not.toContain('n3w-mailbox')
   })
 
+  it('mails the deletion link to the account, linking to the deletion screen with the token', async () => {
+    const { mails, outbox, identity } = await harness('es')
+
+    mails.deleteAccount(identity, TOKEN)
+
+    const mail = await outbox.next(ANN, 1)
+
+    expect(mail.to).toBe(ANN)
+    expect(mail.subject).toBe('Elimina tu cuenta de Perch')
+    expect(mail.text).toContain(`https://localhost:5443/delete-account?token=${TOKEN}`)
+  })
+
+  it('tells the email a deleted account had from what was read before it went, reading nothing', async () => {
+    const opened = await openAuth()
+
+    closers.push(opened.close)
+
+    const read: string[] = []
+    const mails = new AccountMails({
+      mail: opened.outbox,
+      directory: interceptQueries(opened.local, (text) => {
+        read.push(text)
+
+        throw new Error('the account is gone')
+      }),
+      publicUrl: 'https://localhost:5443',
+      log: opened.log,
+    })
+
+    mails.accountDeleted({ email: ANN, name: 'Ann', locale: 'es' })
+
+    const mail = await opened.outbox.next(ANN)
+
+    expect(mail.subject).toBe('Tu cuenta de Perch fue eliminada')
+    expect(mail.text).toContain('Hola, Ann:')
+    expect(mail.text).not.toMatch(/https?:/)
+    expect(read).toEqual([])
+    expect(opened.logs).toEqual([])
+  })
+
   it('speaks the language the account signed up in until its settings name one', async () => {
     const { mails, outbox, identity, local } = await harness('es')
 

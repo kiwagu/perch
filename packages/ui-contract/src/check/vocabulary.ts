@@ -2,7 +2,9 @@
  * Rule 1: the screen files, the platform file and the model speak only the vocabulary's
  * words. Every kind, derived suffix, code, state, role and screen name the screens and the
  * platform use is listed in `vocabulary.md`, and so is every role the model grants a
- * permission to; every choice value belongs to an anchor that exists and is no visibility-button,
+ * permission to; every derived suffix ends with a kind of the vocabulary, the kind of the part
+ * it marks (`kindOf`, as the manifest's `derivedParts` says it);
+ * every choice value belongs to an anchor that exists and is no visibility-button,
  * whose values its suffix defines; every code listed is
  * used somewhere; the platform's status states and reserved anchors are the vocabulary's own.
  * The platform's composites and the vocabulary's "Composites" rows name each other both ways,
@@ -11,9 +13,11 @@
  * `<object>-<verb>ed` stands for them all, wanted once one is derived.
  */
 
-import { screenOf, VISIBILITY_BUTTON } from '../anchors'
+import { FIELD_STATES, kindOf, screenOf, VISIBILITY_BUTTON } from '../anchors'
 import {
   CONFIRM_RULE_ROW,
+  codeEntriesOf,
+  codeNamesOf,
   jsonPath,
   MODEL_FILE,
   type Problem,
@@ -37,6 +41,9 @@ import {
 const FRAME_SCREEN = 'app-shell'
 
 /** Each value of `values` that `listed` lacks, as a problem at `at[index]` (`inScreens`). */
+/** A role is the contract's: of its terms file, or of the vocabulary's Roles without one. */
+const ROLE = 'a role'
+
 const unlistedIn =
   (inScreens: InScreens) =>
   (
@@ -48,7 +55,12 @@ const unlistedIn =
     (values ?? []).flatMap((value, index) =>
       (listed instanceof Set ? listed.has(value) : has(listed, value))
         ? []
-        : [inScreens([...at, index], `"${value}" is not ${noun} of the vocabulary`)],
+        : [
+            inScreens(
+              [...at, index],
+              `"${value}" is not ${noun} of the ${noun === ROLE ? 'contract' : 'vocabulary'}`,
+            ),
+          ],
     )
 
 function screenProblems(contract: Contract): Problem[] {
@@ -57,6 +69,27 @@ function screenProblems(contract: Contract): Problem[] {
   const unlisted = unlistedIn(inScreens)
   const names = Object.keys(vocabulary.screenNames)
   const states = statesOf(vocabulary)
+  // A field state is derived from the field, so an anchor never writes one.
+  const fieldStates = Object.keys(vocabulary.fieldStates)
+  const writable = new Set([
+    ...Object.keys(vocabulary.appStates),
+    ...Object.keys(vocabulary.containerStates),
+    ...Object.keys(vocabulary.rowStates),
+  ])
+  const writtenFieldStates = (
+    written: readonly string[] | undefined,
+    at: readonly PropertyKey[],
+  ): Problem[] =>
+    (written ?? []).flatMap((state, index) =>
+      fieldStates.includes(state) && !writable.has(state)
+        ? [
+            inScreens(
+              [...at, index],
+              `"${state}" is a field state: it is derived from the field, a screen file never writes it`,
+            ),
+          ]
+        : [],
+    )
   const anchors = declaredAnchors(screens)
   // A code the loader derived on the toast anchor or the confirmation is vouched for by its rule
   // row, not a row of its own.
@@ -91,15 +124,11 @@ function screenProblems(contract: Contract): Problem[] {
         ...unlisted(def.derived, [...at, 'derived'], vocabulary.suffixes, 'a derived suffix'),
         ...unlisted(def.codes, [...at, 'codes'], codesFor(anchor), 'a code'),
         ...unlisted(def.states, [...at, 'states'], states, 'a state'),
-        ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, 'a role'),
+        ...writtenFieldStates(def.states, [...at, 'states']),
+        ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, ROLE),
       ]),
     ...screen.bindings.flatMap((binding, at) =>
-      unlisted(
-        binding.roles,
-        ['screens', index, 'bindings', at, 'roles'],
-        vocabulary.roles,
-        'a role',
-      ),
+      unlisted(binding.roles, ['screens', index, 'bindings', at, 'roles'], vocabulary.roles, ROLE),
     ),
   ])
 }
@@ -111,7 +140,7 @@ const modelRoleProblems = ({ vocabulary, model }: Contract): Problem[] =>
       .filter((role) => !has(vocabulary.roles, role))
       .map((role) => ({
         file: MODEL_FILE,
-        message: `${jsonPath(['$defs', entity.name, 'x-perch', 'can', role])}: "${role}" is not a role of the vocabulary`,
+        message: `${jsonPath(['$defs', entity.name, 'x-perch', 'can', role])}: "${role}" is not a role of the contract`,
       })),
   )
 
@@ -126,8 +155,17 @@ function platformProblems({ vocabulary, screens }: Contract): Problem[] {
 
   return [
     ...Object.entries(actions).flatMap(([name, action]) => [
-      ...unlisted(action.roles, ['platform', 'actions', name, 'roles'], vocabulary.roles, 'a role'),
-      ...unlisted(action.codes, ['platform', 'actions', name, 'codes'], vocabulary.codes, 'a code'),
+      ...unlisted(action.roles, ['platform', 'actions', name, 'roles'], vocabulary.roles, ROLE),
+      ...codeEntriesOf(action.codes).flatMap(({ code, at }) =>
+        has(vocabulary.codes, code)
+          ? []
+          : [
+              inScreens(
+                ['platform', 'actions', name, 'codes', at],
+                `"${code}" is not a code of the vocabulary`,
+              ),
+            ],
+      ),
     ]),
     ...(status.states.join(',') === appStates.join(',')
       ? []
@@ -233,7 +271,7 @@ function choiceValueProblems(contract: Contract): Problem[] {
 const usedCodes = (screens: ScreensFile): Set<string> =>
   new Set([
     ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
-    ...Object.values(screens.platform.actions).flatMap(({ codes }) => codes),
+    ...Object.values(screens.platform.actions).flatMap(({ codes }) => codeNamesOf(codes)),
     ...(screens.toasts.length > 0 ? [TOAST_RULE_ROW] : []),
     ...(screens.questions.length > 0 ? [CONFIRM_RULE_ROW] : []),
   ])
@@ -268,12 +306,70 @@ function unusedCodeProblems({ vocabulary, screens }: Contract): Problem[] {
     .map((code) => inVocabulary(`code "${code}" is documented but unused`))
 }
 
+/** Every derived suffix ends with a kind of the vocabulary: the kind of the part it marks. */
+const suffixKindProblems = ({ vocabulary }: Contract): Problem[] =>
+  Object.keys(vocabulary.suffixes).flatMap((suffix) => {
+    const kind = kindOf(suffix)
+
+    return has(vocabulary.kinds, kind)
+      ? []
+      : [
+          inVocabulary(
+            `derived suffix "${suffix}": its kind "${kind}" is not a kind of the vocabulary`,
+          ),
+        ]
+  })
+
+/** The field states are the two the kit renders: a section with a row lists both, no other. */
+function fieldStateProblems({ vocabulary }: Contract): Problem[] {
+  const listed = Object.keys(vocabulary.fieldStates)
+  const rendered: readonly string[] = FIELD_STATES
+
+  if (listed.length === 0) {
+    return []
+  }
+
+  const sharing = [
+    ['an app', vocabulary.appStates],
+    ['a container', vocabulary.containerStates],
+    ['a row', vocabulary.rowStates],
+  ] as const
+
+  return [
+    ...listed
+      .filter((state) => !rendered.includes(state))
+      .map((state) =>
+        inVocabulary(
+          `section "Field states": "${state}" is not a state the kit renders (${FIELD_STATES.join(', ')})`,
+        ),
+      ),
+    ...rendered
+      .filter((state) => !listed.includes(state))
+      .map((state) =>
+        inVocabulary(
+          `section "Field states": "${state}" is a state the kit renders and is not listed`,
+        ),
+      ),
+    ...sharing.flatMap(([noun, table]) =>
+      listed
+        .filter((state) => has(table, state))
+        .map((state) =>
+          inVocabulary(
+            `section "Field states": "${state}" is also ${noun} state: a state name means one thing`,
+          ),
+        ),
+    ),
+  ]
+}
+
 export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...screenProblems(contract),
   ...modelRoleProblems(contract),
   ...platformProblems(contract),
   ...choiceValueProblems(contract),
   ...unusedCodeProblems(contract),
+  ...suffixKindProblems(contract),
+  ...fieldStateProblems(contract),
   ...ruleRowProblems(contract, 'toasts', contract.screens.toasts, TOAST_RULE_ROW),
   ...ruleRowProblems(contract, 'questions', contract.screens.questions, CONFIRM_RULE_ROW),
 ]

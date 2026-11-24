@@ -3,9 +3,10 @@
  *
  * Validates every `.surql` file, reads the schema into a model, cross-checks the
  * entity id registry, collects the shapes and commands under the root, and writes
- * the generated files (removing stale ones). With --check it writes nothing and
- * fails when any generated file is missing, different or stale, so a hook that
- * forgot to regenerate cannot pass silently. Exit code 1 on any problem.
+ * the generated files (removing stale ones), among them the schema's own file of the
+ * contract's length limits. With --check it writes nothing and fails when any generated
+ * file is missing, different or stale, so a hook that forgot to regenerate cannot pass
+ * silently. Exit code 1 on any problem.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -13,10 +14,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, relative, resolve } from 'node:path'
 
 import { registry } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import { type CommandFile, collect, type ShapeFile } from './collect'
 import { emitModel, emitReplicaSchema, type GeneratedFile } from './emit-model'
 import { emitPagesModel, emitSurrealkitSuites } from './emit-reports'
+import { emitValueParams } from './emit-value-params'
 import { checkIdRegistry } from './id-registry'
 import { loadSchemaModel } from './schema-structure'
 import { tableDatabases } from './table-databases'
@@ -35,6 +38,13 @@ export interface ModelResult {
 
 /** The table of the record access whose users the generated suites sign in as. */
 const ACCESS_TABLE = 'identity'
+
+/**
+ * The contract's length limits as database parameters, in the folder every database applies first
+ * (`common/`). The kernel's generated values are the source, so the database takes a limit from
+ * the same module as the gateway and the web.
+ */
+const VALUE_PARAMS_PATH = 'common/contract-values.gen.surql'
 
 /**
  * The replica schema is read by every runtime that replicates, not by one app, so it
@@ -158,11 +168,17 @@ export async function runModel(options: ModelOptions): Promise<ModelResult> {
     ...collected.problems,
   ]
 
-  if (problems.length > 0) {
-    return { problems, written: [] }
+  const valueParams = emitValueParams(CONTRACT_VALUES)
+
+  if (problems.length > 0 || valueParams.isErr()) {
+    return {
+      problems: [...problems, ...(valueParams.isErr() ? valueParams.error : [])],
+      written: [],
+    }
   }
 
   const expected: Array<GeneratedFile & { readonly base: string }> = [
+    { path: VALUE_PARAMS_PATH, text: valueParams.value, base: options.schemaDir },
     ...bundles(collected.shapes, collected.commands).flatMap((bundle) =>
       emitModel(bundle, model).map((file) => ({ ...file, base: options.root })),
     ),

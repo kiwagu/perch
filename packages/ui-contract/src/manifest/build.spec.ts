@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { VISIBILITY_VALUES } from '../anchors'
+import { withDerivedInputs } from '../files'
 import { manifestSchema } from '../schemas'
 
 import { buildManifest } from './build'
@@ -72,6 +73,7 @@ describe('buildManifest', () => {
       screen: 'sample',
       binding: { model: 'thing.title' },
       holdsInput: true,
+      value: { type: 'string', minLength: 1, maxLength: 80 },
     })
     expect(manifest.ids['sample.save-button']).toMatchObject({
       kind: 'button',
@@ -108,6 +110,17 @@ describe('buildManifest', () => {
       fields: { failed: 'sample.title-input' },
     })
     expect(manifestSchema.safeParse(built).success).toBe(true)
+
+    screen.anchors['sample.save-error'] = {
+      kind: 'error',
+      codes: ['failed'],
+      fields: { failed: 'form' },
+    }
+
+    const toForm = buildManifest({ ...withFields, product: PRODUCT, now: NOW })
+
+    expect(toForm.ids['sample.save-error']?.fields).toEqual({ failed: 'form' })
+    expect(manifestSchema.safeParse(toForm).error?.issues).toBeUndefined()
   })
   it('writes the description the engine says where the file writes none, and keeps a written one', () => {
     const withSecret = fixtureContract()
@@ -131,6 +144,58 @@ describe('buildManifest', () => {
     )
     expect(anchors?.['sample.page']?.description).toBe('The root of the screen.')
     expect(anchors?.['sample.save-button']).not.toHaveProperty('description')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('carries a ranked message with its codes in their order, the first shown of those raised', () => {
+    const ranked = fixtureContract()
+    const screen = ranked.screens.screens.find(({ id }) => id === 'sample')
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no sample screen')
+    }
+
+    screen.anchors['sample.status-message'] = {
+      kind: 'message',
+      codes: ['failed', 'saved'],
+      ranked: true,
+    }
+
+    const built = buildManifest({ ...ranked, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.status-message']).toEqual({
+      kind: 'message',
+      screen: 'sample',
+      codes: ['failed', 'saved'],
+      ranked: true,
+    })
+    expect(built.ids['sample.page']).not.toHaveProperty('ranked')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('carries when an element shows beside others, as written, and leaves it out elsewhere', () => {
+    const showing = fixtureContract()
+    const screen = showing.screens.screens.find(({ id }) => id === 'sample')
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no sample screen')
+    }
+
+    screen.anchors['sample.status-message'] = { kind: 'message', codes: ['failed', 'saved'] }
+    screen.anchors['sample.retry-button'] = {
+      kind: 'button',
+      with: [{ 'sample.status-message': ['failed'] }],
+      without: ['sample.list'],
+    }
+
+    const built = buildManifest({ ...showing, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.retry-button']).toEqual({
+      kind: 'button',
+      screen: 'sample',
+      with: [{ 'sample.status-message': ['failed'] }],
+      without: ['sample.list'],
+    })
+    expect(built.ids['sample.page']).not.toHaveProperty('with')
+    expect(built.ids['sample.page']).not.toHaveProperty('without')
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
   it("names in an error's description the actions its flow invokes against it", () => {
@@ -173,6 +238,25 @@ describe('buildManifest', () => {
     expect(manifest.routeParams).toEqual({
       '/sample/$key': contract.screens.screens[0]?.bindings[0]?.params,
     })
+  })
+  it('carries no terms for a contract that writes no terms file', () => {
+    expect(manifest.terms).toBeUndefined()
+    expect(Object.keys(manifest)).not.toContain('terms')
+  })
+  it('carries the terms file verbatim, after the vocabulary, for a contract that writes one', () => {
+    const terms = {
+      contexts: { sample: { meaning: 'The sample platform.' } },
+      terms: { account: { meaning: 'Whoever signs in.', synonyms: ['user'], storage: 'identity' } },
+      roles: { guest: { meaning: 'Nobody is signed in.' }, member: { meaning: 'A member.' } },
+    }
+    const withTerms = buildManifest({ ...contract, terms, product: PRODUCT, now: NOW })
+
+    expect(withTerms.terms).toEqual(terms)
+    expect(Object.keys(withTerms).slice(4, 6)).toEqual(['contract', 'terms'])
+    expect(manifestSchema.safeParse(withTerms).success).toBe(true)
+  })
+  it('tells an agent where the terms are', () => {
+    expect(manifest.contract.instructions.model).toContain('`terms`')
   })
   it('gives each binding of a screen its example link', () => {
     const [binding] = contract.screens.screens[0]?.bindings ?? []
@@ -236,6 +320,23 @@ describe('the questions before destructive actions', () => {
     )
     expect(derived.contract.codes).not.toHaveProperty('<object>-<verb>')
     expect(derived.ids['sample.save-button']?.asks).toEqual(asks)
+    expect(manifestSchema.safeParse(derived).success).toBe(true)
+  })
+})
+
+describe('the question before a leave a control makes', () => {
+  it('is carried on its control, with the fields the leave loses', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+    const leaves = { dialog: 'app-shell.leave-dialog', loses: ['sample.title-input'] }
+
+    if (sample?.anchors['sample.save-button'] !== undefined) {
+      sample.anchors['sample.save-button'].leaves = leaves
+    }
+
+    const derived = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(derived.ids['sample.save-button']?.leaves).toEqual(leaves)
     expect(manifestSchema.safeParse(derived).success).toBe(true)
   })
 })
@@ -317,6 +418,100 @@ describe('a field that starts with a search parameter', () => {
   })
 })
 
+describe('the value a field takes', () => {
+  it('carries on an input the value its bindings derive, and none on a button', () => {
+    const base = fixtureContract()
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(base.screens.screens[0]?.anchors['sample.title-input']).not.toHaveProperty('value')
+    expect(built.ids['sample.title-input']?.value).toStrictEqual({
+      type: 'string',
+      minLength: 1,
+      maxLength: 80,
+    })
+    expect(built.ids['sample.save-button']).not.toHaveProperty('value')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('carries on a textarea the platform value its parameter refers to, narrowed', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    base.screens.platform.values = {
+      note: { type: 'string', maxLength: 500, description: 'A note.' },
+    }
+    base.screens.platform.actions['report'] = {
+      description: 'Reports a thing.',
+      params: { reason: { value: 'note', minLength: 1, description: 'Why.' } },
+      result: 'the report is in',
+      codes: ['failed'],
+      changes: [],
+    }
+    sample.anchors['sample.reason-textarea'] = {
+      kind: 'textarea',
+      binding: { action: 'platform.report', params: { reason: 'sample.reason-textarea' } },
+    }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.reason-textarea']?.value).toStrictEqual({
+      type: 'string',
+      minLength: 1,
+      maxLength: 500,
+    })
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('carries each invariant once, with the actions that name it derived, the codes as written', () => {
+    const base = fixtureContract()
+    const codes = {
+      'device-limit': { invariant: 'device-limit' },
+      failed: 'anything else fails',
+    }
+
+    base.screens.platform.invariants = {
+      'device-limit': { rule: 'Ten devices at most at once.', refuses: 'device-limit' },
+    }
+    base.screens.platform.actions['report'] = {
+      description: 'Reports a thing.',
+      params: {},
+      result: ['the report is in', 'past the limit: nothing is reported'],
+      codes,
+      changes: [],
+    }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.platform.invariants).toEqual({
+      'device-limit': {
+        rule: 'Ten devices at most at once.',
+        refuses: 'device-limit',
+        actions: ['report'],
+      },
+    })
+    expect(built.platform.actions['report']?.codes).toEqual(codes)
+    expect(base.screens.platform.invariants['device-limit']).not.toHaveProperty('actions')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('gives no value to a select, which is no text field', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    sample.anchors['sample.size-select'] = { kind: 'select', binding: { model: 'thing.size' } }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.size-select']).toMatchObject({ kind: 'select' })
+    expect(built.ids['sample.size-select']).not.toHaveProperty('value')
+  })
+})
+
 describe('a composite a secret input opts into', () => {
   it('carries the opt-in and the derived anchors in ids, and the composites in the contract', () => {
     const base = fixtureContract()
@@ -386,5 +581,126 @@ describe('a composite a secret input opts into', () => {
     expect(built.contract.composites).toEqual(base.vocabulary.composites)
     expect(built.ids['sample.title-input']).not.toHaveProperty('composite')
     expect(built.ids['sample.title-input']).not.toHaveProperty('derivedFrom')
+  })
+})
+
+describe('the states a field carries', () => {
+  const states = { unsaved: 'held, not yet saved', saved: 'what is stored' }
+
+  function withFields(fieldStates: Record<string, string>, quiet = false) {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    sample.anchors['sample.title-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { model: 'thing.title' },
+    }
+    sample.anchors['sample.note-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { action: 'thing.createThing' },
+      ...(quiet ? { marksState: false } : {}),
+    }
+    sample.anchors['sample.save-button'] = { kind: 'button' }
+
+    return buildManifest({
+      ...base,
+      vocabulary: { ...base.vocabulary, fieldStates },
+      product: PRODUCT,
+      now: NOW,
+    })
+  }
+
+  it('lists on a model-bound input both states and on an action-bound input unsaved', () => {
+    const built = withFields(states)
+
+    expect(built.ids['sample.title-input']?.fieldStates).toEqual(['unsaved', 'saved'])
+    expect(built.ids['sample.note-input']?.fieldStates).toEqual(['unsaved'])
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('leaves a button without the key', () => {
+    expect(withFields(states).ids['sample.save-button']).not.toHaveProperty('fieldStates')
+  })
+  it("leaves a select whose own change moves its screen's search without the key, holding no input", () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+    const editing = sample?.flow?.states['editing']
+
+    if (sample === undefined || editing === undefined || editing.type === 'parallel') {
+      expect.unreachable('the fixture has a sample screen whose flow edits')
+    }
+
+    sample.anchors['sample.kind-select'] = { kind: 'select', binding: { search: 'kind' } }
+    editing.on = {
+      ...editing.on,
+      'sample.kind-select': {
+        target: 'editing',
+        actions: [
+          {
+            type: 'navigate',
+            params: { to: '/sample/$key', search: { kind: { anchor: 'sample.kind-select' } } },
+          },
+        ],
+      },
+    }
+    sample.anchors = withDerivedInputs(sample).anchors
+
+    const built = buildManifest({
+      ...base,
+      vocabulary: { ...base.vocabulary, fieldStates: states },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(built.ids['sample.kind-select']).toMatchObject({ kind: 'select', holdsInput: false })
+    expect(built.ids['sample.kind-select']).not.toHaveProperty('fieldStates')
+    expect(built.ids['sample.title-input']?.fieldStates).toEqual(['unsaved', 'saved'])
+  })
+  it('carries marksState: false only on the field that writes it, its states unchanged', () => {
+    const quiet = withFields(states, true)
+
+    expect(quiet.ids['sample.note-input']?.marksState).toBe(false)
+    expect(quiet.ids['sample.note-input']?.fieldStates).toEqual(['unsaved'])
+    expect(quiet.ids['sample.title-input']).not.toHaveProperty('marksState')
+    expect(withFields(states).ids['sample.note-input']).not.toHaveProperty('marksState')
+    expect(manifestSchema.safeParse(quiet).error?.issues).toBeUndefined()
+  })
+  it("publishes the vocabulary's table in the contract", () => {
+    expect(withFields(states).contract.fieldStates).toEqual(states)
+  })
+  it('adds nothing to the manifest of a vocabulary without the section', () => {
+    const built = withFields({})
+
+    expect(built.contract.fieldStates).toEqual({})
+    expect(Object.values(built.ids).some((id) => 'fieldStates' in id)).toBe(false)
+  })
+  it('leaves the real ids byte-equal to what they were, the key aside', () => {
+    const repository = contractAt(REPOSITORY_ROOT)
+    const without = buildManifest({
+      ...repository,
+      vocabulary: { ...repository.vocabulary, fieldStates: {} },
+      product: PRODUCT,
+      now: NOW,
+    })
+    const declaring = buildManifest({
+      ...repository,
+      vocabulary: { ...repository.vocabulary, fieldStates: states },
+      product: PRODUCT,
+      now: NOW,
+    })
+    const added = Object.values(declaring.ids).filter((id) => 'fieldStates' in id)
+    const stripped = Object.fromEntries(
+      Object.entries(declaring.ids).map(([anchor, { fieldStates: _, ...rest }]) => [anchor, rest]),
+    )
+
+    expect(without.contract.fieldStates).toEqual({})
+    expect(Object.values(without.ids).some((id) => 'fieldStates' in id)).toBe(false)
+    expect(added.length).toBeGreaterThan(0)
+    expect(JSON.stringify(stripped)).toBe(JSON.stringify(without.ids))
   })
 })

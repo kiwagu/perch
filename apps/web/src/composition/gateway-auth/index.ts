@@ -7,7 +7,23 @@
  * the gateway sign out while it was offline is signed out on its own later.
  */
 
-export { type AccountSession, type Fetcher, type GatewayAuth, gatewayAuth } from './client'
+export type { DeletedAccount } from './account-deletion'
+export type {
+  AccountSession,
+  CodeConfirmation,
+  Fetcher,
+  GatewayAuth,
+  PasskeyAssertion,
+} from './auth.port'
+export { gatewayAuth } from './client'
 export type { EmailConfirmation } from './email-confirmation'
-export type { AccountSignedUpAs, NamedDevice, SignedInDevice } from './signed-in'
+export type { PasskeyOptions } from './passkey-sign-in'
+export type { PasswordReset } from './password-reset'
+export type {
+  AccountSignedUpAs,
+  NamedDevice,
+  SignedInDevice,
+  SignInAnswer,
+  StepAnswer,
+} from './signed-in'
 export type { EmailVerification, VerifiedAccount } from './verification'

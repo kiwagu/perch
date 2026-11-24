@@ -10,12 +10,16 @@ import {
   formatProblem,
   MODEL_FILE,
   PLATFORM_FILE,
+  REFERENCE_FILE,
+  readDescriptions,
   SCREEN_SCHEMA_FILE,
+  SCREENS_DIR,
   scenarioFile,
   VOCABULARY_FILE,
 } from '../files'
+import { DESCRIPTION_PURPOSES } from '../schemas'
 
-import { checkContract } from './run'
+import { checkContract, loadContract } from './run'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 const SCENARIO = 'sample/base/thing'
@@ -55,7 +59,9 @@ describe('checkContract', () => {
   it('stops at the problems of loading, sorted by file and line', () => {
     rmSync(join(root, MODEL_FILE))
     edit(VOCABULARY_FILE, (text) =>
-      text.replace('## Roles', '## Roles\n\n## Roles').replace('## Kinds', '## Kind list'),
+      text
+        .replace('## Composites', '## Composites\n\n## Composites')
+        .replace('## Kinds', '## Kind list'),
     )
     edit(PLATFORM_FILE, (text) => text.replace('version: 1', 'version: one'))
     edit(scenarioFile(SCENARIO), (text) => text.replace('  A: member', '  a: member'))
@@ -64,22 +70,31 @@ describe('checkContract', () => {
     expect(printed()).toEqual([
       'contract/domain/activities/thing.yaml:1: its id is "things", so its file is contract/domain/activities/things.yaml',
       'contract/domain/model.schema.json:1: cannot read the file',
-      'contract/domain/platform.yaml:1: version: Invalid input: expected 1',
+      'contract/domain/platform.yaml:1: version: Invalid input: expected number, received string',
       'contract/vocabulary.md:1: missing section "Kinds"',
       'contract/vocabulary.md:9: unknown section "Kind list"',
-      'contract/vocabulary.md:75: section "Roles" appears twice',
+      'contract/vocabulary.md:84: section "Composites" appears twice',
       'tests/e2e/scenarios/sample/base/thing.md:5: devices.a: Invalid key in record',
     ])
   })
-  it('runs every rule and the schema drift once the files load', () => {
+  it("runs every rule, the schema drift and the reference's drift once the files load", () => {
     edit(VOCABULARY_FILE, (text) =>
       text.replace('| `saved` |', '| `spare` | `sample.save-button` | a spare code |\n| `saved` |'),
     )
     edit(SCREEN_SCHEMA_FILE, (text) => `${text}\n`)
+    edit(REFERENCE_FILE, (text) => `${text}\n`)
 
     expect(printed()).toEqual([
+      "contract/REFERENCE.md:1: differs from the engine's schemas; run `bun run contract:schemas`",
       'contract/schemas/screen.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
       'contract/vocabulary.md:1: code "spare" is documented but unused',
+    ])
+  })
+  it('holds each link of a guide into the reference to an anchor of it', () => {
+    writeFileSync(join(root, 'contract/README.md'), '# Guide\n\n[x](contract/REFERENCE.md#gone)\n')
+
+    expect(printed()).toEqual([
+      'contract/README.md:3: links to contract/REFERENCE.md#gone, which is no anchor of the reference',
     ])
   })
   it('holds the activities to the screens they visit', () => {
@@ -119,11 +134,92 @@ describe('checkContract', () => {
       'contract/domain/platform.yaml:1: actions["sign-out"].notices[0].link: Unrecognized key: "search"',
     ])
   })
+  it('holds a platform value to the budget, and a parameter to the values it may refer to', () => {
+    edit(PLATFORM_FILE, (text) =>
+      text
+        .replace(
+          'actions:\n',
+          `values:\n  flag:\n    type: boolean\n    description: ${'x'.repeat(201)}\nactions:\n`,
+        )
+        .replace(
+          '        type: boolean\n        description: Drop',
+          '        value: flags\n        description: Drop',
+        ),
+    )
+
+    expect(printed()).toEqual([
+      'contract/domain/platform.yaml:1: actions["sign-out"].params.forgetUnsent.value: "flags" is no value of platform.values',
+      `contract/domain/platform.yaml:6: values.flag.description: the description of platform value flag is 201 characters, past its budget of 200; its purpose: "${DESCRIPTION_PURPOSES.value}"`,
+    ])
+  })
+  it('holds a contract from version 3 to where its platform codes belong, and its errors to them', () => {
+    const toVersion = (version: number): void => {
+      edit(PLATFORM_FILE, (text) => text.replace(/^version: \d+$/m, `version: ${version}`))
+      edit(VOCABULARY_FILE, (text) => text.replace('Contract version: 1\n\n', ''))
+    }
+    const unbound = '        type: string\n        description: Drop'
+
+    edit(PLATFORM_FILE, (text) =>
+      text.replace('        type: boolean\n        description: Drop', unbound),
+    )
+    toVersion(3)
+
+    expect(printed()).toEqual([
+      'contract/domain/platform.yaml:1: actions["sign-out"].params.forgetUnsent: a string that refers to no value and writes no constraint: refer to a value (`value: <name>`) or write a constraint beside its type',
+    ])
+
+    toVersion(2)
+
+    expect(printed()).toEqual([])
+
+    edit(`${SCREENS_DIR}/sample/$key.yaml`, (text) =>
+      text.replace(
+        '  sample.list:\n',
+        '  sample.error:\n    kind: error\n    codes: [ title-too-long, failed ]\n    fields: { title-too-long: sample.title-input }\n  sample.list:\n',
+      ),
+    )
+    toVersion(3)
+
+    expect(printed()).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.error"].fields["title-too-long"]: "sample.title-input" is derived: leave it out',
+    ])
+  })
+  it('holds the reads an action changes to the platform actions the lists read', () => {
+    edit(PLATFORM_FILE, (text) => text.replace('    changes: []\n', '    changes: [ sign-out ]\n'))
+    edit(MODEL_FILE, (text) =>
+      text.replace(
+        '"updateThing": { "params": { "id": "$id", "title": "title" }, "changes": [] }',
+        '"updateThing": { "params": { "id": "$id", "title": "title" }, "changes": ["sign-out"] }',
+      ),
+    )
+
+    expect(printed()).toEqual([
+      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].actions.updateThing.changes[0]: "sign-out" is the source of no list, section or table: changes names the reads whose answer differs once the action succeeds: other platform actions, each once, that a list, a section or a table takes as its source',
+      'contract/domain/platform.yaml:1: actions["sign-out"].changes[0]: "sign-out" is the action itself: changes names the reads whose answer differs once the action succeeds: other platform actions, each once, that a list, a section or a table takes as its source',
+    ])
+  })
   it('refuses a permission role of the model that the vocabulary does not list', () => {
     edit(MODEL_FILE, (text) => text.replace('"member": { "create"', '"memebr": { "create"'))
 
     expect(printed()).toEqual([
-      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the contract',
+    ])
+  })
+  it('loads the descriptions as the domain files write them', () => {
+    const { contract } = loadContract(root)
+
+    expect(contract?.descriptions).toEqual(readDescriptions(root).descriptions)
+    expect(contract?.descriptions.map(({ place }) => place)).toContain('sample.page')
+  })
+  it('holds every written description to its budget, at its line in its file', () => {
+    edit('contract/domain/screens/sample/$key.yaml', (text) =>
+      text.replace('The root of the screen.', `The root${' of the screen'.repeat(14)}.`),
+    )
+    edit(MODEL_FILE, (text) => text.replace('Adds a thing.', `Adds${' a thing'.repeat(25)}.`))
+
+    expect(printed().map((problem) => problem.replace(/; its purpose: .*$/, ''))).toEqual([
+      'contract/domain/model.schema.json:16: $defs.thing["x-perch"].actions.createThing.description: the description of model action thing.createThing is 205 characters, past its budget of 200',
+      'contract/domain/screens/sample/$key.yaml:11: anchors["sample.page"].description: the description of sample.page is 205 characters, past its budget of 200',
     ])
   })
 })

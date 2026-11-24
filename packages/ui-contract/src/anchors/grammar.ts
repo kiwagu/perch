@@ -28,10 +28,46 @@ export const FIELD_KINDS: ReadonlySet<string> = new Set([
   'switch',
 ])
 
+/**
+ * What an error's `fields` names for a code that concerns the form as a whole rather than one of
+ * its fields: never an anchor, which has two segments at least.
+ */
+export const WHOLE_FORM = 'form'
+
+/**
+ * The kinds a person acts on, whose event a flow handles: a button, a link, a tab and the
+ * field kinds. A cell, an entry or a container is no control, whatever it is nested in.
+ */
+export const CONTROL_KINDS: ReadonlySet<string> = new Set(['button', 'link', 'tab', ...FIELD_KINDS])
+
+/** The kinds a person types into: each takes the value its bindings give it (`fieldValueOf`). */
+export const TEXT_FIELD_KINDS: ReadonlySet<string> = new Set(['input', 'textarea'])
+
+/**
+ * The controls a press or a choice drives, enabled by their screen's machine: disabled in a state
+ * that renders one and does not handle its event. The `CONTROL_KINDS` but a link and a text field.
+ */
+export const ENABLED_BY_STATE_KINDS: ReadonlySet<string> = new Set(
+  [...CONTROL_KINDS].filter((kind) => kind !== 'link' && !TEXT_FIELD_KINDS.has(kind)),
+)
+
+/** The part an anchor sits in: the anchor without its last segment. */
+export const partOf = (anchor: string): string => anchor.slice(0, anchor.lastIndexOf('.'))
+
+/** The kinds that show entries, the only ones a `source` gives entries to. */
+export const LISTING_KINDS: ReadonlySet<string> = new Set(['list', 'section', 'table'])
+
+/**
+ * Whether `other` is `anchor` itself or an anchor under it (`<anchor>.<rest>`): a declared
+ * anchor nested in it, such as a composite's item under its list, or a part derived from it.
+ */
+export const isUnder = (anchor: string, other: string): boolean =>
+  other === anchor || other.startsWith(`${anchor}.`)
+
 /** The longest screen name the anchor starts with on a segment boundary, if any. */
 export const screenOf = (anchor: string, screenNames: readonly string[]): string | undefined =>
   screenNames
-    .filter((name) => anchor === name || anchor.startsWith(`${name}.`))
+    .filter((name) => isUnder(name, anchor))
     .reduce<string | undefined>(
       (longest, name) => (longest === undefined || name.length > longest.length ? name : longest),
       undefined,

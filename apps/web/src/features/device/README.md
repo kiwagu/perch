@@ -23,7 +23,7 @@ composition root, the session token and this device's id on every call). Layers:
   held to `contract/domain/screens/devices.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`: a sign-out is an invoke of its action, the buttons are enabled
   while the machine's state takes them (none while a sign-out runs), the dialog is open while
-  the flow confirms, and the hook runs the move to sign-in. Every device signed in, and those signed out within 30 days, with the label each
+  the state renders it (`renders`), and the hook runs the move to sign-in. Every device signed in, and those signed out within 30 days, with the label each
   gave itself, when it was last seen (and signed out), this device marked "This device".
   Another device signs out from its row (its session ended, its channel closed), after which
   the list is read again; this device has no such button and signs out through its session

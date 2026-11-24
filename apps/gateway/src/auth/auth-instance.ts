@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { bearer } from 'better-auth/plugins'
+import { twoFactor } from 'better-auth/plugins/two-factor'
 
 import type { LocalDb } from '@workspace/data'
 import { surrealAuthAdapter } from '@workspace/data/better-auth-adapter'
@@ -12,11 +13,15 @@ import type { MailPort } from '../mail'
 
 import { ResetLinks } from './account-links'
 import { AccountMails } from './account-mails'
+import { ADMIN_PATHS } from './admin-paths'
+import { adminPlugin } from './admin-plugin'
 import { type AuthLog, authErrorReporter, authLogger } from './auth-log'
 import { AUTH_MODELS, generateAuthId } from './auth-models'
+import { passkeyPlugin } from './passkey-plugin'
 import { hashPassword, verifyPassword } from './password-hash'
 import { RESET_LINK_LIFETIME_S, resetMailer } from './reset-mail'
 import { sessionHooks } from './session-hooks'
+import { storageFailuresTold } from './storage-failures'
 import { verificationMailer } from './verification-mail'
 
 /**
@@ -24,6 +29,12 @@ import { verificationMailer } from './verification-mail'
  * instance and the gateway's own extension of a session (`DeviceSessions.seen`) both use it.
  */
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * How many devices one account keeps signed in at once: a sign-in that would bring it past them
+ * asks first, then signs out the device seen least recently (`AuthSessions.admit`).
+ */
+export const DEVICE_LIMIT = 10
 
 /** How long a verification link verifies, in seconds: a day. */
 export const VERIFICATION_LINK_LIFETIME_S = 24 * 60 * 60
@@ -55,14 +66,35 @@ export function authOptions(options: AuthInstanceOptions) {
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [...options.trustedOrigins],
-    database: surrealAuthAdapter(options.local),
-    plugins: [bearer()],
+    // A passkey or a session the directory did not take is a failure of the service, which the
+    // passkey plugin would otherwise answer as a refusal of the device's ceremony.
+    database: storageFailuresTold(surrealAuthAdapter(options.local), options.log),
+    // The admin plugin keeps an account's role and ban and refuses a banned account a session;
+    // none of its endpoints is reachable (`adminPlugin`, `disabledPaths` below). The two-factor
+    // plugin keeps an account's second factor and answers a sign-in by password of an account
+    // whose factor is on with a challenge instead of a session; its own lockout is off, as the
+    // gateway counts a sign-in's wrong codes with its wrong passwords. The passkey plugin keeps
+    // an account's passkeys (`passkeyPlugin`). The mount reaches their endpoints only through the
+    // gateway's own calls.
+    plugins: [
+      bearer(),
+      adminPlugin(),
+      twoFactor({
+        issuer: 'Perch',
+        accountLockout: { enabled: false },
+        schema: {
+          user: { fields: { twoFactorEnabled: 'two_factor_enabled' } },
+          twoFactor: AUTH_MODELS.twoFactor,
+        },
+      }),
+      passkeyPlugin(options.publicUrl),
+    ],
     emailAndPassword: {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
       // A new password's length, as the rules of a new password set it (the auth mount checks
-      // the rest at sign-up). Better Auth checks it on a new password only, never at a sign-in, so
-      // an account whose password was set before the rules still signs in.
+      // the rest at sign-up). Better Auth checks it on a new password only: at a sign-in a
+      // password of another length is no account's, so it is refused as a wrong one.
       minPasswordLength: PASSWORD_LENGTH.min,
       maxPasswordLength: PASSWORD_LENGTH.max,
       // No session before the email is verified: a sign-up answers with no token, a taken email
@@ -118,8 +150,15 @@ export function authOptions(options: AuthInstanceOptions) {
       additionalFields: {
         device: { type: 'string', required: true, input: false },
         label: { type: 'string', required: true, input: false },
+        // A sign-in's session until the gateway admits it against the limit of devices, and a
+        // verification's until the gateway admits it: no caller reads a session that waits.
+        pending: { type: 'boolean', required: false, input: false, defaultValue: false },
       },
       expiresIn: SESSION_LIFETIME_MS / 1000,
+      // A session of any age may add a passkey: a device stays signed in for months, and
+      // Better Auth's default would ask for a session younger than a day. The mount serves none of
+      // Better Auth's other endpoints that ask for a fresh session.
+      freshAge: 0,
       // Better Auth's refresh stays off, so it never writes `expires_at` after sign-in: its write is
       // unconditional and could revive a session the gateway ended. The gateway extends a session
       // itself, where its device is seen.
@@ -138,6 +177,10 @@ export function authOptions(options: AuthInstanceOptions) {
     },
     advanced: {
       database: { generateId: generateAuthId },
+      // Better Auth checks a request's origin, its Fetch Metadata and its callback URLs in every
+      // environment, a test run included: its default skips them when `NODE_ENV` is `test` or
+      // `TEST` is true, which would leave a spec unable to meet the 403s it refuses with.
+      disableOriginCheck: false,
     },
     // Better Auth's bulk revocations end sessions by deleting their rows. `/revoke-sessions` deletes
     // them in one call, which the session hooks can refuse only at its first row, so it may end
@@ -147,12 +190,17 @@ export function authOptions(options: AuthInstanceOptions) {
     // to, and sets the password apart from them: the gateway changes a password itself, the new
     // password and every ending in one transaction (`AccountPasswords`). `/change-email` signs a
     // device in at its confirmation and mails through the verification mail: the gateway asks for
-    // and confirms a change itself (`EmailChanges`).
+    // and confirms a change itself (`EmailChanges`). Every endpoint of the admin plugin is switched
+    // off too, read from the plugin's own table (`ADMIN_PATHS`): the gateway keeps the plugin for
+    // its fields and its refusal of a banned account's session only. Its endpoints would set a
+    // role, ban, list, impersonate or remove an account outside the account's turns, and end
+    // sessions by deleting their rows, their sockets left open.
     disabledPaths: [
       '/revoke-sessions',
       '/revoke-other-sessions',
       '/change-password',
       '/change-email',
+      ...ADMIN_PATHS,
     ],
     // Better Auth's limiter restarts its count only after a pause as long as its window, so it
     // refuses an address's 21st request however slowly the 20 before it came; the auth mount

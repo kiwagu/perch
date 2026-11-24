@@ -12,28 +12,39 @@ import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
 import { trackedStore, useSettingsWrites } from '../../../../../platform/settings-writes'
 import { useDeviceTheme } from '../../../../../platform/theme'
+import { PASSKEYS_SERVICE } from '../../../application/passkeys.service'
 import { settingsShape } from '../../../application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../application/settings/settings.service'
 import {
   createSettingsMachine,
+  PASSKEYS_LIST,
   type SettingsValues,
+  TWO_FACTOR_SECTION,
 } from '../../../application/settings/settings-machine'
+import { TWO_FACTOR_SERVICE } from '../../../application/two-factor.service'
 
+import { DeletionFormView } from './deletion-form.view'
 import { type EmailFormValues, EmailFormView } from './email-form.view'
+import { PasskeysListView } from './passkeys-list.view'
 import { type PasswordFormValues, PasswordFormView } from './password-form.view'
+import { useSectionRead } from './section-read'
 import { SettingsView } from './settings.view'
+import { TwoFactorSectionView } from './two-factor-section.view'
 
 const EMPTY_PASSWORDS: PasswordFormValues = { current: '', password: '', confirmation: '' }
 const EMPTY_EMAIL: EmailFormValues = { email: '', password: '' }
 
 /**
  * The settings screen: its flow run as its machine over the account's settings, the theme this
- * device shows and the account's password and email, whose forms' values the page holds so that
- * the flow's `clear` empties them.
+ * device shows and the account's password, email, second factor, passkeys and deletion, whose
+ * forms' values the page holds so that the flow's `clear` empties them. The page reads the second
+ * factor and the passkeys as it opens and again each time the flow reads them.
  */
 export function SettingsContainer() {
   const session = useService(SESSION)
   const settings = useService(SETTINGS_SERVICE)
+  const twoFactor = useService(TWO_FACTOR_SERVICE)
+  const passkeys = useService(PASSKEYS_SERVICE)
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
     () => session.current(),
@@ -45,6 +56,13 @@ export function SettingsContainer() {
   const writes = useSettingsWrites()
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS)
   const [email, setEmail] = useState(EMPTY_EMAIL)
+  const [deletionPassword, setDeletionPassword] = useState('')
+  const [factorPassword, setFactorPassword] = useState('')
+  // Each clear of the flow starts the second factor's password field over, hidden.
+  const [factorPasswordClears, setFactorPasswordClears] = useState(0)
+  const [factorCode, setFactorCode] = useState('')
+  const factor = useSectionRead(() => twoFactor.read())
+  const listed = useSectionRead(() => passkeys.list())
   // What the machine's guards read, current before it is asked: kept beside it, never in its context.
   const live = useRef<SettingsValues & { readonly store: typeof row }>({
     held: false,
@@ -82,9 +100,16 @@ export function SettingsContainer() {
       changePassword: (currentPassword, password) =>
         session.changePassword(currentPassword, password),
       changeEmail: (address, password) => session.changeEmail(address, password),
+      requestAccountDeletion: (password) => session.requestAccountDeletion(password),
+      enableTwoFactor: (password) => twoFactor.enable(password),
+      confirmTwoFactor: (code, enrolment) => twoFactor.confirm(code, enrolment),
+      disableTwoFactor: (password) => twoFactor.disable(password),
+      renewCodes: (password) => twoFactor.renewCodes(password),
+      addPasskey: () => passkeys.add(),
+      removePasskey: (passkey) => passkeys.remove(passkey),
     })
-  }, [device.set, settings, writes, session])
-  const { state, send, submit, actor } = useScreenMachine(machine)
+  }, [device.set, settings, writes, session, twoFactor, passkeys])
+  const { state, send, submit, actor, can, renders } = useScreenMachine('user.settings', machine)
 
   // A chosen language is spoken at once, while its store runs.
   useEffect(() => {
@@ -93,7 +118,20 @@ export function SettingsContainer() {
     return () => spoken.unsubscribe()
   }, [actor, setLocale])
 
-  // A changed password empties its form, as the flow says.
+  // The flow reads the second factor and the passkeys again after the actions that change them.
+  useEffect(() => {
+    const read = actor.on('read', (event) => {
+      if (event.anchor === TWO_FACTOR_SECTION) {
+        factor.again()
+      } else if (event.anchor === PASSKEYS_LIST) {
+        listed.again()
+      }
+    })
+
+    return () => read.unsubscribe()
+  }, [actor, factor.again, listed.again])
+
+  // A changed password empties its form, and a deletion link sent its password, as the flow says.
   useFieldClears(actor, {
     'user.settings.password.current-password-input': () =>
       setPasswords((now) => ({ ...now, current: '' })),
@@ -101,6 +139,12 @@ export function SettingsContainer() {
       setPasswords((now) => ({ ...now, password: '' })),
     'user.settings.password.password-confirmation-input': () =>
       setPasswords((now) => ({ ...now, confirmation: '' })),
+    'user.settings.deletion.password-input': () => setDeletionPassword(''),
+    'user.settings.two-factor.password-input': () => {
+      setFactorPassword('')
+      setFactorPasswordClears((clears) => clears + 1)
+    },
+    'user.settings.two-factor.code-input': () => setFactorCode(''),
   })
 
   return (
@@ -108,20 +152,14 @@ export function SettingsContainer() {
       <SettingsView
         theme={device.theme}
         locale={locale}
-        canChooseTheme={state.can({ type: 'user.settings.theme-select', theme: 'light' })}
-        canChooseLocale={state.can({ type: 'user.settings.locale-select', locale: 'en' })}
+        can={can}
         onTheme={(theme) => send({ type: 'user.settings.theme-select', theme })}
         onLocale={(chosen) => send({ type: 'user.settings.locale-select', locale: chosen })}
       />
       <PasswordFormView
         values={passwords}
         error={state.context.passwordError}
-        canSave={state.can({
-          type: 'user.settings.password.save-button',
-          currentPassword: '',
-          password: '',
-          confirmation: '',
-        })}
+        can={can}
         onChange={(field, next) => {
           setPasswords(next)
 
@@ -151,7 +189,7 @@ export function SettingsContainer() {
         error={state.context.emailError}
         message={state.context.emailMessage}
         sentTo={state.context.sentTo}
-        canSend={state.can({ type: 'user.settings.email.send-button', email: '', password: '' })}
+        can={can}
         onChange={setEmail}
         onSend={() =>
           submit({
@@ -159,6 +197,58 @@ export function SettingsContainer() {
             email: email.email,
             password: email.password,
           })
+        }
+      />
+      <TwoFactorSectionView
+        factor={
+          factor.read.status === 'ready'
+            ? { status: 'ready', enabled: factor.read.value }
+            : { status: factor.read.status }
+        }
+        renders={renders}
+        can={can}
+        password={factorPassword}
+        passwordClears={factorPasswordClears}
+        code={factorCode}
+        error={state.context.twoFactorError}
+        start={state.context.start}
+        backupCodes={state.context.backupCodes}
+        onPassword={setFactorPassword}
+        onCode={setFactorCode}
+        onEnable={() =>
+          submit({ type: 'user.settings.two-factor.enable-button', password: factorPassword })
+        }
+        onDisable={() =>
+          send({ type: 'user.settings.two-factor.disable-button', password: factorPassword })
+        }
+        onRenew={() =>
+          send({ type: 'user.settings.two-factor.renew-codes-button', password: factorPassword })
+        }
+        onConfirm={() =>
+          submit({ type: 'user.settings.two-factor.confirm-button', code: factorCode })
+        }
+        onStop={() => send({ type: 'user.settings.two-factor.stop-button' })}
+        onHideCodes={() => send({ type: 'user.settings.two-factor.hide-codes-button' })}
+      />
+      <PasskeysListView
+        passkeys={
+          listed.read.status === 'ready'
+            ? { status: 'ready', items: listed.read.value }
+            : { status: listed.read.status }
+        }
+        error={state.context.passkeysError}
+        can={can}
+        onAdd={() => send({ type: 'user.settings.passkeys.add-button' })}
+        onRemove={(passkey) => send({ type: 'user.settings.passkeys.remove-button', passkey })}
+      />
+      <DeletionFormView
+        password={deletionPassword}
+        error={state.context.deletionError}
+        message={state.context.deletionMessage}
+        can={can}
+        onChange={setDeletionPassword}
+        onSend={() =>
+          submit({ type: 'user.settings.deletion.send-button', password: deletionPassword })
         }
       />
     </div>

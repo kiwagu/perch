@@ -1,22 +1,27 @@
 import type { ComponentType } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { FieldGroup } from '@workspace/ui/components/ui/field'
 
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
-/** Where the page leads once the email changed: by who is signed in here, or nowhere. */
-export type ConfirmEmailOnward = 'profile' | 'sign-in' | 'none'
+/** The anchors only some states of the flow render that the page shows or leaves out. */
+export type ConfirmEmailListed =
+  | 'user.confirm-email.status'
+  | 'user.confirm-email.profile-link'
+  | 'user.confirm-email.sign-in-link'
 
 export interface ConfirmEmailViewProps {
-  /** Whether the link is being checked. */
-  readonly confirming: boolean
+  /**
+   * Whether the flow's state renders an anchor: the status while the link is checked, then where
+   * the page leads once the email changed, by who is signed in here, or nowhere.
+   */
+  readonly renders: (anchor: ConfirmEmailListed) => boolean
   /** The code the message shows once the email is the new one. */
   readonly message?: 'email-changed' | undefined
-  /** Where the page leads with the message. */
-  readonly onward: ConfirmEmailOnward
   /** The code of the failure the error shows. */
   readonly error?: string | undefined
   readonly link?: ComponentType<PageLinkProps>
@@ -51,7 +56,7 @@ export function ConfirmEmailView(props: ConfirmEmailViewProps) {
       </CardHeader>
       <CardContent>
         <FieldGroup>
-          {props.confirming ? (
+          {props.renders('user.confirm-email.status') ? (
             <p role="status" data-testid="user.confirm-email.status" data-state="loading">
               {t('user.confirm-email.checking')}
             </p>
@@ -63,18 +68,18 @@ export function ConfirmEmailView(props: ConfirmEmailViewProps) {
               </AlertDescription>
             </Alert>
           ) : null}
-          {props.message && props.onward === 'profile' ? (
+          {props.renders('user.confirm-email.profile-link') ? (
             <Link
-              to="/me"
+              to={CONTRACT_ROUTES['user.profile']}
               className="text-sm underline"
               data-testid="user.confirm-email.profile-link"
             >
               {t('user.confirm-email.profile')}
             </Link>
           ) : null}
-          {props.message && props.onward === 'sign-in' ? (
+          {props.renders('user.confirm-email.sign-in-link') ? (
             <Link
-              to="/sign-in"
+              to={CONTRACT_ROUTES['user.sign-in']}
               className="text-sm underline"
               data-testid="user.confirm-email.sign-in-link"
             >

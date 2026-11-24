@@ -1,21 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import { identityIdFactory } from '@workspace/ids'
-
-import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
+import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
 import {
-  type KeptDevice,
-  type MemoryStorage,
-  memoryStorage,
-  saveDevice,
-  saveNotice,
-} from '../storage'
+  openTestWorld,
+  signUpVerified,
+  type TestWorld,
+  type TestWorldOptions,
+} from '../__fixtures__/session'
+import { memoryStorage, saveNotice } from '../storage'
 
-const ann: KeptDevice = {
-  identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  token: 'token-ann',
-  memberships: [],
-}
+const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
 
 const worlds: TestWorld[] = []
 
@@ -35,17 +29,6 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   worlds.push(opened)
 
   return opened
-}
-
-/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const other = memoryStorage()
-
-  saveDevice(other, device)
-
-  for (const key of ['perch.session.token', 'perch.session.identity']) {
-    storage.changeElsewhere(key, other.get(key))
-  }
 }
 
 describe("the sign-in page's word, the browser's and this tab's own", () => {
@@ -81,14 +64,25 @@ describe("the sign-in page's word, the browser's and this tab's own", () => {
     expect(tab.session.notice()).toBe('resend-after-sign-in')
   })
 
-  it("drops this tab's word once an account signs in in this tab after it was left by a guest", async () => {
-    const tab = await world()
+  it('ends every waiting word as an account signs in here, and a tab that hears it late keeps the words left since', async () => {
+    const storage = memoryStorage()
+    const auth = fakeGatewayAuth()
+    const signing = await world({ storage, auth })
+    const late = await world({ storage })
 
-    expect((await tab.session.restore()).isOk()).toBe(true)
-    tab.session.leaveNotice('signed-out-elsewhere')
-    signInElsewhere(tab.storage, ann)
+    late.session.leaveNotice('password-reset-elsewhere')
+    saveNotice(storage, 'signed-out-elsewhere')
 
-    await vi.waitFor(() => expect(tab.session.current()?.id).toBe(ann.identity.id))
-    expect(tab.session.notice()).toBeUndefined()
+    // Ann opens the link of her sign-up's mail in the first tab: an account signs in here.
+    expect((await signUpVerified(signing.session, auth, annSignUp)).isOk()).toBe(true)
+
+    expect(signing.session.notice()).toBeUndefined()
+    expect(late.session.notice()).toBeUndefined()
+
+    // The second tab's frame hears of it only once that session ended and left its word.
+    saveNotice(storage, 'password-changed-elsewhere')
+    late.session.dropNotice()
+
+    expect(late.session.notice()).toBe('password-changed-elsewhere')
   })
 })

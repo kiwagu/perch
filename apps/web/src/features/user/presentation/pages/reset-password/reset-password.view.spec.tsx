@@ -2,22 +2,40 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { renderWithProviders } from '../../../../../test-utils'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
 import es from '../../i18n/user.es.json'
 
-import { ResetPasswordView, type ResetPasswordViewProps } from './reset-password.view'
+import {
+  type ResetPasswordListed,
+  ResetPasswordView,
+  type ResetPasswordViewProps,
+} from './reset-password.view'
 
+/** What a state renders of the anchors only some render: `anchor` alone. */
+const only = (anchor: ResetPasswordListed) => (asked: ResetPasswordListed) => asked === anchor
+
+/** Renders the view in a state that renders the form, unless `props` says otherwise. */
 function renderView(props: Partial<ResetPasswordViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const handlers = {
     onTypePassword: vi.fn(),
     onSubmit: vi.fn(() => Promise.resolve(true)),
   }
 
-  renderWithProviders(<ResetPasswordView linkDead={false} canSubmit {...handlers} {...props} />, {
-    locale,
-    es,
-  })
+  renderWithFacts(
+    <ResetPasswordView
+      renders={only('user.reset-password.form')}
+      can={() => true}
+      {...handlers}
+      {...props}
+    />,
+    { locale, es },
+  )
 
   return handlers
 }
@@ -61,6 +79,14 @@ describe('ResetPasswordView', () => {
     expect(onSubmit).toHaveBeenCalledWith({ password: 'Secret-new1', confirmation: 'Secret-new1' })
   })
 
+  it('gives the password and its confirmation what the contract says of them', () => {
+    renderView()
+
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([PASSWORD, CONFIRMATION]),
+    )
+  })
+
   it('renders the eye of both passwords', () => {
     renderView()
 
@@ -84,6 +110,17 @@ describe('ResetPasswordView', () => {
     expect(input(field).closest('[data-slot="field"]')?.contains(error)).toBe(true)
   })
 
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'password-rejected': 'data:PASSWORD_REJECTED',
+      'passwords-differ': RESET_PASSWORDS_DIFFER,
+    }
+
+    expectEachCodeMarksItsField('user.reset-password.error', (code) =>
+      renderView({ error: failures[code] }),
+    )
+  })
+
   it('says a refusal that concerns no field above the form', () => {
     renderView({ error: 'data:RATE_LIMITED' })
 
@@ -99,34 +136,48 @@ describe('ResetPasswordView', () => {
   ])(
     'takes the form away for a link that does not work, offering a new one: %s',
     (failure, code) => {
-      renderView({ error: failure, linkDead: true })
+      renderView({ error: failure, renders: only('user.reset-password.forgot-link') })
 
       expect(screen.getByTestId('user.reset-password.error').getAttribute('data-code')).toBe(code)
       expect(screen.getByTestId('user.reset-password.forgot-link').getAttribute('href')).toBe(
-        '/forgot-password',
+        CONTRACT_ROUTES['user.forgot-password'],
       )
       expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
     },
   )
 
   it('says the password is the new one beside the link to sign in', () => {
-    renderView({ message: 'password-reset' })
+    renderView({ message: 'password-reset', renders: only('user.reset-password.sign-in-link') })
 
     expect(screen.getByTestId('user.reset-password.message').getAttribute('data-code')).toBe(
       'password-reset',
     )
     expect(screen.getByTestId('user.reset-password.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
   })
 
-  it('holds the submit while the flow does not take it', () => {
-    renderView({ canSubmit: false })
+  it('holds the submit while the flow does not take its event', () => {
+    renderView({ can: () => false })
 
     expect(
       (screen.getByTestId('user.reset-password.submit-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the submit with both passwords as typed', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ can })
+    type(PASSWORD, 'Secret-new1')
+    type(CONFIRMATION, 'Secret-new1')
+
+    expect(can).toHaveBeenLastCalledWith({
+      type: 'user.reset-password.submit-button',
+      password: 'Secret-new1',
+      confirmation: 'Secret-new1',
+    })
   })
 
   it('speaks Spanish', () => {
@@ -135,5 +186,24 @@ describe('ResetPasswordView', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       es['user.reset-password.title'],
     )
+  })
+})
+
+describe('the state colour of the fields', () => {
+  it.each([PASSWORD, CONFIRMATION])('draws none on %s', (testId) => {
+    renderWithFacts(
+      <UnsavedInputScope>
+        <ResetPasswordView
+          renders={only('user.reset-password.form')}
+          can={() => true}
+          onTypePassword={() => {}}
+          onSubmit={() => Promise.resolve(true)}
+        />
+      </UnsavedInputScope>,
+    )
+
+    type(testId, 'Abcdefghi1!')
+
+    expectNoStateColour(screen.getByTestId(testId))
   })
 })

@@ -11,6 +11,7 @@ import {
 import { z } from '@workspace/zod'
 
 import { messageOf } from './failure'
+import { heldBack } from './held-back'
 import localTailStatement from './surql/local-tail.surql'
 import outboxAckStatement from './surql/outbox-ack.surql'
 import outboxReadStatement from './surql/outbox-read.surql'
@@ -189,9 +190,16 @@ export class RegionStore {
       .map(() => undefined)
   }
 
-  /** Appends a server update to the update log, after every local update so far; the outbox does not take it. */
+  /**
+   * Appends a server update to the update log, after every local update so far; the outbox does
+   * not take it. A local update that fails to persist holds it back (`HeldBack`), while a store
+   * the device reset under it answers `data:REGION_STALE` as every other write does.
+   */
   appendRemote(bytes: Uint8Array): ResultAsync<void, DataError> {
     return this.flush()
+      .mapErr((failure) =>
+        failure.code === 'data:WRITE_FAILED' ? heldBack(this.region, failure) : failure,
+      )
       .andThen(() =>
         this.#query(
           importStatement,

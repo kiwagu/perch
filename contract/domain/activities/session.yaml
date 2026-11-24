@@ -15,12 +15,12 @@ meta:
     noUnsentChanges: this device holds no changes the server has not received
 states:
   sign-in:
-    description: The sign-in page, where a visitor signs in or creates an account.
+    description: The sign-in page, where a guest signs in or creates an account.
     meta: { screen: user.sign-in, address: { path: /sign-in } }
     on:
       user.sign-in.submit-button:
         target: profile
-        description: The account signs in and the profile opens. In the mode sign-up the account is created and the page asks to open the link of its verification mail instead; the link signs in on /verify-email, outside this activity.
+        description: The account signs in and the profile opens; in the mode sign-up the page asks to open the link of the verification mail instead.
   profile:
     description: The profile of the account signed in.
     meta: { screen: user.profile, address: { path: /me } }

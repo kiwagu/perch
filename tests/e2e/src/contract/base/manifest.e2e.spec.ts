@@ -1,9 +1,22 @@
 // scenario: contract/base/manifest
-import { createValidator, type Manifest, manifestSchema } from '@workspace/ui-contract'
+import { fileURLToPath } from 'node:url'
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+import {
+  createValidator,
+  formatProblem,
+  loadScreens,
+  type Manifest,
+  manifestSchema,
+} from '@workspace/ui-contract'
 import { baseOf, type RenderedPage } from '@workspace/ui-contract/anchors'
 import { z } from '@workspace/zod'
 
 import { appReady, expect, test } from '../../support/fixtures'
+
+const ROOT = fileURLToPath(new URL('../../../../..', import.meta.url))
+// The contract the build reads: the version the served manifest must name.
+const { screens, problems } = loadScreens(ROOT)
 
 /** The rendered anchors the manifest does not declare: neither in `ids` nor derived from one. */
 function undeclared(manifest: Manifest, page: RenderedPage): string[] {
@@ -46,7 +59,7 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
     })
 
     await test.step('2. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
 
@@ -57,14 +70,16 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
     })
 
     // Expected:
-    // - After step 1 the manifest is valid against its schema and names contract version 1
+    // - After step 1 the manifest is valid against its schema and names the contract version
+    //   that `contract/domain/platform.yaml` declares, the version the build was made from
     const validate = createValidator().compile(schema)
 
     expect(validate(served), JSON.stringify(validate.errors)).toBe(true)
 
     const manifest = manifestSchema.parse(served)
 
-    expect(manifest.contract.version).toBe(1)
+    expect(screens, problems.map(formatProblem).join('\n')).toBeDefined()
+    expect(manifest.contract.version).toBe(screens?.version)
     // - After step 3 every anchor the helper reports is in the manifest's ids with the same kind,
     //   or is derived from one of them with a suffix of that entry's derived
     expect(rendered, 'the build installs window.__perch.ui').toBeDefined()
@@ -75,7 +90,7 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
     // - After step 3 the helper reports the page's URL, on [/sign-in], with [app-shell.status] in
     //   [state:ready]
     expect(onPage.url).toBe(page.url())
-    expect(new URL(onPage.url).pathname).toBe('/sign-in')
+    expect(new URL(onPage.url).pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(onPage.anchors).toContainEqual(
       expect.objectContaining({ anchor: 'app-shell.status', state: 'ready' }),
     )

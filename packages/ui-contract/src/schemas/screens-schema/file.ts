@@ -17,7 +17,12 @@ export const authoredScreenFileSchema = authoredScreenSchema
 
 export const platformFileSchema = z
   .strictObject({
-    version: z.literal(1).describe('The version of the contract format.'),
+    version: z
+      .int()
+      .min(1)
+      .describe(
+        'The version of the contract format the files are written in, said here alone from version 2.',
+      ),
     ...platformSchema.shape,
   })
   .describe('The version of the contract format and what the platform offers every screen.')

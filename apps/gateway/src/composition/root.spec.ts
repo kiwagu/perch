@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { ok } from 'neverthrow'
+import { ok, okAsync } from 'neverthrow'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
 import { applySchema } from '@workspace/data'
@@ -38,7 +38,7 @@ const rootOptions = {
  * mail it sent, which signs the laptop in: her identity and raw token.
  */
 async function signUpAnn(root: GatewayRoot) {
-  mailsOf(root.auth, rootOptions.mail)
+  mailsOf(root.auth, rootOptions.mail, root.sessions)
 
   const { token, user } = await signUpOn(
     root.auth,
@@ -114,6 +114,41 @@ describe('createGatewayRoot', () => {
 
     // The organisation's database is still held when the gateway closes.
     await expect(root.close()).resolves.toBeUndefined()
+  })
+
+  it("builds an account's deletion over the directory: its link, its organisations and its rows", async () => {
+    const root = (
+      await createGatewayRoot({ ...rootOptions, url: 'mem://', clock: manualClock() })
+    )._unsafeUnwrap()
+
+    try {
+      const { identity } = await signUpAnn(root)
+
+      ;(await root.organisations.create({ identity, key: 'acme', name: 'Acme' }))._unsafeUnwrap()
+
+      const token = (await root.deletions.ask(identity))._unsafeUnwrap()
+      const read = (await root.deletions.read(token))._unsafeUnwrap()
+
+      if (read.kind !== 'deletion') {
+        return expect.unreachable('the link reads as a deletion')
+      }
+
+      expect(await root.departure.blocked(identity)).toEqual(ok(false))
+      expect(await root.deletions.claim(read.claims)).toEqual(ok(true))
+      expect(await root.teardown.addressee(identity)).toEqual(
+        ok({ email: ann.email, name: 'Ann', locale: 'en' }),
+      )
+      expect(
+        await root.departure.leave(identity, {
+          before: () => okAsync('allowed'),
+          after: () => root.teardown.remove(identity),
+        }),
+      ).toEqual(ok('allowed'))
+      expect(await root.organisations.membershipsOf(identity)).toEqual(ok([]))
+      expect(await root.sessions.identityOf(ann.email)).toEqual(ok(undefined))
+    } finally {
+      await root.close()
+    }
   })
 })
 

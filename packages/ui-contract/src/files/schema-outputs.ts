@@ -1,7 +1,8 @@
 /**
  * The JSON Schemas beside the contract files, generated from their Zod sources and
  * committed: editors validate the files with them, and a schema that differs from its
- * source is drift.
+ * source is drift. The reference of every key and rule is written with them
+ * (`renderReference`), and its drift is the reference's own (`referenceDrift`).
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -9,12 +10,14 @@ import { dirname, join } from 'node:path'
 
 import { z } from '@workspace/zod'
 
+import { renderReference } from '../reference'
 import {
   activitySchema,
   authoredScreenFileSchema,
   entityDefinitionSchema,
   manifestSchema,
   platformFileSchema,
+  termsFileSchema,
 } from '../schemas'
 
 import {
@@ -22,7 +25,9 @@ import {
   ENTITY_SCHEMA_FILE,
   MANIFEST_SCHEMA_FILE,
   PLATFORM_SCHEMA_FILE,
+  REFERENCE_FILE,
   SCREEN_SCHEMA_FILE,
+  TERMS_SCHEMA_FILE,
 } from './paths'
 import type { Problem } from './problems'
 
@@ -34,22 +39,29 @@ export const SCHEMA_OUTPUTS: ReadonlyArray<{ file: string; schema: () => object 
   { file: SCREEN_SCHEMA_FILE, schema: () => jsonSchemaOf(authoredScreenFileSchema) },
   { file: PLATFORM_SCHEMA_FILE, schema: () => jsonSchemaOf(platformFileSchema) },
   { file: ACTIVITY_SCHEMA_FILE, schema: () => jsonSchemaOf(activitySchema) },
+  { file: TERMS_SCHEMA_FILE, schema: () => jsonSchemaOf(termsFileSchema) },
   { file: ENTITY_SCHEMA_FILE, schema: () => jsonSchemaOf(entityDefinitionSchema) },
   { file: MANIFEST_SCHEMA_FILE, schema: () => jsonSchemaOf(manifestSchema) },
 ]
 
 const textOf = (schema: object): string => `${JSON.stringify(schema, null, 2)}\n`
 
-/** Writes the schemas under `root`; returns the files written. */
+/** Writes `text` into `file` under `root`, making its folder; returns the file. */
+function written(root: string, file: string, text: string): string {
+  const path = join(root, file)
+
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, text)
+
+  return file
+}
+
+/** Writes the schemas under `root`, then the reference; returns the files written. */
 export function writeSchemas(root: string): string[] {
-  return SCHEMA_OUTPUTS.map(({ file, schema }) => {
-    const path = join(root, file)
-
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, textOf(schema()))
-
-    return file
-  })
+  return [
+    ...SCHEMA_OUTPUTS.map(({ file, schema }) => written(root, file, textOf(schema()))),
+    written(root, REFERENCE_FILE, renderReference()),
+  ]
 }
 
 /** A committed schema that is missing or differs from what its source generates. */

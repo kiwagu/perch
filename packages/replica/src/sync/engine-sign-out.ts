@@ -149,7 +149,14 @@ export class EngineSignOut {
             match(reason)
               .with('signed-out', () => 'signed-out' as const)
               .with(
-                P.union('unauthorized', 'protocol', 'revoked', 'password-changed'),
+                P.union(
+                  'unauthorized',
+                  'protocol',
+                  'revoked',
+                  'password-changed',
+                  'device-limit',
+                  'banned',
+                ),
                 () => 'offline' as const,
               )
               .exhaustive(),

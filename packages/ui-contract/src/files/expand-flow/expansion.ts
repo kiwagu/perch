@@ -18,6 +18,8 @@ export interface FlowLookups {
   readonly toast: string | undefined
   /** The platform actions whose success toasts, each with its code (`platform.yaml` `toasts`). */
   readonly platformToasts: Readonly<Record<string, string>>
+  /** The version the contract is read by, which says what the expansion derives. */
+  readonly edition: number
 }
 
 /** A toast the loader derived: the frame's toast anchor, its code, the model action it says succeeded. */

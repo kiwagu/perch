@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { routeFrameEffect } from './frame-effects'
 
 const channels = () => ({
@@ -7,6 +9,7 @@ const channels = () => ({
   clear: vi.fn(),
   pushToast: vi.fn(),
   leaveSignInNotice: vi.fn(),
+  dropSignInNotice: vi.fn(),
 })
 
 describe('routeFrameEffect', () => {
@@ -34,6 +37,16 @@ describe('routeFrameEffect', () => {
     expect(into.notify).not.toHaveBeenCalled()
   })
 
+  it('drops every word left for the sign-in page when a flow clears its notice', () => {
+    const into = channels()
+
+    routeFrameEffect({ type: 'clear', anchor: 'user.sign-in.notice-message' }, into)
+
+    expect(into.dropSignInNotice).toHaveBeenCalledTimes(1)
+    expect(into.clear).not.toHaveBeenCalled()
+    expect(into.leaveSignInNotice).not.toHaveBeenCalled()
+  })
+
   it('refuses a code the sign-in page does not say', () => {
     expect(() =>
       routeFrameEffect(
@@ -51,12 +64,13 @@ describe('routeFrameEffect', () => {
       into,
     )
     routeFrameEffect({ type: 'clear', anchor: 'organisation.notes.error' }, into)
-    routeFrameEffect({ type: 'navigate', to: '/sign-in' }, into)
+    routeFrameEffect({ type: 'navigate', to: CONTRACT_ROUTES['user.sign-in'] }, into)
 
     expect(into.pushToast).not.toHaveBeenCalled()
     expect(into.notify).not.toHaveBeenCalled()
     expect(into.clear).not.toHaveBeenCalled()
     expect(into.leaveSignInNotice).not.toHaveBeenCalled()
+    expect(into.dropSignInNotice).not.toHaveBeenCalled()
   })
 
   it('refuses a frame show of several codes: the machine narrows it first', () => {

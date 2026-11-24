@@ -1,11 +1,19 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { expect } from 'vitest'
 
 import { type AuthUser, type DataError, dataError, type SignUpInput } from '@workspace/data'
 import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { identityIdFactory } from '@workspace/ids'
 import { keepsPasswordRules } from '@workspace/kernel'
 
-import type { EmailVerification, GatewayAuth, NamedDevice, SignedInDevice } from '../gateway-auth'
+import type {
+  EmailVerification,
+  GatewayAuth,
+  NamedDevice,
+  SignedInDevice,
+  SignInAnswer,
+  StepAnswer,
+} from '../gateway-auth'
 
 interface Account {
   readonly identity: SignedInDevice['identity']
@@ -26,7 +34,30 @@ export type FakeAuthRequest =
       readonly name: string
       readonly locale: string
     }
-  | { readonly kind: 'sign-in'; readonly email: string; readonly device: NamedDevice }
+  | {
+      readonly kind: 'sign-in'
+      readonly email: string
+      readonly device: NamedDevice
+      /** Present on a sign-in that confirmed signing out the device seen least recently. */
+      readonly signOutOldest?: true
+    }
+  | {
+      readonly kind: 'confirm-sign-in'
+      readonly email: string
+      readonly code: string
+      readonly device: NamedDevice
+      /** Present on a code step that confirmed signing out the device seen least recently. */
+      readonly signOutOldest?: true
+    }
+  | { readonly kind: 'passkey-options'; readonly device: NamedDevice }
+  | {
+      readonly kind: 'passkey-sign-in'
+      /** The credential the assertion names. */
+      readonly credential: string
+      readonly device: NamedDevice
+      /** The account the device-limit dialog asked about, when the retry names one. */
+      readonly signOutOldestFor?: string
+    }
   | { readonly kind: 'verify'; readonly token: string; readonly device: NamedDevice }
   | { readonly kind: 'resend'; readonly email: string }
   | { readonly kind: 'request-reset'; readonly email: string }
@@ -34,6 +65,8 @@ export type FakeAuthRequest =
   | { readonly kind: 'change-password'; readonly token: string; readonly device: string }
   | { readonly kind: 'change-email'; readonly email: string; readonly token: string }
   | { readonly kind: 'confirm'; readonly token: string }
+  | { readonly kind: 'request-deletion'; readonly token: string; readonly device: string }
+  | { readonly kind: 'delete'; readonly token: string }
   | { readonly kind: 'sign-out'; readonly token: string; readonly device: string }
 
 export interface FakeGatewayAuth extends GatewayAuth {
@@ -51,6 +84,34 @@ export interface FakeGatewayAuth extends GatewayAuth {
   resetLinkFor(email: string): string
   /** The token of the latest link that confirms the change of the account of `email` to a new one. */
   confirmationLinkFor(email: string): string
+  /** The token of the latest link that deletes the account of `email`. */
+  deletionLinkFor(email: string): string
+  /**
+   * Makes the account of `email` (or not any longer, with `false`) the only administrator of an
+   * organisation with other members: a request to delete it, and the deletion itself, are then
+   * refused as `data:LAST_ADMIN` and change nothing.
+   */
+  blockDeletion(email: string, blocked?: boolean): void
+  /**
+   * Puts the account of `email` at its limit of devices (`at`, by default) or takes it off: a
+   * sign-in of it that does not confirm signing out its device seen least recently answers the
+   * outcome `device-limit`, nothing signed in, and one that confirms signs in.
+   */
+  atDeviceLimit(email: string, at?: boolean): void
+  /**
+   * Turns the second factor of the account of `email` on, taking `code` at its code step: its
+   * password sign-in then answers a challenge (`code-required`) and signs nothing in.
+   */
+  secondFactor(email: string, code: string): void
+  /** Gives the account of `email` a passkey and answers the credential its assertions name. */
+  passkeyOf(email: string): string
+  /**
+   * Has an operator ban the account of `email` (or lift it, with `false`): a sign-in of it with
+   * the right password, its email verified, is then refused as `data:ACCOUNT_BANNED`, nothing
+   * signed in; the first exchange of a link of it verifies its email, signs nothing in and is
+   * refused alike.
+   */
+  ban(email: string, banned?: boolean): void
 }
 
 /** One of the app's languages, as the gateway takes a sign-up's: anything else is refused. */
@@ -63,8 +124,10 @@ const isLocale = (locale: string): locale is Locale =>
  * answer that signs a device in carries a new session token. A sign-up signs nothing in: a new
  * email makes an account not verified yet and a verification link, as its mail would carry; one
  * that has an account changes nothing; both answer alike. A sign-in with the right password of an
- * account not verified yet is refused as `data:EMAIL_NOT_VERIFIED`. The first exchange of any of
- * the account's links verifies it and signs the device in, a later one signs nothing in.
+ * account not verified yet is refused as `data:EMAIL_NOT_VERIFIED`, and one of an account an
+ * operator banned (`ban`) as `data:ACCOUNT_BANNED`, once the email is verified. The first
+ * exchange of any of the account's links verifies it and signs the device in, a later one signs
+ * nothing in; one of a banned account verifies it and is refused as `data:ACCOUNT_BANNED`.
  */
 export function fakeGatewayAuth(): FakeGatewayAuth {
   const accounts = new Map<string, Account>()
@@ -76,11 +139,27 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
   const resets = new Map<string, string>()
   /** The account and the new email of each confirmation link's token; only the newest works. */
   const confirmations = new Map<string, { readonly email: string; readonly next: string }>()
+  /** The email of the account each deletion link's token deletes; only the newest works. */
+  const deletions = new Map<string, string>()
+  /** The emails of the accounts that are the only administrator of an organisation with others. */
+  const onlyAdmins = new Set<string>()
+  /** The emails of the accounts at their limit of devices. */
+  const atLimit = new Set<string>()
+  /** The emails of the accounts an operator banned. */
+  const banned = new Set<string>()
   /** The email of the account each session token was given for. */
   const sessions = new Map<string, string>()
+  /** The code the code step of each account whose second factor is on takes, by email. */
+  const codes = new Map<string, string>()
+  /** The email of the account each challenge the password step answered stands for. */
+  const challenges = new Map<string, string>()
+  /** The email of the account each passkey's credential belongs to. */
+  const credentials = new Map<string, string>()
   const requests: FakeAuthRequest[] = []
   let issued = 0
   let linked = 0
+  let challenged = 0
+  let credentialed = 0
   let signOutAnswer = (_token: string): ResultAsync<void, DataError> => okAsync(undefined)
   const token = () => {
     issued += 1
@@ -115,6 +194,46 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       if (link === undefined) throw new Error('the gateway made no confirmation link for the email')
 
       return link
+    },
+    deletionLinkFor: (email) => {
+      const link = [...deletions].findLast(([, of]) => of === email.toLowerCase())?.[0]
+
+      if (link === undefined) throw new Error('the gateway made no deletion link for the email')
+
+      return link
+    },
+    secondFactor: (email, code) => {
+      codes.set(email.toLowerCase(), code)
+    },
+    passkeyOf: (email) => {
+      credentialed += 1
+
+      const credential = `credential-${credentialed}`
+
+      credentials.set(credential, email.toLowerCase())
+
+      return credential
+    },
+    atDeviceLimit: (email, at = true) => {
+      if (at) {
+        atLimit.add(email.toLowerCase())
+      } else {
+        atLimit.delete(email.toLowerCase())
+      }
+    },
+    ban: (email, on = true) => {
+      if (on) {
+        banned.add(email.toLowerCase())
+      } else {
+        banned.delete(email.toLowerCase())
+      }
+    },
+    blockDeletion: (email, blocked = true) => {
+      if (blocked) {
+        onlyAdmins.add(email.toLowerCase())
+      } else {
+        onlyAdmins.delete(email.toLowerCase())
+      }
     },
     resetLinkFor: (email) => {
       const link = [...resets].findLast(([, of]) => of === email.toLowerCase())?.[0]
@@ -154,7 +273,12 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       return okAsync(undefined)
     },
     signIn: (input, device) => {
-      requests.push({ kind: 'sign-in', email: input.email, device })
+      requests.push({
+        kind: 'sign-in',
+        email: input.email,
+        device,
+        ...(input.signOutOldest === true ? { signOutOldest: true } : {}),
+      })
 
       const account = accounts.get(input.email.toLowerCase())
 
@@ -166,11 +290,123 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
         return errAsync(dataError('data:EMAIL_NOT_VERIFIED', 'the email is not verified yet'))
       }
 
+      if (banned.has(input.email.toLowerCase())) {
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
+
+      // An account whose second factor is on signs no device in or out at its password.
+      if (codes.has(account.identity.email)) {
+        challenged += 1
+        challenges.set(`challenge-${challenged}`, account.identity.email)
+
+        return okAsync({ kind: 'code-required', challenge: `challenge-${challenged}` })
+      }
+
+      if (atLimit.has(input.email.toLowerCase()) && input.signOutOldest !== true) {
+        return okAsync({ kind: 'device-limit' })
+      }
+
       const given = token()
 
       sessions.set(given, account.identity.email)
 
-      return okAsync({ identity: account.identity, token: given })
+      return okAsync({
+        kind: 'signed-in',
+        device: { identity: account.identity, token: given },
+      })
+    },
+    confirmSignIn: (step, device): ResultAsync<StepAnswer, DataError> => {
+      requests.push({
+        kind: 'confirm-sign-in',
+        email: step.email,
+        code: step.code,
+        device,
+        ...(step.signOutOldest ? { signOutOldest: true } : {}),
+      })
+
+      const email = challenges.get(step.challenge)
+      const account = email === undefined ? undefined : accounts.get(email)
+
+      // A dead challenge, or one of another email than the one typed, starts over from the password.
+      if (account === undefined || email !== step.email.toLowerCase() || !codes.has(email ?? '')) {
+        return errAsync(dataError('data:CODE_EXPIRED', 'the sign-in must start again'))
+      }
+
+      // The step is judged before its code is looked at: a banned account, or one at the limit of
+      // devices unless the step confirms signing out its device seen least recently, ends the
+      // challenge, no code checked or spent.
+      if (banned.has(account.identity.email)) {
+        challenges.delete(step.challenge)
+
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
+
+      if (!step.signOutOldest && atLimit.has(account.identity.email)) {
+        challenges.delete(step.challenge)
+
+        return okAsync({ kind: 'device-limit' })
+      }
+
+      if (codes.get(account.identity.email) !== step.code) {
+        return errAsync(dataError('data:INVALID_CODE', 'the code is wrong'))
+      }
+
+      // A right code spends the challenge.
+      challenges.delete(step.challenge)
+
+      const given = token()
+
+      sessions.set(given, account.identity.email)
+
+      return okAsync({
+        kind: 'signed-in',
+        device: { identity: account.identity, token: given },
+      })
+    },
+    passkeyOptions: (device) => {
+      requests.push({ kind: 'passkey-options', device })
+
+      challenged += 1
+
+      return okAsync({
+        options: { challenge: 'cGFzc2tleQ', userVerification: 'required' },
+        challenge: `passkey-challenge-${challenged}`,
+      })
+    },
+    signInWithPasskey: (input, device): ResultAsync<StepAnswer, DataError> => {
+      requests.push({
+        kind: 'passkey-sign-in',
+        credential: input.response.id,
+        device,
+        ...(input.signOutOldestFor === undefined
+          ? {}
+          : { signOutOldestFor: input.signOutOldestFor }),
+      })
+
+      const email = credentials.get(input.response.id)
+      const account = email === undefined ? undefined : accounts.get(email)
+
+      if (account === undefined) {
+        return errAsync(dataError('data:PASSKEY_UNKNOWN', 'no account holds the passkey'))
+      }
+
+      if (banned.has(account.identity.email)) {
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
+
+      // The confirmation holds only for the account the dialog asked about.
+      if (atLimit.has(account.identity.email) && input.signOutOldestFor !== account.identity.id) {
+        return okAsync({ kind: 'device-limit', consentFor: account.identity.id })
+      }
+
+      const given = token()
+
+      sessions.set(given, account.identity.email)
+
+      return okAsync({
+        kind: 'signed-in',
+        device: { identity: account.identity, token: given },
+      })
     },
     verifyEmail: (link, device): ResultAsync<EmailVerification, DataError> => {
       requests.push({ kind: 'verify', token: link, device })
@@ -187,6 +423,10 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       }
 
       accounts.set(email, { ...account, verified: true })
+
+      if (banned.has(email)) {
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
 
       const given = token()
 
@@ -226,7 +466,7 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       return okAsync(undefined)
     },
-    resetPassword: (link, password) => {
+    resetPassword: (link, password, session) => {
       requests.push({ kind: 'reset', token: link })
 
       const email = resets.get(link)
@@ -240,7 +480,16 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       resets.delete(link)
       accounts.set(email, { ...account, password, verified: true })
 
-      return okAsync(undefined)
+      // It ends every session of the account, the one presented with it among them when it was one.
+      const signedOut = session !== undefined && sessions.get(session.token) === email
+
+      for (const [given, of] of sessions) {
+        if (of === email) {
+          sessions.delete(given)
+        }
+      }
+
+      return okAsync({ signedOut })
     },
     changePassword: (input, session) => {
       requests.push({ kind: 'change-password', token: session.token, device: session.device })
@@ -320,12 +569,71 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       return okAsync({ identity: account.identity.id, email: change.next })
     },
+    requestAccountDeletion: (password, session) => {
+      requests.push({ kind: 'request-deletion', token: session.token, device: session.device })
+
+      const email = sessions.get(session.token)
+      const account = email === undefined ? undefined : accounts.get(email)
+
+      if (email === undefined || account === undefined) {
+        return errAsync(dataError('data:AUTH_FAILED', 'the gateway refused the session token'))
+      }
+
+      if (account.password !== password) {
+        return errAsync(dataError('data:INVALID_CREDENTIALS', 'the password is wrong'))
+      }
+
+      if (onlyAdmins.has(email)) {
+        return errAsync(dataError('data:LAST_ADMIN', 'the account is the last administrator'))
+      }
+
+      // The newest link replaces the earlier ones.
+      for (const [link, of] of deletions) {
+        if (of === email) deletions.delete(link)
+      }
+
+      linked += 1
+      deletions.set(`delete-${linked}`, email)
+
+      return okAsync(undefined)
+    },
+    deleteAccount: (link) => {
+      requests.push({ kind: 'delete', token: link })
+
+      const email = deletions.get(link)
+      const account = email === undefined ? undefined : accounts.get(email)
+
+      if (email === undefined || account === undefined) {
+        return errAsync(dataError('data:LINK_INVALID', 'the gateway refused the link'))
+      }
+
+      if (onlyAdmins.has(email)) {
+        return errAsync(dataError('data:LAST_ADMIN', 'the account is the last administrator'))
+      }
+
+      // The account goes for good, its sessions and its links with it.
+      deletions.delete(link)
+      accounts.delete(email)
+
+      for (const [given, of] of sessions) {
+        if (of === email) sessions.delete(given)
+      }
+
+      return okAsync({ identity: account.identity.id })
+    },
     signOut: (signedOut, device) => {
       requests.push({ kind: 'sign-out', token: signedOut, device })
 
       return signOutAnswer(signedOut)
     },
   }
+}
+
+/** The device a password sign-in signed in; the test fails when it signed nothing in. */
+export function signedDevice(answer: SignInAnswer): SignedInDevice {
+  return answer.kind === 'signed-in'
+    ? answer.device
+    : expect.unreachable(`the sign-in answered ${answer.kind}`)
 }
 
 /** The device on which `verifiedElsewhere` opens a link: not the test's own. */

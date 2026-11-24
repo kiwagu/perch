@@ -2,20 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { SHAPE_RUNNER } from '@workspace/data'
 import { Container } from '@workspace/di'
+import { profileIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { openTestSession, type TestSession } from '../../composition/__fixtures__/session'
 import type { SessionService } from '../../composition/session'
-import { keptAccountStart, memoryStorage } from '../../composition/storage'
 import { COMMANDS } from '../../platform/commands.port'
 import { SESSION } from '../../platform/session.port'
 
-import { ACCOUNT_START_SERVICE, AccountStartService } from './application/account-start.service'
-import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
+import { PROFILE_SERVICE } from './application/profile.service'
 import { settingsCommands, settingsShape } from './application/settings/settings.model.gen'
 import { SETTINGS_SERVICE, SettingsService } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE } from './application/sign-in.service'
 import { VERIFY_EMAIL_SERVICE } from './application/verify-email.service'
-import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
 import { UserModule } from './user.module'
 
 let opened: TestSession
@@ -34,23 +33,8 @@ beforeEach(async () => {
     .singleton(SHAPE_RUNNER, () => opened.runner)
     .singleton(COMMANDS, () => opened.commands)
     .singleton(SESSION, () => session)
-    // The composition root provides the settings to the frame and to every module, and the start
-    // of a new account, which it finishes where the account's space opens again.
+    // The composition root provides the settings to the frame and to every module.
     .singleton(SETTINGS_SERVICE, () => settings)
-    .singleton(
-      ACCOUNT_START_SERVICE,
-      () =>
-        new AccountStartService(
-          new ProfileService(opened.runner, opened.commands, {
-            shape: profileShape,
-            commands: profileCommands,
-          }),
-          settings,
-          keptAccountStart(memoryStorage()),
-          (run) => run(() => opened.session.flush()),
-          () => 'system',
-        ),
-    )
 
   container = root.child()
 
@@ -64,7 +48,7 @@ afterEach(async () => {
 })
 
 describe('UserModule', () => {
-  it('provides sign-in, verification, profile and settings services over the application ports', async () => {
+  it('provides sign-in, verification and profile services over the application ports', async () => {
     const email = 'ann@example.test'
 
     expect(
@@ -75,55 +59,103 @@ describe('UserModule', () => {
       ).isOk(),
     ).toBe(true)
 
-    // The link of its mail signs this device in, and makes the account whole there.
+    // The link of its mail signs this device in; the account starts once the device has pulled.
     const verified = (
       await container.get(VERIFY_EMAIL_SERVICE).verify(opened.auth.linkFor(email))
     )._unsafeUnwrap()
     const user = verified.kind === 'signed-in' ? verified.user : expect.unreachable('signed in')
 
+    expect(session.current()?.id).toBe(user.id)
+
+    // The profile service writes and reads the account's profile through the ports.
+    const profiles = container.get(PROFILE_SERVICE)
+
+    expect(
+      (
+        await profiles.createProfile({
+          id: profileIdFactory.create(),
+          identity: user.id,
+          name: 'Ann',
+          email,
+        })
+      ).isOk(),
+    ).toBe(true)
     expect((await session.flush()).isOk()).toBe(true)
-    expect(
-      (await container.get(PROFILE_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
-    ).toMatchObject([{ name: 'Ann', email }])
-    expect(
-      (await container.get(SETTINGS_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
-    ).toMatchObject([{ locale: 'es' }])
+    expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
+      { name: 'Ann', email },
+    ])
   })
 
-  it('routes guests to sign-in, the verification of their email and the request of a reset mail, anyone to the links that set a password or confirm an email, and signed-in users to their profile and their settings', () => {
+  it('routes guests to sign-in, the verification of their email and the request of a reset mail, anyone to the links that set a password, confirm an email or delete an account, and signed-in users to their profile and their settings', () => {
     expect(
       UserModule.routes.map((route) => ({
         path: route.path,
         page: route.page,
         guard: route.guard,
+        roles: route.roles,
         search: route.search === undefined ? undefined : Object.keys(route.search.shape),
       })),
     ).toEqual([
-      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: ['email'] },
-      { path: '/verify-email', page: 'VerifyEmailPage', guard: 'guest', search: ['token'] },
       {
-        path: '/forgot-password',
-        page: 'ForgotPasswordPage',
+        path: CONTRACT_ROUTES['user.sign-in'],
+        page: 'SignInPage',
         guard: 'guest',
+        roles: [CONTRACT_ROLES.guest],
         search: ['email'],
       },
       {
-        path: '/reset-password',
-        page: 'ResetPasswordPage',
-        guard: undefined,
+        path: CONTRACT_ROUTES['user.verify-email'],
+        page: 'VerifyEmailPage',
+        guard: 'guest',
+        roles: [CONTRACT_ROLES.guest],
         search: ['token'],
       },
       {
-        path: '/confirm-email',
-        page: 'ConfirmEmailPage',
+        path: CONTRACT_ROUTES['user.forgot-password'],
+        page: 'ForgotPasswordPage',
+        guard: 'guest',
+        roles: [CONTRACT_ROLES.guest],
+        search: ['email'],
+      },
+      {
+        path: CONTRACT_ROUTES['user.reset-password'],
+        page: 'ResetPasswordPage',
         guard: undefined,
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: ['token'],
       },
-      { path: '/me', page: 'ProfilePage', guard: 'authenticated', search: undefined },
-      { path: '/settings', page: 'SettingsPage', guard: 'authenticated', search: undefined },
+      {
+        path: CONTRACT_ROUTES['user.confirm-email'],
+        page: 'ConfirmEmailPage',
+        guard: undefined,
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+        search: ['token'],
+      },
+      {
+        path: CONTRACT_ROUTES['user.delete-account'],
+        page: 'DeleteAccountPage',
+        guard: undefined,
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+        search: ['token'],
+      },
+      {
+        path: CONTRACT_ROUTES['user.profile'],
+        page: 'ProfilePage',
+        guard: 'authenticated',
+        roles: [CONTRACT_ROLES.identity],
+        search: undefined,
+      },
+      {
+        path: CONTRACT_ROUTES['user.settings'],
+        page: 'SettingsPage',
+        guard: 'authenticated',
+        roles: [CONTRACT_ROLES.identity],
+        search: undefined,
+      },
     ])
     expect(Object.keys(UserModule.declarations).sort()).toEqual([
       'ConfirmEmailPage',
+      'DeleteAccountPage',
       'ForgotPasswordPage',
       'ProfilePage',
       'ResetPasswordPage',

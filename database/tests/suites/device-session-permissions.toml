@@ -66,3 +66,44 @@ actor = "root"
 sql = "CREATE device_session SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), token = 'tok-a', expires_at = time::now() + 30d, device = 'dev-c', label = 'Safari on Mac';"
 allow = false
 error_contains = "device_session_token"
+
+[[cases]]
+name = "a session ended by a ban is accepted"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), token = 'tok-banned', expires_at = time::now(), ended_at = time::now(), ended_reason = 'banned', device = 'dev-d', label = 'Banned' RETURN VALUE ended_reason;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "banned"
+
+[[cases]]
+name = "an ending reason outside the known ones is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), token = 'tok-expelled', expires_at = time::now(), ended_at = time::now(), ended_reason = 'expelled', device = 'dev-e', label = 'Expelled';"
+allow = false
+error_contains = "ended_reason"
+
+[[cases]]
+name = "alice cannot mark a session as impersonated"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE device_session SET impersonated_by = 'idn_someone' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "no session is impersonated"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE token FROM device_session WHERE impersonated_by != NONE;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false

@@ -1,68 +1,11 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
-import { createActor, waitFor } from 'xstate'
+import { waitFor } from 'xstate'
 
 import { dataError } from '@workspace/data'
-import type { Locale } from '@workspace/i18n'
 
-import type { Theme } from '../../../../../platform/theme'
-
-import {
-  createSettingsMachine,
-  SETTINGS_PASSWORDS_DIFFER,
-  type SettingsMachineDeps,
-  type SettingsValues,
-} from '.'
-
-function screen(
-  options: {
-    readonly store?: () => ResultAsync<void, unknown>
-    readonly storeTheme?: () => ResultAsync<void, unknown>
-    readonly changePassword?: SettingsMachineDeps['changePassword']
-    readonly changeEmail?: SettingsMachineDeps['changeEmail']
-  } = {},
-) {
-  let values: SettingsValues = { held: true, account: 'idn_ann', storingFor: undefined }
-  const setTheme = vi.fn<(theme: Theme) => void>()
-  const storeTheme = vi.fn<(theme: Theme) => ResultAsync<void, unknown>>(
-    options.storeTheme ?? (() => okAsync(undefined)),
-  )
-  const storeLocale = vi.fn<(locale: Locale) => ResultAsync<void, unknown>>(
-    options.store ?? (() => okAsync(undefined)),
-  )
-  const actor = createActor(
-    createSettingsMachine({
-      values: () => values,
-      setTheme,
-      storeTheme: (theme) => {
-        values = { ...values, storingFor: values.account }
-
-        return storeTheme(theme)
-      },
-      storeLocale: (locale) => {
-        values = { ...values, storingFor: values.account }
-
-        return storeLocale(locale)
-      },
-      changePassword: options.changePassword ?? (() => okAsync(undefined)),
-      changeEmail: options.changeEmail ?? (() => okAsync(undefined)),
-    }),
-  ).start()
-  const emitted: unknown[] = []
-
-  actor.on('*', (event) => emitted.push(event))
-
-  return {
-    actor,
-    setTheme,
-    storeTheme,
-    storeLocale,
-    emitted,
-    set: (more: Partial<SettingsValues>) => {
-      values = { ...values, ...more }
-    },
-  }
-}
+import { screen } from './__fixtures__/screen'
+import { SETTINGS_PASSWORDS_DIFFER, type SettingsMachineDeps } from '.'
 
 const NOT_STORED = {
   type: 'show',
@@ -295,5 +238,123 @@ describe('the email region', () => {
       emailMessage: undefined,
       sentTo: undefined,
     })
+  })
+})
+
+describe('the deletion region', () => {
+  const SEND = { type: 'user.settings.deletion.send-button', password: 'Secret-ann1' } as const
+  const IDLE = { viewing: { deletion: 'idle' } } as const
+  const SENT = { viewing: { deletion: 'sent' } } as const
+  const PASSWORD_CLEARED = { type: 'clear', anchor: 'user.settings.deletion.password-input' }
+
+  it('sends the mail of the deletion link, says so and empties the password', async () => {
+    const requestAccountDeletion = vi.fn((_password: string) => okAsync(undefined))
+    const settings = screen({ requestAccountDeletion })
+
+    settings.actor.send(SEND)
+
+    expect(settings.actor.getSnapshot().can(SEND)).toBe(false)
+
+    const sent = await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    expect(requestAccountDeletion).toHaveBeenCalledWith('Secret-ann1')
+    expect(sent.context).toMatchObject({
+      deletionError: undefined,
+      deletionMessage: 'check-your-mail',
+    })
+    expect(settings.emitted).toContainEqual(PASSWORD_CLEARED)
+    expect(sent.can(SEND)).toBe(true)
+  })
+
+  it('says an account that is the last admin of others is refused, and empties the password', async () => {
+    const settings = screen({
+      requestAccountDeletion: () => errAsync(dataError('data:LAST_ADMIN', 'other members')),
+    })
+
+    settings.actor.send(SEND)
+
+    const refused = await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+    expect(refused.context).toMatchObject({
+      deletionError: 'data:LAST_ADMIN',
+      deletionMessage: undefined,
+    })
+    expect(settings.emitted).toContainEqual(PASSWORD_CLEARED)
+    expect(refused.can(SEND)).toBe(true)
+  })
+
+  it.each(['data:INVALID_CREDENTIALS', 'data:RATE_LIMITED', 'data:OFFLINE'] as const)(
+    'says why %s refused it and keeps the password as typed',
+    async (code) => {
+      const settings = screen({
+        requestAccountDeletion: () => errAsync(dataError(code, 'refused')),
+      })
+
+      settings.actor.send(SEND)
+
+      const refused = await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+      expect(refused.context).toMatchObject({ deletionError: code, deletionMessage: undefined })
+      expect(settings.emitted).not.toContainEqual(PASSWORD_CLEARED)
+      expect(refused.can(SEND)).toBe(true)
+    },
+  )
+
+  it('sends a fresh link on another press, and a refusal then takes the message away', async () => {
+    const answers = [
+      okAsync(undefined),
+      okAsync(undefined),
+      errAsync(dataError('data:RATE_LIMITED', 'busy')),
+    ]
+    const requestAccountDeletion = vi.fn(
+      (_password: string) => answers.shift() ?? okAsync(undefined),
+    )
+    const settings = screen({ requestAccountDeletion })
+
+    settings.actor.send(SEND)
+    await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    settings.actor.send(SEND)
+    expect(settings.actor.getSnapshot().matches({ viewing: { deletion: 'sending' } })).toBe(true)
+    await waitFor(settings.actor, (state) => state.matches(SENT))
+    expect(requestAccountDeletion).toHaveBeenCalledTimes(2)
+
+    settings.actor.send(SEND)
+
+    const refused = await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+    expect(refused.context).toMatchObject({
+      deletionError: 'data:RATE_LIMITED',
+      deletionMessage: undefined,
+    })
+  })
+
+  it('forgets the last refusal as the next press goes out', async () => {
+    let refuse = true
+    const settings = screen({
+      requestAccountDeletion: () =>
+        refuse ? errAsync(dataError('data:INVALID_CREDENTIALS', 'wrong')) : okAsync(undefined),
+    })
+
+    settings.actor.send(SEND)
+    await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+    refuse = false
+    settings.actor.send(SEND)
+    expect(settings.actor.getSnapshot().context.deletionError).toBeUndefined()
+
+    const sent = await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    expect(sent.context.deletionMessage).toBe('check-your-mail')
+  })
+
+  it('leaves the email region to its own press', async () => {
+    const settings = screen()
+
+    settings.actor.send(SEND)
+    await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    expect(settings.actor.getSnapshot().matches({ viewing: { email: 'idle' } })).toBe(true)
+    expect(settings.actor.getSnapshot().context.emailMessage).toBeUndefined()
   })
 })

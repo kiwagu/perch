@@ -12,7 +12,8 @@ import {
   TOKEN_MARKER,
 } from '../__fixtures__/rejection'
 
-import { type Fetcher, type GatewayAuth, gatewayAuth } from './client'
+import type { Fetcher, GatewayAuth } from './auth.port'
+import { gatewayAuth } from './client'
 
 const BASE = 'https://app.example.test/backend'
 
@@ -105,8 +106,8 @@ describe('gatewayAuth', () => {
     const { fetcher, sent } = fakeFetch(respond(200, signedIn))
 
     expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
-      identity: { id: ann, email: credentials.email },
-      token: 'token-1',
+      kind: 'signed-in',
+      device: { identity: { id: ann, email: credentials.email }, token: 'token-1' },
     })
     expect(sent.map(({ url, label, body }) => ({ url, label, body }))).toEqual([
       { url: `${BASE}/auth/sign-in/email`, label: 'Chrome on Linux', body: credentials },
@@ -119,9 +120,12 @@ describe('gatewayAuth', () => {
     )
 
     expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
-      identity: { id: ann, email: credentials.email },
-      token: 'token-1',
-      start: { name: 'Ann', locale: 'es' },
+      kind: 'signed-in',
+      device: {
+        identity: { id: ann, email: credentials.email },
+        token: 'token-1',
+        start: { name: 'Ann', locale: 'es' },
+      },
     })
 
     // A start the app cannot take is no signed-in account.
@@ -137,7 +141,9 @@ describe('gatewayAuth', () => {
   it('keeps the raw token of the body, never the signed one of the set-auth-token header', async () => {
     const { fetcher } = fakeFetch(withSignedHeader(signedIn))
 
-    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrap().token).toBe('token-1')
+    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toMatchObject({
+      device: { token: 'token-1' },
+    })
 
     // An answer whose body carries no token signs nobody in, whatever its header says.
     const tokenless = fakeFetch(withSignedHeader({ ...signedIn, token: null }))
@@ -166,6 +172,26 @@ describe('gatewayAuth', () => {
     expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
       'data:EMAIL_NOT_VERIFIED',
     )
+  })
+
+  it('reads 409 to a sign-in as the account at its limit of devices, nothing signed in', async () => {
+    const { fetcher } = fakeFetch(respond(409, { code: 'device-limit' }))
+
+    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
+      kind: 'device-limit',
+    })
+  })
+
+  it('confirms a sign-in past the limit of devices in its body, only when asked to', async () => {
+    const { fetcher, sent } = fakeFetch(respond(200, signedIn), respond(200, signedIn))
+    const auth = gatewayAuth(BASE, fetcher)
+
+    expect((await auth.signIn({ ...credentials, signOutOldest: true }, device)).isOk()).toBe(true)
+    expect((await auth.signIn({ ...credentials, signOutOldest: false }, device)).isOk()).toBe(true)
+    expect(sent.map(({ body }) => body)).toEqual([
+      { ...credentials, signOutOldest: true },
+      credentials,
+    ])
   })
 
   it('reads 400 and 422 to a sign-up as a refused sign-up, naming neither email nor password', async () => {

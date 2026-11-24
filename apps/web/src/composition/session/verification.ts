@@ -1,17 +1,20 @@
-import { okAsync, type ResultAsync } from 'neverthrow'
+import type { ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 
 import type { EmailVerified } from '../../platform/session.port'
-import type { GatewayAuth, VerifiedAccount } from '../gateway-auth'
+import type { GatewayAuth } from '../gateway-auth'
 
-import type { SessionSignIn } from './sign-in'
+import type { Asked, SessionSignIn } from './sign-in'
 
 /**
  * Exchanges a verification link's token as a sign-in: in the browser's sign-in lock, with the
  * device named, its answer kept and the identity's space opened when the gateway signed the device
- * in, and refused when another account was saved meanwhile (one account per browser). A link
- * verified before signs nothing in, and nothing changes here.
+ * in, and refused when another account was saved meanwhile (one account per browser). The account
+ * the first verification signed in has not started, so its start is kept as a sign-in that learnt
+ * of one keeps it, to finish after this device's first pull: the gateway marked the email verified
+ * before it signed this device in, so another device may have signed in and started it meanwhile.
+ * A link verified before signs nothing in, and nothing changes here.
  */
 export function verifyEmail(
   signingIn: Pick<SessionSignIn, 'enter'>,
@@ -19,27 +22,19 @@ export function verifyEmail(
   token: string,
   generation: number,
 ): ResultAsync<EmailVerified, DataError> {
-  let account: VerifiedAccount | undefined
-
-  return signingIn
-    .enter(
-      undefined,
-      (device) =>
-        auth.verifyEmail(token, device).andThen((answer) => {
-          if (answer.kind === 'verified-before') {
-            return okAsync(undefined)
-          }
-
-          account = answer.account
-
-          return okAsync(answer.device)
-        }),
-      generation,
-    )
-    .map(
-      (user): EmailVerified =>
-        user === undefined || account === undefined
-          ? { kind: 'verified-before' }
-          : { kind: 'signed-in', user, name: account.name, locale: account.locale },
-    )
+  return signingIn.enter<EmailVerified>(
+    undefined,
+    (device) =>
+      auth.verifyEmail(token, device).map(
+        (answer): Asked<EmailVerified> =>
+          answer.kind === 'verified-before'
+            ? { stopped: { kind: 'verified-before' } }
+            : {
+                // The account starts as one a sign-in learnt of: once this device pulled what it has.
+                device: { ...answer.device, start: answer.account },
+                signedIn: (user) => ({ kind: 'signed-in', user }),
+              },
+      ),
+    generation,
+  )
 }

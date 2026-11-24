@@ -11,7 +11,9 @@ every mail the stand's gateway sends lands there, for people and the suites to r
   `docker compose -p <project> run --rm --name <project>-caddy-<stand> caddy` with the stand's
   ports in `FRONT_PORT` and `GATEWAY_PORT` (the main checkout: https://localhost:5443 with the
   gateway on 5181, https://localhost:5493 with gateway-e2e on 5191; a worktree's slot shifts
-  each by 100), and the manifest switch in `PERCH_UI_MANIFEST`. The compose project and the container name carry the checkout's project slug,
+  each by 100), the manifest switch in `PERCH_UI_MANIFEST` and the client address it names to
+  the gateway in `PERCH_CLIENT_ADDRESS` (`peer` for `caddy-dev`, `claimed` for `caddy-e2e`: under
+  `Caddyfile` below). The compose project and the container name carry the checkout's project slug,
   so two stands, or two checkouts, never share a container. The service mounts a web build
   read-only at `/srv/web`, the folder `WEB_DIST` names under `apps/web` (default `dist`): the
   dev stand passes `dist-dev`, which the `web` watcher keeps current; the e2e stand keeps
@@ -54,6 +56,13 @@ every mail the stand's gateway sends lands there, for people and the suites to r
   `X-Content-Type-Options: nosniff`. No `Strict-Transport-Security`: it binds the whole host,
   so from `https://localhost` it would force https on every local port; a deployed front sends
   it for its own domain. The e2e fixtures hold every document and script to these values.
+  The gateway counts its request limits by the client address, the rightmost
+  `X-Forwarded-For` entry, which the front writes under `/backend/`: with `peer` (the default,
+  and the dev stand's) the address the request came from, whatever a browser sent there.
+  `caddy-e2e` runs with `claimed`: the request's `X-Perch-Client-Address` header is the
+  entry, and is not passed on. Every browser of the e2e suite reaches the front from 127.0.0.1,
+  so each Playwright worker claims an address of its own and spends its own limits; a request
+  without the header leaves the entry empty, and the gateway takes the connection's address.
 - `make-certs.sh`: writes `certs/localhost.pem` and `certs/localhost-key.pem` (gitignored) once.
   With mkcert installed the certificate is mkcert's, which browsers trust after `mkcert -install`;
   otherwise openssl makes a self-signed one. Delete `certs/` to make new ones.
