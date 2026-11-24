@@ -229,7 +229,7 @@ devices of such an account as the test opens, each a browser context of its own)
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
-the gateway answers a sign-up no sooner than 800 ms, by when an assertion would look only every
+the gateway answers a sign-up no sooner than 1050 ms, by when an assertion would look only every
 500 ms), `signUp` (counts the email's mails, `startSignUp`, then
 opens the link of the declared `sign-up` mail, the first after those counted, in the same page,
 which signs the account in, on `/me`: an email invited before it signs up holds the invitation

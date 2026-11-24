@@ -154,6 +154,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       connections: root.connections,
       clock: root.clock,
       accounts: root.accountTurns,
+      startingLanguage: root.startingLanguage,
     }),
   ]
   const server = Bun.serve<SocketData, never>({

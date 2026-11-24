@@ -63,6 +63,11 @@ export const ACCEPT_REFUSED = {
     codes: ['invitation-gone', 'other-account', 'already-member', 'failed'],
   },
 } as const
+export const SETTINGS_REFUSED = {
+  type: 'show',
+  params: { anchor: 'organisation.settings.error', codes: ['forbidden', 'failed'] },
+} as const
+
 export const DECLINE_REFUSED = {
   type: 'show',
   params: {
@@ -78,6 +83,7 @@ const cleared = <Anchor extends string>(anchor: Anchor) =>
 export const CLEAR_NOTES_ERROR = cleared('organisation.notes.error')
 export const CLEAR_INVITE_ERROR = cleared('organisation.invite.error')
 export const CLEAR_RECEIVED_ERROR = cleared('organisation.received.error')
+export const CLEAR_SETTINGS_ERROR = cleared('organisation.settings.error')
 /** The fields the invitation's form empties once it is mailed. */
 export const CLEAR_EMAIL = cleared('organisation.invite.email-input')
 export const CLEAR_ROLE = cleared('organisation.invite.role-select')

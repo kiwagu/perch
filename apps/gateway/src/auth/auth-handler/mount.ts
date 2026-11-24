@@ -17,6 +17,7 @@ import type { AuthInstance } from '../auth-instance'
 import type { AuthSessions } from '../auth-sessions'
 import type { PasskeyRows } from '../passkey-rows'
 import type { ProfileEmails } from '../profile-emails'
+import type { StartingLanguage } from '../starting-language.port'
 import type { TwoFactorRows } from '../two-factor-rows'
 
 import { deleteAccount, requestAccountDeletion } from './account-deletion'
@@ -151,6 +152,8 @@ export interface AuthMountDeps {
    * email's, so the turns never wait on each other in a circle.
    */
   readonly accounts: KeyedTurns<string>
+  /** The language an account an invitation creates starts in, looked up at its sign-up. */
+  readonly startingLanguage: StartingLanguage
 }
 
 /**

@@ -150,6 +150,30 @@ export async function chooseMemberRole(page: Page, email: string, role: Role): P
   await memberRoleOption(page, role).click()
 }
 
+/**
+ * Chooses `locale` as the organisation's default language on an administrator's "/org" page: the
+ * select takes a choice once the organisation's settings row is on the device, which the leading
+ * tab creates after the organisation's region caught up.
+ */
+export async function chooseDefaultLanguage(page: Page, locale: string): Promise<void> {
+  const select = page.getByTestId('organisation.settings.locale-select')
+
+  await expect(select).toBeEnabled({ timeout: 15_000 })
+  await select.click()
+  await page
+    .locator(`[data-testid="organisation.settings.locale-select.option"][data-value="${locale}"]`)
+    .click()
+  await expect(select).toHaveAttribute('data-value', locale)
+}
+
+/** Removes the organisation's default language on an administrator's "/org" page. */
+export async function removeDefaultLanguage(page: Page): Promise<void> {
+  const clear = page.getByTestId('organisation.settings.clear-button')
+
+  await clear.click()
+  await expect(clear).toHaveCount(0)
+}
+
 /** What a test knows of an invitation's mail: the invited email and the account that invited. */
 export interface InvitationMail {
   readonly email: string

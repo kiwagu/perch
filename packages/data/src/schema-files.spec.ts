@@ -38,7 +38,9 @@ describe('readSchema', () => {
 
   it('composes the tenant database: every common file, then its own, each in name order', () => {
     expect(readSchema('tenant')).toBe(
-      [...COMMON, 'tenant/member.surql', 'tenant/note.surql'].map(file).join('\n'),
+      [...COMMON, 'tenant/member.surql', 'tenant/note.surql', 'tenant/organisation_settings.surql']
+        .map(file)
+        .join('\n'),
     )
   })
 })

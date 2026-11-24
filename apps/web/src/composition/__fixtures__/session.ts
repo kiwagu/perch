@@ -100,45 +100,68 @@ export interface BrowserDatabases {
    * the database closes once the last tab has let it go.
    */
   open(identity: IdentityId): ResultAsync<LocalDb, DataError>
+  /**
+   * A tab's connection to the identity's database of the organisation `key`, shared the same way
+   * when the browser shares its organisations' databases; none when each tab opens its own.
+   */
+  readonly openTenant?: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
 }
 
-export function browserDatabases(): BrowserDatabases {
-  const shared = new Map<IdentityId, { readonly local: LocalDb; tabs: number }>()
+/**
+ * The databases of one browser, which its tabs share: each identity's own, and with `tenants`
+ * each organisation's too.
+ */
+export function browserDatabases(options: { readonly tenants?: boolean } = {}): BrowserDatabases {
+  const shared = new Map<string, { readonly local: LocalDb; tabs: number }>()
 
-  return {
-    open(identity) {
-      const held = shared.get(identity)
-      const opening = held
-        ? okAsync(held)
-        : openTestDb().map((local) => {
-            const opened = { local, tabs: 0 }
+  /** A tab's connection to the database named `name`, opened by `open` for its first tab. */
+  const opened = (
+    name: string,
+    open: () => ResultAsync<LocalDb, DataError>,
+  ): ResultAsync<LocalDb, DataError> => {
+    const held = shared.get(name)
+    const opening = held
+      ? okAsync(held)
+      : open().map((local) => {
+          const fresh = { local, tabs: 0 }
 
-            shared.set(identity, opened)
+          shared.set(name, fresh)
 
-            return opened
-          })
+          return fresh
+        })
 
-      return opening.map((opened): LocalDb => {
-        let holding = true
-        const release = async () => {
-          if (!holding) {
-            return
-          }
-
-          holding = false
-          opened.tabs -= 1
-
-          if (opened.tabs === 0) {
-            shared.delete(identity)
-            await opened.local.close()
-          }
+    return opening.map((database): LocalDb => {
+      let holding = true
+      const release = async () => {
+        if (!holding) {
+          return
         }
 
-        opened.tabs += 1
+        holding = false
+        database.tabs -= 1
 
-        return { ...opened.local, close: release, destroy: release }
-      })
-    },
+        if (database.tabs === 0) {
+          shared.delete(name)
+          await database.local.close()
+        }
+      }
+
+      database.tabs += 1
+
+      return { ...database.local, close: release, destroy: release }
+    })
+  }
+
+  return {
+    open: (identity) => opened(identity, () => openTestDb()),
+    ...(options.tenants === true
+      ? {
+          openTenant: (identity: IdentityId, key: string) =>
+            opened(`${identity}/${key}`, () =>
+              openTestDb({ schema: readSchema('tenant'), database: 'tenant' }),
+            ),
+        }
+      : {}),
   }
 }
 
@@ -262,10 +285,13 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
           },
         }
       }),
-    openTenantLocal: (_identity, key) =>
+    openTenantLocal: (identity, key) =>
       options.refusedTenants?.includes(key)
         ? errAsync(dataError('data:OPEN_FAILED', `the browser would not open ${key}`))
-        : openTestDb({ schema: readSchema('tenant'), database: 'tenant' }).map((local): LocalDb => {
+        : (
+            options.databases?.openTenant?.(identity, key) ??
+            openTestDb({ schema: readSchema('tenant'), database: 'tenant' })
+          ).map((local): LocalDb => {
             tenantsOpened.push(key)
 
             return {

@@ -15,7 +15,10 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
   }) => {
     const data = { ...generate.account(), name: generate.name() }
     // The sign-up's mail goes to the email, in the language the sign-up was made in.
-    const signedUp = { params: { email: data.email, locale: 'es' } }
+    const signedUp = {
+      params: { email: data.email, locale: 'es' },
+      account: { email: data.email, language: 'es' },
+    }
 
     await test.step('1. On device A, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])

@@ -65,7 +65,10 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     await test.step('5. Open the link of [mail:sign-up]', async () => {
       // The mail to the email, held to its declaration: the link opens [/verify-email] with its
       // token, in the language of the sign-up.
-      await openDeclaredMail(page, 'sign-up', { params: { email: data.email, locale: 'en' } })
+      await openDeclaredMail(page, 'sign-up', {
+        params: { email: data.email, locale: 'en' },
+        account: { email: data.email, language: 'en' },
+      })
     })
 
     // Expected:

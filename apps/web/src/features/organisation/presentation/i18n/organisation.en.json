@@ -42,6 +42,10 @@
   "organisation.invitation.error.invitation-gone": "This invitation is no longer valid: it was revoked, replaced, used or has expired. Ask an administrator of the organisation for a new one.",
   "organisation.invitation.error.already-member": "This account is already a member of the organisation.",
   "organisation.invitation.error.failed": "Something went wrong. Try again.",
+  "organisation.default-language.title": "Default language",
+  "organisation.default-language.label": "Language",
+  "organisation.default-language.none": "No default language",
+  "organisation.default-language.clear": "Remove the default",
   "organisation.error.key-invalid": "Use 2 to 32 lowercase letters, digits and underscores, starting with a letter.",
   "organisation.error.name-required": "Enter a name.",
   "organisation.error.name-too-long": "Use at most 80 characters for the name.",
@@ -54,6 +58,7 @@
   "organisation.error.not-admin": "Only an administrator can do this.",
   "organisation.error.last-admin": "The only administrator cannot become a member. Make another member an administrator first.",
   "organisation.error.forbidden": "Only the author or an administrator can change this note.",
+  "organisation.error.settings-forbidden": "Only an administrator can change the default language.",
   "organisation.error.text-required": "Write the note first.",
   "organisation.error.text-too-long": "Use at most 500 characters.",
   "organisation.error.failed": "Something went wrong. Try again."

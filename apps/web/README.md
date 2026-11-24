@@ -87,7 +87,14 @@ modeling stage.
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
   another one created. The ending of that sign-in forgets the start (`forgetSignIn`); a session
   that only closes (a tab that goes) keeps it. A start that a sign-out left unfinished
-  stays so until a sign-in learns of it. The first verification's answer (`{ name, locale }` of the
+  stays so until a sign-in learns of it. The settings row of each organisation the account
+  administers (`organisation_settings:ost_<key>`, with no default language) is ensured the same
+  way by `composition/organisation-starts.ts`: in the tab that leads, once the engine says that
+  organisation's region caught up, under the Web Lock `perch.session.organisation-start.<identity>.<key>`,
+  importing what the other tabs appended and flushing before it reads, creating only what is still
+  missing, and writing into that organisation whichever is current (`SessionService.tenantWritePath`,
+  under the identity's write lock, refused once the space, the engine, the admin role or the open
+  database changed). The first verification's answer (`{ name, locale }` of the
   sign-up), and a sign-in's answer that carries `start` (the account has no settings or profile at
   the gateway yet, because a reset verified its email or the device that verified it has not
   synced its start), keep that start before the device is saved
@@ -333,7 +340,10 @@ modeling stage.
   container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
+  and correlation ids). `TENANT_COMMANDS` (`forTenant(key, admitted)`) gives a command bus over
+  one organisation's region, named by its key (`SessionService.tenantWritePath`), whichever is
+  current, refused once its database is not open or `admitted` no longer holds when the write is
+  admitted. The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes
