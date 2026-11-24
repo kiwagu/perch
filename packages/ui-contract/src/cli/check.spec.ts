@@ -45,6 +45,27 @@ function writeCurrentRepository(): void {
   )
 }
 
+/** A result of one string past the budget, the other form version 6 refuses. */
+const LONG_RESULT = `this device signs out ${'and forgets what it held '.repeat(8).trim()}`
+
+/**
+ * The fixture migrated to the current version with the migration's work by hand left undone: the
+ * action's codes still a list, and its result one string past the budget.
+ */
+function writeMigratedRepositoryInOlderForms(): void {
+  writeContractRepository(root)
+  migrate(root, { write: true })
+  const platform = join(root, PLATFORM_FILE)
+
+  writeFileSync(
+    platform,
+    readFileSync(platform, 'utf8').replace(
+      'result: this device signs out\n',
+      `result: ${LONG_RESULT}\n`,
+    ),
+  )
+}
+
 /** An e2e test under `tests/e2e/src` that clicks an anchor the contract does not declare. */
 function writeUnknownAnchorTest(): void {
   mkdirSync(join(root, TESTS), { recursive: true })
@@ -109,6 +130,22 @@ describe('check --current', () => {
     expect(current.code).toBe(1)
     expect(current.err).toContain(UNKNOWN_ANCHOR)
     expect(current.err).toContain(VERSION_NOTE)
+  })
+})
+
+describe('check of a migrated contract that keeps the older forms', () => {
+  it('fails on both paths, naming the list of codes and the long result', () => {
+    writeMigratedRepositoryInOlderForms()
+
+    for (const argv of [[], ['--current']]) {
+      const result = run(argv)
+
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('actions["sign-out"].codes')
+      expect(result.err).toContain('a list of codes')
+      expect(result.err).toContain('actions["sign-out"].result')
+      expect(result.err).toContain(`is ${LONG_RESULT.length} characters, past its budget`)
+    }
   })
 })
 
