@@ -20,6 +20,7 @@ import {
 } from './__fixtures__/code-step'
 import {
   ANN,
+  freshAddress,
   mountedOnRealAuth,
   PASSWORD,
   pastFloor,
@@ -57,12 +58,12 @@ async function confirm(
   device = 'desk',
   email = ANN,
 ) {
-  return answered(await mounted.route(codeStep(challenge, code, device, { email }), FROM))
+  return answered(await mounted.route(codeStep(challenge, code, device, { email }), freshAddress()))
 }
 
 /** The status of Ann's sign-in with her right password from the desk. */
 async function rightPassword(mounted: Mounted) {
-  return (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status
+  return (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status
 }
 
 describe("authHandler, a sign-in's code step and the email's failed sign-ins", () => {
@@ -246,7 +247,9 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
         codeExpired,
       )
       await wrongPasswords(mounted, 1, FROM, GHOST)
-      expect((await mounted.route(signInRequest(GHOST, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(GHOST, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
       // Ann's own challenge was left as it was.
       expect((await confirm(mounted, challenge, await codeOf(ann.secret))).status).toBe(200)
     },

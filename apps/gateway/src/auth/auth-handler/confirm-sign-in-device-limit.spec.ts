@@ -25,7 +25,7 @@ import {
   PAST_THE_LIMIT,
   seenInTurn,
 } from './__fixtures__/devices'
-import { ANN, mountedOnRealAuth, PASSWORD, signInRequest } from './__fixtures__/mount'
+import { ANN, freshAddress, mountedOnRealAuth, PASSWORD, signInRequest } from './__fixtures__/mount'
 
 /** The client address a request comes from. */
 const FROM = '203.0.113.7'
@@ -54,14 +54,14 @@ async function confirm(
   return answered(
     await mounted.route(
       codeStep(challenge, code, device, signOutOldest === undefined ? {} : { signOutOldest }),
-      FROM,
+      freshAddress(),
     ),
   )
 }
 
 /** The status of Ann's sign-in with her right password from `device`. */
 async function rightPassword(mounted: Mounted, device: string) {
-  return (await mounted.route(signInRequest(ANN, PASSWORD, device), FROM))?.status
+  return (await mounted.route(signInRequest(ANN, PASSWORD, device), freshAddress()))?.status
 }
 
 /**

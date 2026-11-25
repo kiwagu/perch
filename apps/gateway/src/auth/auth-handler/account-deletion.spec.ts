@@ -16,6 +16,7 @@ import { deviceHeaders, signUpOn } from '../__fixtures__/auth-instance'
 
 import {
   ANN,
+  freshAddress,
   heldQueries,
   holdTurn,
   mountedOnRealAuth,
@@ -133,7 +134,9 @@ describe('authHandler, the request to delete the account', () => {
       ).toBe(401)
     }
 
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), ELSEWHERE))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 30_000)
 
   it('answers a body that names no password bad-request', async () => {
@@ -158,7 +161,9 @@ describe('authHandler, the request to delete the account', () => {
     expect(
       (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
     ).toBe(401)
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 60_000)
 
   it.each(OUT_OF_LENGTH)(
@@ -176,7 +181,9 @@ describe('authHandler, the request to delete the account', () => {
       // The sign-up's mail alone: no mail to delete the account.
       expect(mounted.outbox.to(ANN)).toHaveLength(1)
       // That last failure spent the account's failed sign-ins.
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     60_000,
   )

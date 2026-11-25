@@ -19,6 +19,7 @@ import {
   ANN,
   ARGON2_WAIT,
   annsLink,
+  freshAddress,
   heldQueries,
   holdTurn,
   isAccountLookup,
@@ -264,7 +265,9 @@ describe('authHandler, a sign-in and what runs beside it', () => {
 
       expect((await mounted.route(signInRequest(ANN, password, 'desk'), FROM))?.status).toBe(401)
       // That last failure spent them: the right password waits too.
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     60_000,
   )
@@ -611,7 +614,9 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
         (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
       ).toBe(401)
       // It was no success either: those failures stand, so the right password waits.
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     60_000,
   )
@@ -633,7 +638,9 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
 
     // Past the window from the refusal, still within that from the first wrong password.
     await mounted.clock.advance(2_000)
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 60_000)
 
   it("forgets the email's failed sign-ins at the right password of an account whose email is not verified, which Better Auth refuses after it checked it", async () => {
@@ -650,17 +657,13 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
     // limit, each from an address of its own, so only the email's limit can refuse the next.
     for (let failed = 0; failed < FAILED_SIGN_INS.limit; failed += 1) {
       expect(
-        (
-          await mounted.route(
-            signInRequest(ANN, 'Wrong-pass-word-9', 'desk'),
-            `198.51.100.${failed}`,
-          )
-        )?.status,
+        (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), freshAddress()))
+          ?.status,
       ).toBe(401)
     }
 
     expect(
-      (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), '198.51.100.250'))
+      (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), freshAddress()))
         ?.status,
     ).toBe(429)
   }, 90_000)
@@ -703,7 +706,7 @@ describe('authHandler, the password step of an account whose second factor is on
     await annWithSecondFactor(mounted)
 
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
-    const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+    const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress())
 
     for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
@@ -808,7 +811,9 @@ describe('authHandler, the password step of an account whose second factor is on
     expect(await challengeRows(mounted)).toEqual([])
     // The refusal judged nothing: the next wrong password is the last allowed, which spends them.
     expect((await wrong())?.status).toBe(401)
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 60_000)
 })
 
@@ -849,7 +854,9 @@ describe('authHandler, the judgement of a password step that met the second fact
     // The refusal judged nothing, though the email has no account any more: the next wrong
     // password is the last allowed, which spends them.
     expect((await wrong())?.status).toBe(401)
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 60_000)
 })
 
@@ -862,7 +869,7 @@ describe('authHandler, the password step of a banned account whose second factor
     await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
 
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
-    const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+    const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress())
 
     for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
@@ -907,6 +914,8 @@ describe('authHandler, the password step of a banned account whose second factor
 
     expect([refused?.status, await refused?.json()]).toEqual([403, { code: 'account-banned' }])
     expect((await wrong())?.status).toBe(401)
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 60_000)
 })

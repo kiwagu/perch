@@ -23,7 +23,7 @@ describe('organisationRoutes', () => {
     })
 
     it("lets an admin's invites the contract allows within its window reach the service, unknown emails included, and answers the next 429 without calling it", async () => {
-      const { root, ann, ask, founded } = await harness()
+      const { root, ann, ask, founded, limits } = await harness()
       const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
       await founded()
@@ -40,10 +40,12 @@ describe('organisationRoutes', () => {
 
       expect(refused).toEqual({ status: 429, body: { code: 'rate-limited' } })
       expect(invite).toHaveBeenCalledTimes(INVITES)
+      // The address's mails were left: the admin's invitations refused, not the address's mails.
+      expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
     })
 
     it('answers 429 with Retry-After in whole seconds', async () => {
-      const { routes, floor, ann, founded } = await harness()
+      const { routes, floor, ann, founded, limits } = await harness()
 
       await founded()
 
@@ -65,6 +67,8 @@ describe('organisationRoutes', () => {
 
       expect(response?.status).toBe(429)
       expect(response?.headers.get('Retry-After')).toBe(String(IDENTITY_INVITES.windowMs / 1000))
+      // The address's mails were left: the admin's invitations refused, not the address's mails.
+      expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
     })
 
     it('still lets another admin invite from another address when one is refused', async () => {
@@ -159,7 +163,7 @@ describe('organisationRoutes', () => {
     })
 
     it('counts an invitation whose email is not one, though the service is not asked', async () => {
-      const { root, ann, ask, founded } = await harness()
+      const { root, ann, ask, founded, limits } = await harness()
       const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
       await founded()
@@ -178,6 +182,8 @@ describe('organisationRoutes', () => {
         body: { code: 'rate-limited' },
       })
       expect(invite).not.toHaveBeenCalled()
+      // The address's mails were left: the admin's invitations refused, not the address's mails.
+      expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
     })
 
     it("answers an address's mail past its limit 429, sign-ups and invites together, its invite windows untouched", async () => {
@@ -230,6 +236,9 @@ describe('organisationRoutes', () => {
 
     it('gives the address its mail back when an invite window refuses the invite', async () => {
       const { limits, ann, ask, founded } = await harness()
+
+      // Mails are left once the admin's invitations are spent, so a refused one could take one.
+      expect(ADDRESS_MAILS.limit).toBeGreaterThan(INVITES)
 
       await founded()
 

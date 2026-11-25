@@ -16,6 +16,7 @@ import {
   ANN,
   ARGON2_WAIT,
   annsLink,
+  freshAddress,
   holdTurn,
   mountedOnRealAuth,
   PASSWORD,
@@ -162,7 +163,9 @@ describe('authHandler, the request to change the email', () => {
       ).toBe(401)
     }
 
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), ELSEWHERE))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 30_000)
 
   it("refuses a new email that is not an email with email-invalid, taking none of the account's changes", async () => {
@@ -243,7 +246,9 @@ describe('authHandler, the request to change the email', () => {
     expect(
       (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
     ).toBe(401)
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 60_000)
 
   it.each(OUT_OF_LENGTH)(
@@ -260,7 +265,9 @@ describe('authHandler, the request to change the email', () => {
       expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
       expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
       // That last failure spent the account's failed sign-ins.
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     60_000,
   )

@@ -34,6 +34,8 @@ export interface SignedIn {
 export interface NamedDevice {
   readonly id: string
   readonly label: string
+  /** The client address it comes from, where a step needs it distinct; else one from its id. */
+  readonly address?: string
 }
 
 /** What a device signs up or in with. */
@@ -81,7 +83,8 @@ function deviceHeaders(device: string | NamedDevice): Record<string, string> {
 
   return {
     'X-Perch-Device': id,
-    'X-Forwarded-For': simulatedAddress(id),
+    'X-Forwarded-For':
+      typeof device === 'string' ? simulatedAddress(id) : (device.address ?? simulatedAddress(id)),
     ...(typeof device === 'string' ? {} : { 'X-Perch-Device-Label': device.label }),
   }
 }

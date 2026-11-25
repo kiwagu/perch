@@ -143,10 +143,15 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       const device = { id: 'smoke-device-wrong-passwords', label: 'Smoke' }
       const { identity } = await signUp(base, mailbox, { ...freshAccount(), device })
       const last = checkLimited(
-        // Each wrong password from an address of its own: only the email's limit can refuse the last.
+        // Each wrong password from an address of its own, outside the range a device's id maps to:
+        // only the email's limit can refuse the last.
         await signIns(
           base,
-          (attempt) => ({ ...device, id: `${device.id}-${attempt}` }),
+          (attempt) => ({
+            ...device,
+            id: `${device.id}-${attempt}`,
+            address: `198.19.${Math.floor(attempt / 250)}.${(attempt % 250) + 1}`,
+          }),
           FAILED_SIGN_INS.limit + 1,
           () => ({
             email: identity.email,

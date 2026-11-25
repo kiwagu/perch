@@ -13,6 +13,7 @@ import { DeviceSessions } from '../device-sessions'
 import {
   ANN,
   ARGON2_WAIT,
+  freshAddress,
   heldQueries,
   isSessionInsert,
   mountedOnRealAuth,
@@ -112,11 +113,13 @@ describe('authHandler, the change of a password', () => {
       }
 
       // The account's failed sign-ins are spent: the right password and a sign-in wait too.
-      const limited = await mounted.route(change(ann.on('laptop'), PASSWORD), FROM)
+      const limited = await mounted.route(change(ann.on('laptop'), PASSWORD), freshAddress())
 
       expect(limited?.status).toBe(429)
       expect(await limited?.json()).toEqual({ code: 'rate-limited' })
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
       expect((await mounted.sessions.read(ann.tokens.get('phone') ?? '')).kind).toBe('session')
       expect(ann.sockets.get('phone')?.ended).toEqual([])
       await mounted.clock.advance(FAILED_SIGN_INS.windowMs)
@@ -137,9 +140,9 @@ describe('authHandler, the change of a password', () => {
       expect(
         (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
       ).toBe(401)
-      expect((await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'desk'), FROM))?.status).toBe(
-        429,
-      )
+      expect(
+        (await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     ARGON2_RUNS_MS,
   )
@@ -157,7 +160,9 @@ describe('authHandler, the change of a password', () => {
       expect(refused?.status).toBe(400)
       expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
       // That last failure spent the account's failed sign-ins; the password stays what it was.
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
       await mounted.clock.advance(FAILED_SIGN_INS.windowMs)
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
     },

@@ -21,6 +21,7 @@ import {
 import {
   ANN,
   ARGON2_WAIT,
+  freshAddress,
   heldQueries,
   holdTurn,
   isAdmission,
@@ -219,7 +220,9 @@ describe("authHandler, a sign-in's code step and a ban", () => {
 
       expect(await answered(await confirming)).toEqual(accountBanned)
       await wrongPasswords(mounted, 1, FROM)
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     ARGON2_RUNS_MS,
   )
@@ -247,7 +250,9 @@ describe("authHandler, a sign-in's code step and a ban", () => {
           .kind,
       ).toBe('none')
       await wrongPasswords(mounted, 1, FROM)
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     ARGON2_RUNS_MS,
   )
@@ -380,7 +385,9 @@ describe("authHandler, a sign-in's backup code spent beside another use of the c
       expect(await answered(await again)).toEqual(invalidCode)
       // That wrong code is the first failure of the new count: the rest of the limit spends it.
       await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     ARGON2_RUNS_MS,
   )

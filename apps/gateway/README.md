@@ -121,7 +121,7 @@ the update; each device's next hello is then refused with 4401.
   simulated client address, of its own (one sign-in of unknown emails more than an address's
   credential checks within their window, the last answered 429 with `Retry-After` by the
   gateway's limit per address; one wrong password more than an email's failed sign-ins for a
-  further identity, the last answered 429 by its limit per email; both limits the contract's,
+  further identity, each from an address of its own, the last answered 429 by its limit per email; both limits the contract's,
   `CREDENTIAL_CHECKS` and `FAILED_SIGN_INS`; a sign-up of a taken email
   answered 202 with no body and the same headers as a new one's, and mailed nothing; a sign-up
   whose password breaks the rules of a new password answered 400 `weak-password`; an
