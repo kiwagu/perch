@@ -34,10 +34,11 @@ Where: [/org] on devices A and D (user A, admin, in English, in two browsers); [
 
 ### Expected result
 - After step 2 [organisation.settings.locale-select] shows [value:es] on devices A and D: device D got it from the server, which holds it, and no [app-shell.notice-message] carries [code:change-rejected] on device A
-- After step 3 the invitation is pending, and [mail:organisations.invite] reaches the invited email in the language [value:en], user A's, as no account has that email yet
+- After step 3 the invitation is pending, and [mail:organisations.invite] reaches the invited email in the language [value:es], the organisation's, as no account has that email yet
 - After step 4 [mail:sign-up] reaches the invited email in the language [value:es], the organisation's, though the sign-up page spoke English, and [user.settings.locale-select] shows [value:es]
 - After step 5 device B shows [organisation.page.role-badge] carrying [value:member] and no [organisation.settings.locale-select]
 - After step 6 [user.settings.locale-select] still shows [value:en]: the member's own language wins over the organisation's
 - After step 7 [organisation.settings.locale-select] still shows [value:es] on device A, with [organisation.settings.clear-button] beside it
 - After step 8 [organisation.settings.clear-button] is gone on devices A and D: device D got the removal from the server, which holds it, and no [app-shell.notice-message] carries [code:change-rejected] on device A
+- After step 9 [mail:organisations.invite] reaches the second invited email in the language [value:en]: the organisation's default was removed, so the built-in English speaks
 - After step 10 [mail:sign-up] reaches the second invited email in the language [value:en] and [user.settings.locale-select] shows [value:en] on device C: with no default, the account starts in its sign-up page's language
