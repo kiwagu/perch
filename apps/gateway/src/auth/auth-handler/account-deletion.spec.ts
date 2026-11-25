@@ -222,7 +222,8 @@ describe('authHandler, the request to delete the account', () => {
 
     await mounted.outbox.next(ANN, 3)
 
-    const fourth = await mounted.route(askToDelete(ann.on('laptop')), ELSEWHERE)
+    // From an address of its own, whose checks and mails are untouched: only the account refuses it.
+    const fourth = await mounted.route(askToDelete(ann.on('laptop')), freshAddress())
 
     expect(fourth?.status).toBe(429)
     expect(await fourth?.json()).toEqual({ code: 'rate-limited' })

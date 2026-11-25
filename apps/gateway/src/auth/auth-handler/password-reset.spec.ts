@@ -18,6 +18,7 @@ import {
   ANN,
   ARGON2_WAIT,
   annsLink,
+  freshAddress,
   heldQueries,
   holdTurn,
   isSessionInsert,
@@ -134,7 +135,8 @@ describe('authHandler, the request for a reset mail', () => {
       await resetLink(mounted, ANN, n === 1 ? ELSEWHERE : FROM)
     }
 
-    const fourth = await mounted.route(resetRequest(ANN.toUpperCase()), FROM)
+    // From an address of its own, whose mails are untouched: only the email's limit refuses it.
+    const fourth = await mounted.route(resetRequest(ANN.toUpperCase()), freshAddress())
 
     expect(fourth?.status).toBe(429)
     expect(await fourth?.json()).toEqual({ code: 'rate-limited' })

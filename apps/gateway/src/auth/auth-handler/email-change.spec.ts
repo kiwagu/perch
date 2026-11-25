@@ -211,9 +211,10 @@ describe('authHandler, the request to change the email', () => {
       ).toBe(202)
     }
 
+    // From an address of its own, whose checks and mails are untouched: only the account refuses it.
     const next = await mounted.route(
       changeTo(ann.on('laptop'), `new-${limit}@example.test`),
-      ELSEWHERE,
+      freshAddress(),
     )
 
     expect(next?.status).toBe(429)

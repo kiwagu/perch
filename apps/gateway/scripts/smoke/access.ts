@@ -12,7 +12,7 @@ import { z } from '@workspace/zod'
 import { CREDENTIAL_CHECKS, FAILED_SIGN_INS } from '../../src/limits/windows'
 
 import { freshPassword } from './fresh-password'
-import { type Answer, type Credentials, call, signUp } from './http'
+import { type Answer, addressApart, type Credentials, call, signUp } from './http'
 import { reported } from './reported-answer'
 import { check, step } from './steps'
 
@@ -143,15 +143,10 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       const device = { id: 'smoke-device-wrong-passwords', label: 'Smoke' }
       const { identity } = await signUp(base, mailbox, { ...freshAccount(), device })
       const last = checkLimited(
-        // Each wrong password from an address of its own, outside the range a device's id maps to:
-        // only the email's limit can refuse the last.
+        // Each wrong password from an address of its own: only the email's limit can refuse the last.
         await signIns(
           base,
-          (attempt) => ({
-            ...device,
-            id: `${device.id}-${attempt}`,
-            address: `198.19.${Math.floor(attempt / 250)}.${(attempt % 250) + 1}`,
-          }),
+          (attempt) => ({ ...device, id: `${device.id}-${attempt}`, address: addressApart() }),
           FAILED_SIGN_INS.limit + 1,
           () => ({
             email: identity.email,
@@ -254,8 +249,15 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       const device = deviceNamed('resends')
       const answers: Answer[] = []
 
+      // Each from an address of its own, whose mails are untouched: only the email refuses the last.
       for (let attempt = 0; attempt < 4; attempt += 1) {
-        answers.push(await resend(base, email, device))
+        answers.push(
+          await resend(base, email, {
+            ...device,
+            id: `${device.id}-${attempt}`,
+            address: addressApart(),
+          }),
+        )
       }
 
       const last = checkLimited(answers, 202)

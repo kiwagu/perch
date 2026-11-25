@@ -41,6 +41,12 @@ const FROM = '203.0.113.7'
 /** Another client address, which nothing from `FROM` charges. */
 const ELSEWHERE = '203.0.113.8'
 
+/**
+ * A third address, from which a test sends only the request whose refusal it judges: whatever other
+ * limits that request takes are fresh there, so only the limit judged can refuse it.
+ */
+const APART = '203.0.113.9'
+
 /** The answers of `count` calls of `ask`, one after the other. */
 function answers<T>(count: number, ask: (n: number) => T): T[] {
   return Array.from({ length: count }, (_, n) => ask(n))
@@ -238,8 +244,11 @@ describe('RequestLimits', () => {
   it("takes an address's invitations across identities within their window and refuses the next", async () => {
     const { limits } = limitsOn()
 
-    // Two identities fill the address's invitations: ann all of hers, bob the rest.
+    // Two identities fill the address's invitations: ann all of hers, bob the rest. Every invitation
+    // also takes one of the address's mails, so its invitations can refuse only while it has more
+    // mails than invitations: no other address tells the two apart.
     expect(ADDRESS_INVITES.limit).toBeLessThanOrEqual(2 * INVITES)
+    expect(MAILS).toBeGreaterThan(ADDRESS_INVITES.limit)
 
     for (let attempt = 0; attempt < ADDRESS_INVITES.limit; attempt += 1) {
       expect(limits.inviteMail(attempt < INVITES ? ann : bob, '203.0.113.7')).toEqual({
@@ -259,6 +268,9 @@ describe('RequestLimits', () => {
 
   it("leaves the address's invitations uncharged by an invitation its identity's limit refuses", () => {
     const { limits } = limitsOn()
+
+    // The address's invitations are seen through invitations that each take one of its mails too.
+    expect(MAILS).toBeGreaterThan(ADDRESS_INVITES.limit)
 
     for (let attempt = 0; attempt < INVITES; attempt += 1) {
       limits.inviteMail(ann, '203.0.113.7')
@@ -298,19 +310,21 @@ describe('RequestLimits', () => {
       limits.inviteMail(ann, FROM)
     }
 
-    // The identity's window refuses these 20: each gives its mail back.
-    expect(answers(20, () => limits.inviteMail(ann, FROM).allowed)).toEqual(
+    // The identity's window refuses these 20 from an address of their own: each gives its mail back.
+    expect(answers(20, () => limits.inviteMail(ann, APART).allowed)).toEqual(
       answers(20, () => false),
     )
-    // The invitations took as many of the address's mails: the rest fit, and the next is refused.
-    expect(answers(MAILS - INVITES, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(MAILS - INVITES, () => true),
+    expect(answers(MAILS, () => limits.verificationMail(APART).allowed)).toEqual(
+      answers(MAILS, () => true),
     )
-    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    expect(limits.verificationMail(APART).allowed).toBe(false)
   })
 
   it("gives the address its mail back when the address's invitations refuse the invitation", () => {
     const { limits } = limitsOn()
+
+    // Its invitations refuse while it has mails left: no other address tells the two apart.
+    expect(MAILS).toBeGreaterThan(ADDRESS_INVITES.limit)
 
     for (let attempt = 0; attempt < ADDRESS_INVITES.limit; attempt += 1) {
       limits.inviteMail(attempt < INVITES ? ann : bob, FROM)
@@ -331,6 +345,9 @@ describe('RequestLimits', () => {
 
   it("moves no invitation window for an invitation the address's mails refuse", async () => {
     const { clock, limits } = limitsOn()
+
+    // The address's invitations are seen through invitations that each take one of its mails too.
+    expect(MAILS).toBeGreaterThan(ADDRESS_INVITES.limit)
 
     answers(MAILS, () => limits.verificationMail(FROM))
     await clock.advance(ADDRESS_MAILS.windowMs - minute)
@@ -396,15 +413,15 @@ describe('RequestLimits', () => {
       answers(3, () => ({ allowed: true })),
     )
     await clock.advance(5 * minute)
-    expect(limits.verificationMail(FROM, 'ghost@example.test')).toEqual({
+    expect(limits.verificationMail(APART, 'ghost@example.test')).toEqual({
       allowed: false,
       retryAfterMs: 10 * minute,
     })
-    // The address took three of its mails: the rest fit, the refused resend's place given back.
-    expect(answers(MAILS - 3, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(MAILS - 3, () => true),
+    // The refused resend gave its address's mail back: all of them fit there.
+    expect(answers(MAILS, () => limits.verificationMail(APART).allowed)).toEqual(
+      answers(MAILS, () => true),
     )
-    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    expect(limits.verificationMail(APART).allowed).toBe(false)
   })
 
   it("takes an address's verification mails within their window, sign-ups and resends together, and refuses the next of either kind", async () => {
@@ -493,17 +510,17 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
       true,
     ])
     await clock.advance(5 * minute)
-    expect(limits.resetMail(FROM, 'ann@example.test')).toEqual({
+    expect(limits.resetMail(APART, 'ann@example.test')).toEqual({
       allowed: false,
       retryAfterMs: 10 * minute,
     })
     // An email's resends of its verification mail are another limit.
     expect(limits.verificationMail(FROM, 'ann@example.test')).toEqual({ allowed: true })
-    // The address took four of its mails: the rest fit, the refused reset's place given back.
-    expect(answers(MAILS - 4, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(MAILS - 4, () => true),
+    // The refused reset gave its address's mail back: all of them fit there.
+    expect(answers(MAILS, () => limits.verificationMail(APART).allowed)).toEqual(
+      answers(MAILS, () => true),
     )
-    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    expect(limits.verificationMail(APART).allowed).toBe(false)
     await clock.advance(10 * minute)
     expect(limits.resetMail(ELSEWHERE, 'ann@example.test')).toEqual({ allowed: true })
   })

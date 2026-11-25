@@ -22,6 +22,7 @@ import { AT_THE_LIMIT, PAST_THE_LIMIT, seenInTurn } from './__fixtures__/devices
 import {
   ANN,
   ARGON2_WAIT,
+  freshAddress,
   heldQueries,
   holdTurn,
   isAdmission,
@@ -323,7 +324,7 @@ describe('authHandler, a passkey sign-in', () => {
       expect(await passkeySignIn(mounted, 'desk', held)).toEqual(accountBanned)
       await wrongPasswords(mounted, 1, '198.18.1.8')
       expect(
-        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), '198.18.1.8'))?.status,
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
       ).toBe(429)
     },
     ARGON2_RUNS_MS,

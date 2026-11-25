@@ -6,7 +6,7 @@ import { z } from '@workspace/zod'
 
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
-import { CREDENTIAL_CHECKS, FAILED_SIGN_INS } from '../../limits/windows'
+import { ADDRESS_MAILS, CREDENTIAL_CHECKS, FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
@@ -24,6 +24,7 @@ import {
   ANN,
   acceptedSignIn,
   fakeConnections,
+  freshAddress,
   mountedOnFakeAuth,
   noAccounts,
   noSessions,
@@ -362,6 +363,8 @@ describe('authHandler', () => {
       return (await Promise.all(pending)).map((answer) => answer?.status ?? 0)
     }
 
+    // Each sign-up takes one of the address's mails too: its checks refuse first while mails are left.
+    expect(ADDRESS_MAILS.limit).toBeGreaterThan(CHECKS + 1)
     expect(await signUps(FROM, CHECKS)).toEqual(times(CHECKS, 202))
     await clock.advance(4_000 - SIGN_UP_FLOOR_MS)
 
@@ -691,7 +694,7 @@ describe('authHandler', () => {
       expect((await signIn({ ...credentials, password: 'wrong-pass-word' })).status).toBe(401)
     }
 
-    expect((await signIn(credentials)).status).toBe(429)
+    expect((await signIn(credentials, undefined, freshAddress())).status).toBe(429)
 
     // Read as a form, each body names Ann with her right password; Better Auth is handed the JSON
     // the limit counted, which names the decoy, so Ann is never signed in and the decoy is limited.
@@ -710,7 +713,7 @@ describe('authHandler', () => {
     }
 
     expect(statuses).toEqual(SPENT)
-    expect((await signIn(credentials)).status).toBe(429)
+    expect((await signIn(credentials, undefined, freshAddress())).status).toBe(429)
   })
 
   it("answers 404 to a device listing the account's sessions: no device learns another one's token", async () => {

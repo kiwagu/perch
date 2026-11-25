@@ -21,6 +21,7 @@ import {
   ARGON2_WAIT,
   annsLink,
   fakeConnection,
+  freshAddress,
   heldQueries,
   isSessionInsert,
   mountedOnFakeAuth,
@@ -350,9 +351,12 @@ describe('authHandler, the resend of the verification mail', () => {
     const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true }))
     const statuses: number[] = []
 
-    for (let n = 0; n < 4; n += 1) {
+    for (let n = 0; n < 3; n += 1) {
       statuses.push((await route(resendRequest(GHOST), FROM))?.status ?? 0)
     }
+
+    // The fourth from an address of its own, whose mails are untouched: only the email refuses it.
+    statuses.push((await route(resendRequest(GHOST), freshAddress()))?.status ?? 0)
 
     expect(statuses).toEqual([202, 202, 202, 429])
     expect(received).toHaveLength(3)
