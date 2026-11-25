@@ -640,7 +640,7 @@ actions:
       - admin
     mail:
       to: email
-      language: recipient
+      language: [ recipient, organisation ]
       link: { screen: organisation.invitation, search: token }
   organisations.invitations:
     description: Reads the pending invitations of the current organisation.
