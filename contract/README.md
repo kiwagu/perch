@@ -120,7 +120,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   activity's names or a scenario's prose; code and
   tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`, and an
   invariant's number through `CONTRACT_INVARIANTS` (`ui-contract emit terms`), never by hand,
-  which the ESLint rule `workspace/contract-terms` holds ([the rule](REFERENCE.md#rule-terms)).
+  which the ESLint rule `workspace/contract-terms` holds, and a role SurrealQL writes is held to
+  `CONTRACT_ROLES` by `bun run lint:surql` ([the rule](REFERENCE.md#rule-terms)).
 - `domain/screens/<pathname>.yaml`: one screen per file, named by the path of the screen's
   first binding without the leading `/`. `/sign-in` is `domain/screens/sign-in.yaml` and `/me`
   is `domain/screens/me.yaml`; a nested path is a folder (`/org/$org` would be
