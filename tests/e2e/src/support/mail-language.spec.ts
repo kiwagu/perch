@@ -29,6 +29,14 @@ describe('languageOf', () => {
       languageOf(['recipient', 'organisation'], { params: {}, account: ACCOUNT }),
     ).toThrow('the test gave no value for "organisation"')
   })
+  it('moves past a parameter it gave no value for, as one left out, but fails at the last source', () => {
+    expect(
+      languageOf(['locale', 'organisation'], { params: {}, organisation: { language: 'es' } }),
+    ).toBe('es')
+    expect(() => languageOf(['recipient', 'locale'], { params: {} })).toThrow(
+      'the test gave no value for "locale"',
+    )
+  })
   it('fails for a source written alone the test gave no value for', () => {
     expect(() => languageOf('organisation', { params: {} })).toThrow(
       'the test gave no value for "organisation"',

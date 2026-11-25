@@ -91,6 +91,27 @@ describe('mailsProblems', () => {
       ])
     }
   })
+  it('lets an optional parameter be followed, and wants a list to end with a source that always has a language', () => {
+    const optional = (language: unknown, roles?: readonly string[]) => {
+      const contract = sending({ to: 'email', language, link: LINK }, roles)
+      const params = contract.screens.platform.actions['invite.send']?.params ?? {}
+
+      Object.assign(params, {
+        tongue: { type: 'string', optional: true, description: 'A language.' },
+      })
+
+      return printed(contract)
+    }
+
+    expect(optional(['tongue', 'organisation'], ['admin'])).toEqual([])
+    expect(optional(['recipient', 'tongue', 'locale'])).toEqual([])
+    expect(optional(['recipient', 'tongue'])).toEqual([
+      `${AT}.language[1]: "tongue" may have no language, so it does not end a list: end it with a source that always has one`,
+    ])
+    expect(optional(['tongue', 'recipient'])).toEqual([
+      `${AT}.language[1]: "recipient" may have no language, so it does not end a list: end it with a source that always has one`,
+    ])
+  })
   it('takes the organisation only on an action run in an organisation: roles listed, neither guest nor identity', () => {
     const refusal = `${AT}.language[1]: "organisation" speaks the language of the organisation the action runs in, so "invite.send" lists its roles, neither guest nor identity among them`
 

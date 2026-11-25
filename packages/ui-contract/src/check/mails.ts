@@ -10,10 +10,10 @@
  * `recipient`, a mail's language alone, are reserved on an action that sends a mail.
  * `organisation`, the organisation the action runs in, always has a language, so the action lists
  * its roles, neither guest nor identity among them. `recipient`, the account whose email the mail
- * goes to, has one only when an account has that email, so the mail goes to a parameter; in a list
- * the next source speaks when it has none, and every other source always has one, so only the
- * recipient may be followed. Written alone, the older form, it falls back on the signed-in account,
- * so only signed-in roles run the action.
+ * goes to, has one only when an account has that email, so the mail goes to a parameter; so has an
+ * optional parameter left out. In a list the next source speaks when one has none, so only these may
+ * be followed, and a list ends with a source that always has one. The recipient written alone, the
+ * older form, falls back on the signed-in account, so only signed-in roles run the action.
  */
 
 import { GUEST, IDENTITY } from '../anchors'
@@ -90,11 +90,28 @@ function languageMessages(
           ]
       : []
 
+  const mayHaveNone = (source: string): boolean =>
+    source === RECIPIENT ||
+    (Object.hasOwn(action.params, source) && action.params[source]?.optional === true)
+  const last = sources.at(-1)
+  const unended =
+    typeof mail.language !== 'string' &&
+    last !== undefined &&
+    mayHaveNone(last.source) &&
+    mayHaveNone(sources.at(-2)?.source ?? '')
+      ? [
+          {
+            at: last.at,
+            message: `"${last.source}" may have no language, so it does not end a list: end it with a source that always has one`,
+          },
+        ]
+      : []
+
   return [
     ...sources.flatMap(({ source, at }, index) => {
       const before = sources[index - 1]?.source
 
-      return before !== undefined && before !== RECIPIENT
+      return before !== undefined && !mayHaveNone(before)
         ? [
             {
               at,
@@ -103,6 +120,7 @@ function languageMessages(
           ]
         : sourceMessages(name, action, mail, source).map((message) => ({ at, message }))
     }),
+    ...unended,
     ...alone.map((message) => ({ at: [], message })),
   ]
 }

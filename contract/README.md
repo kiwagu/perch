@@ -198,8 +198,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   signed up in; `organisation`, the organisation the action runs in: its default language when
   its settings name one, else the app's built-in English; or `recipient`, the account whose email
   the mail goes to, read as `account` is, when an account has that email. Every source but
-  `recipient` always has a language, so it ends a list: an invitation's `language: [ recipient,
-  organisation ]` speaks the language of the account it invites, else its organisation's.
+  `recipient` and an optional parameter left out always has a language, so it ends a list, and a
+  list ends with one: an invitation's `language: [ recipient, organisation ]` speaks the language
+  of the account it invites, else its organisation's.
   `recipient` written alone, the older form, falls back on the signed-in account's. `account` is
   a reserved word there: it names the account the action acts on, the signed-in account for an
   action on its own account (a change of email, a request to delete it), else, whoever is signed
@@ -210,7 +211,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   and each source to the action's parameters and those three words, refuses a parameter named
   `account` on an action that sends a mail or a notice and one named `organisation` or
   `recipient` on an action that sends a mail, refuses a source after one that always has a
-  language (it is never reached), takes `recipient` only for a mail whose `to` is a parameter
+  language (it is never reached) and a list whose last source may have none, takes `recipient`
+  only for a mail whose `to` is a parameter
   (written alone, only on an action whose `roles` leave `guest` out, as it falls back on a
   signed-in account) and `organisation` only on an action whose `roles` leave out `guest` and
   `identity` (it runs in an organisation; the contract does not say which other roles are held
