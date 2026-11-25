@@ -1,9 +1,10 @@
 /**
  * Reports a role or a route of the UI contract written by hand as a string where the code expects
- * a role or a route: code and tests name them through `CONTRACT_ROLES` and `CONTRACT_ROUTES`, the
- * constants the contract's engine emits (`ui-contract emit terms`), so a role or a route is said
- * once, in the contract. The option `module` is the absolute path of that module; the rule reads
- * its two constants (a missing or malformed module fails the lint, never passes it).
+ * a role or a route, and a number of an invariant written by hand where the code expects one: code
+ * and tests name them through `CONTRACT_ROLES`, `CONTRACT_ROUTES` and `CONTRACT_INVARIANTS`, the
+ * constants the contract's engine emits (`ui-contract emit terms`), so each is said once, in the
+ * contract. The option `module` is the absolute path of that module; the rule reads its three
+ * constants (a missing or malformed module fails the lint, never passes it).
  *
  * The code expects a role where TypeScript does: the type the code declares at the literal (a
  * parameter, an element of a typed list, a typed property or return; never a type inferred from

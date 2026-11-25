@@ -242,8 +242,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   ```
 
   `account` is reserved on an action that sends a notice too. The check holds `to` and
-  `language` as a mail's, but for one source, never `organisation` or `recipient`, which a
-  mail's language alone takes, wants the names
+  `language` as a mail's, but for one source, a parameter or `account`: `organisation` and
+  `recipient` are a mail's language alone, and on a notice they name only a parameter of the
+  action when it has one of that name; it wants the names
   unique within the action, and holds a link to a
   screen with a route, every route of which needs no parameter, as the link carries none (no
   `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario

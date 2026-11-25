@@ -6,7 +6,9 @@
  * definition of a field named `role`, after `$value` compared or tested the same way. Each such
  * string is one of the contract's roles (`CONTRACT_ROLES`), or a value allowed for that field of
  * that table alone (`identity.role` holds `user`, the auth library's word for an account with no
- * platform role). A table name (`type::record('member', $id)`) and a comment are no role.
+ * platform role). A table name (`type::record('member', $id)`) and a comment are no role. A role
+ * written another way (the other way round, with `CONTAINS`, as a quoted key, through a `LET`) is
+ * not read: the schema and the queries write roles in the forms above.
  */
 
 import { type Token, tokenize } from './tokenizer'
