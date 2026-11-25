@@ -11,7 +11,7 @@
  */
 
 import type { Contract } from '../check'
-import { codeEntriesOf, languageSources, outcomesOf } from '../files'
+import { codeEntriesOf, languageSources, outcomesOf, renderedRule, renderedValue } from '../files'
 
 import { valueWords } from './value-words'
 
@@ -86,6 +86,17 @@ export function actionLines(action: PlatformAction | undefined): string[] {
 
 type PlatformInvariant = NonNullable<Contract['screens']['platform']['invariants']>[string]
 
-/** The lines of an invariant: its rule and the code it refuses with; none for one a side lacks. */
+/**
+ * The lines of an invariant: its rule with its values written in, the code it refuses with and
+ * each value by its name, so a changed number shows on its own line; none for one a side lacks.
+ */
 export const invariantLines = (invariant: PlatformInvariant | undefined): string[] =>
-  invariant === undefined ? [] : [`rule: ${invariant.rule}`, `refuses ${invariant.refuses}`]
+  invariant === undefined
+    ? []
+    : [
+        `rule: ${renderedRule(invariant)}`,
+        `refuses ${invariant.refuses}`,
+        ...Object.entries(invariant.values ?? {}).map(
+          ([name, value]) => `value ${name}: ${renderedValue(value)}`,
+        ),
+      ]

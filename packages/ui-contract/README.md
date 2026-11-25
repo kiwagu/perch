@@ -90,7 +90,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     map or as the older list a contract before version 6 may write, its result as a list or as one
     string; `invariantActions(platform)`
     (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, by
-    name (`contract/REFERENCE.md#rule-action-outcomes`).
+    name; `renderedRule(invariant)` and `renderedValue(value)` (`files/invariant-values.ts`): the
+    rule with each of its `values` written in where it says `{name}`, a count as digits and a
+    duration with its unit (`contract/REFERENCE.md#rule-action-outcomes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
     write, as they write them, each a `WrittenDescription` (`file`, `line`, `at`, `kind`, `place`,
     `text`); the `Contract` carries them as `descriptions`, read by `loadContract`
@@ -144,6 +146,7 @@ links to as `contract/REFERENCE.md#<slug>`.
       (`contract/REFERENCE.md#rule-check-files`);
     - `invariantsProblems`, `behaviourTextsProblems`, `actionFormsProblems`: each invariant an
       action names exists and refuses with the code it is named under, every invariant is named,
+      each `{name}` of a rule names one of its `values` and each value is named,
       each outcome line, condition and rule keeps the budget, and from version 6
       (`BEHAVIOUR_EDITION`) a `result` of one string keeps it too and an action's codes are a map,
       never a list (`contract/REFERENCE.md#rule-action-outcomes`);

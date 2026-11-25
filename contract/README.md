@@ -148,7 +148,12 @@ The authored files, edited by hand or by a model in the modeling thread:
   invariant. An invariant, under `invariants`, is a rule
   several actions keep, said once with the code it `refuses` with; each action that keeps it
   names it under that code, and the engine derives the actions it limits, which the manifest
-  carries. Each outcome line, condition and rule keeps the budget of a description. From version
+  carries. A rule that states a number (a limit, a window) declares it under `values`, by a
+  camelCase name, as a count or a duration in one unit, and writes it as `{name}`: a number is
+  said once, the manifest carries the rule with each value written in (`10`, `15 minutes`), the
+  check refuses a `{name}` that names no value and a value the rule never names, and the engine
+  emits the values for code to name, `CONTRACT_INVARIANTS` (`ui-contract emit terms`). Each
+  outcome line, condition and rule keeps the budget of a description. From version
   6 the check refuses the older forms, a list of the codes' names and a `result` of one string
   past the budget; a contract at an older version still loads them:
 
@@ -158,8 +163,9 @@ The authored files, edited by hand or by a model in the modeling thread:
       rule: An account is signed in on ten devices at most at once, each counted once while its session lasts.
       refuses: device-limit
     failed-sign-ins:
-      rule: Ten wrong passwords of one email within a quarter of an hour keep its password out.
+      rule: "{limit} wrong passwords of one email within {window} keep its password out."
       refuses: rate-limited
+      values: { limit: 10, window: { minutes: 15 } }
     address-mails:
       rule: A network address is charged 200 mail requests a quarter of an hour at most.
       refuses: rate-limited
@@ -831,7 +837,8 @@ opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
 removed whole shows every line, as nothing else in the summary says its mail. An invariant is
 listed by its name, as `invariant lines added in <name>` and `invariant lines removed in
-<name>`, its rule (`rule: <the text>`) and its code (`refuses <code>`). The reads an
+<name>`, its rule with its values written in (`rule: <the text>`), its code (`refuses <code>`)
+and each value (`value limit: 10`, `value window: 15 minutes`), so a changed number shows. The reads an
 action of the model changes are listed by the entity and the action, as `model action lines
 added in <entity>.<action>` and `model action lines removed in <entity>.<action>`, a line each
 in the same form (`model action lines added in profile.updateName: changes accounts.list,

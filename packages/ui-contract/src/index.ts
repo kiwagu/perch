@@ -156,6 +156,8 @@ export {
   REFERENCE_FILE,
   type ResolvedValue,
   readDescriptions,
+  renderedRule,
+  renderedValue,
   resolveValue,
   routeKeyOf,
   SCENARIOS_DIR,

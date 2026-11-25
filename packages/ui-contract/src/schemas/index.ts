@@ -28,6 +28,8 @@ export {
   draftPatternSchema,
   effectSchema,
   flowSchema,
+  type InvariantValue,
+  invariantValueSchema,
   languageSources,
   ORGANISATION,
   type PlatformComposite,

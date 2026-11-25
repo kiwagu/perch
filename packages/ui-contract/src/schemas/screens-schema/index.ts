@@ -40,6 +40,8 @@ export { actionParamsSchema, paramValueSchema } from './params'
 export {
   type ActionCodes,
   type ActionResult,
+  type InvariantValue,
+  invariantValueSchema,
   type PlatformComposite,
   type PlatformDefaults,
   type PlatformInvariant,

@@ -119,6 +119,62 @@ describe('invariantsProblems', () => {
       ),
     ])
   })
+  it('passes an invariant whose rule names each of its values', () => {
+    expect(
+      invariantsProblems(
+        signingIn(
+          { 'device-limit': { invariant: 'device-limit' } },
+          {
+            'device-limit': {
+              rule: '{limit} devices at most at once; the {limit} first stay.',
+              refuses: 'device-limit',
+              values: { limit: 10 },
+            },
+          },
+        ),
+      ),
+    ).toEqual([])
+  })
+  it('refuses a placeholder that names no value, and a value its rule never names, at their place', () => {
+    expect(
+      invariantsProblems(
+        signingIn(
+          { 'device-limit': { invariant: 'device-limit' } },
+          {
+            'device-limit': {
+              rule: '{limit} devices within {window}, {}.',
+              refuses: 'device-limit',
+              values: { limit: 10, spare: 2 },
+            },
+          },
+        ),
+      ),
+    ).toEqual([
+      problem(
+        'invariants["device-limit"].rule: "{window}" names no value of "device-limit": declare it under its values, or write the text without braces',
+      ),
+      problem(
+        'invariants["device-limit"].rule: "{}" names no value of "device-limit": declare it under its values, or write the text without braces',
+      ),
+      problem(
+        'invariants["device-limit"].values.spare: the rule of "device-limit" never names it: write "{spare}" where the rule states it',
+      ),
+    ])
+  })
+  it('refuses a placeholder in the rule of an invariant with no values', () => {
+    expect(
+      invariantsProblems(
+        signingIn(
+          { 'device-limit': { invariant: 'device-limit' } },
+          { 'device-limit': { rule: '{limit} devices at most.', refuses: 'device-limit' } },
+        ),
+      ),
+    ).toEqual([
+      problem(
+        'invariants["device-limit"].rule: "{limit}" names no value of "device-limit": declare it under its values, or write the text without braces',
+      ),
+    ])
+  })
   it('runs among the rules of the contract check', () => {
     expect(
       contractProblems(signingIn({ 'device-limit': { invariant: 'devices' } }, undefined)),

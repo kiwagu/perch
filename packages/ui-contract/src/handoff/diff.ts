@@ -113,8 +113,8 @@ export interface ContractChanges {
    */
   actionLines: Record<string, Change>
   /**
-   * Per invariant of the platform either contract holds, by its name, its lines (`rule: <text>`
-   * and `refuses <code>`), an invariant one side lacks having none.
+   * Per invariant of the platform either contract holds, by its name, its lines (`rule: <text>` with its values written in,
+   * `refuses <code>` and `value <name>: <value>`), an invariant one side lacks having none.
    */
   invariantLines: Record<string, Change>
   /**

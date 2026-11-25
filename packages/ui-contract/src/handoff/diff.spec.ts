@@ -1350,6 +1350,36 @@ describe('diffContracts and the invariants', () => {
       },
     })
   })
+  it('lists the rule with its values written in and each value, so a changed value shows', () => {
+    const stated = (limit: number) => ({
+      rule: '{limit} devices at most, each kept {window}.',
+      refuses: 'device-limit',
+      values: { limit, window: { hours: 1 } },
+    })
+
+    expect(
+      diffContracts(withInvariants({ limit: stated(10) }), withInvariants({ limit: stated(12) }))
+        .invariantLines,
+    ).toEqual({
+      limit: {
+        added: ['rule: 12 devices at most, each kept 1 hour.', 'value limit: 12'],
+        removed: ['rule: 10 devices at most, each kept 1 hour.', 'value limit: 10'],
+      },
+    })
+    expect(
+      diffContracts(withInvariants({ limit: LIMIT }), withInvariants({ limit: stated(10) }))
+        .invariantLines,
+    ).toEqual({
+      limit: {
+        added: [
+          'rule: 10 devices at most, each kept 1 hour.',
+          'value limit: 10',
+          'value window: 1 hour',
+        ],
+        removed: ['rule: Ten devices at most at once.'],
+      },
+    })
+  })
   it('lists nothing for invariants that stay as they were, or a platform with none', () => {
     expect(
       diffContracts(withInvariants({ limit: LIMIT }), withInvariants({ limit: LIMIT }))

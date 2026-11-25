@@ -1276,6 +1276,31 @@ The rule, said once for every action that names it under the code it refuses wit
 <a id="platform-invariants-name-refuses"></a>
 The code an action refuses with when the rule would break: each action names the invariant under it.
 
+### `invariants.<name>.values`
+
+<a id="platform-invariants-name-values"></a>
+The numbers the rule states, by camelCase name: a count or a duration; the rule writes each as `{name}`. See the rule `action-outcomes`.
+
+### `invariants.<name>.values.<name>`
+
+<a id="platform-invariants-name-values-name"></a>
+A count: a limit, how many.
+
+### `invariants.<name>.values.<name>.seconds`
+
+<a id="platform-invariants-name-values-name-seconds"></a>
+The duration in seconds.
+
+### `invariants.<name>.values.<name>.minutes`
+
+<a id="platform-invariants-name-values-name-minutes"></a>
+The duration in minutes.
+
+### `invariants.<name>.values.<name>.hours`
+
+<a id="platform-invariants-name-values-name-hours"></a>
+The duration in hours.
+
 ### `events`
 
 <a id="platform-events"></a>
@@ -4170,17 +4195,42 @@ The screen the link opens, at a route that needs no parameter: the link carries 
 ### `platform.invariants`
 
 <a id="manifest-platform-invariants"></a>
-The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.
+The invariants by name, each once: its rule with its values written in, the code it refuses with, its values and the actions it limits, derived. See the rule `action-outcomes`.
 
 ### `platform.invariants.<name>.rule`
 
 <a id="manifest-platform-invariants-name-rule"></a>
-The rule, said once for every action that names it under the code it refuses with. At most 200 characters.
+Derived: the rule as written, each `{name}` of its values written in. See the rule `action-outcomes`.
 
 ### `platform.invariants.<name>.refuses`
 
 <a id="manifest-platform-invariants-name-refuses"></a>
 The code an action refuses with when the rule would break: each action names the invariant under it.
+
+### `platform.invariants.<name>.values`
+
+<a id="manifest-platform-invariants-name-values"></a>
+The numbers the rule states, by camelCase name: a count or a duration; the rule writes each as `{name}`. See the rule `action-outcomes`.
+
+### `platform.invariants.<name>.values.<name>`
+
+<a id="manifest-platform-invariants-name-values-name"></a>
+A count: a limit, how many.
+
+### `platform.invariants.<name>.values.<name>.seconds`
+
+<a id="manifest-platform-invariants-name-values-name-seconds"></a>
+The duration in seconds.
+
+### `platform.invariants.<name>.values.<name>.minutes`
+
+<a id="manifest-platform-invariants-name-values-name-minutes"></a>
+The duration in minutes.
+
+### `platform.invariants.<name>.values.<name>.hours`
+
+<a id="manifest-platform-invariants-name-values-name-hours"></a>
+The duration in hours.
 
 ### `platform.invariants.<name>.actions`
 
@@ -5050,9 +5100,9 @@ Keys it concerns: [`platform.values.<name>.format`](#platform-values-name-format
 <a id="rule-action-outcomes"></a>
 A platform action says what it answers in two places. Its `result` is what holds once it runs: one outcome, or a list of outcome lines, the plain success first, then each other outcome under its own condition (`with the second factor on: asks for a code and signs no device in`). Its `codes` map each code a failure shows to when it answers: a condition, as the server judges it when the request is admitted (`invalid-code: the code is wrong or used up`), or the invariants it refuses for, rules several actions keep, each said once under `platform.invariants`: `{ invariant: <name> }`, or `{ invariant: [<name>, <name>] }` for two or more, each once, with `condition: <text>` beside them for a cause of the code that is no invariant (`rate-limited: { invariant: [failed-sign-ins, address-mails], condition: a fourth change by the account within a quarter of an hour }`). Each outcome line, a `result` of one string included, each condition and each rule keeps 200 characters, the budget of a description (`behaviourTextsProblems`). A contract before version 6 may write the older forms, `codes` as a list of their names, which says no condition, and a longer `result` of one string; from version 6 the check refuses both (`actionFormsProblems`, `behaviourTextsProblems`).
 
-An invariant, `platform.invariants.<name>`, writes its `rule` and the code it `refuses` with. An action names it under that code, alone or among others, and nowhere else: the engine derives the actions an invariant limits (`invariantActions`), by name, and the manifest carries them under the invariant as `actions`. `contract:check` holds them (`invariantsProblems`): each invariant an action names exists, and its `refuses` is the code it is named under, both at that code; an invariant no action names is refused, at the invariant. The vocabulary's Codes table keeps what each code means to the user; the rule behind a refusal is its invariant's.
+An invariant, `platform.invariants.<name>`, writes its `rule` and the code it `refuses` with. A rule that states a number (a limit, a window) declares it under `values`, by a camelCase name, as a count (`limit: 10`) or a duration in one unit (`window: { minutes: 15 }`), and writes it as `{name}` where it says it: `{limit} wrong passwords within {window}`. So a number is said once, and the manifest carries the rule with each value written in (a count as digits, a duration as `15 minutes`) and the values beside it; the engine emits them for code to name (`CONTRACT_INVARIANTS`, see the rule `terms`). An action names it under that code, alone or among others, and nowhere else: the engine derives the actions an invariant limits (`invariantActions`), by name, and the manifest carries them under the invariant as `actions`. `contract:check` holds them (`invariantsProblems`): each invariant an action names exists, and its `refuses` is the code it is named under, both at that code; an invariant no action names is refused, at the invariant; a `{name}` of a rule names one of its values, at the rule, and a value the rule never names is refused, at the value. The vocabulary's Codes table keeps what each code means to the user; the rule behind a refusal is its invariant's.
 
-The hand-over diff lists each outcome line as `result: <line>`, by its position when there are several (`result #2: <line>`, so a reorder shows), each code as `code <code>: "<condition>"`, `code <code>: invariant <name>`, `code <code>: invariant <name>, <name>`, or, with a condition beside them, `code <code>: invariant <name>; "<condition>"` (the condition quoted, so a text never reads as the invariants a code names), and each invariant as `invariant lines added in <name>` and `invariant lines removed in <name>`, its `rule: <text>` and `refuses <code>`.
+The hand-over diff lists each outcome line as `result: <line>`, by its position when there are several (`result #2: <line>`, so a reorder shows), each code as `code <code>: "<condition>"`, `code <code>: invariant <name>`, `code <code>: invariant <name>, <name>`, or, with a condition beside them, `code <code>: invariant <name>; "<condition>"` (the condition quoted, so a text never reads as the invariants a code names), and each invariant as `invariant lines added in <name>` and `invariant lines removed in <name>`, its `rule: <text>` with its values written in, `refuses <code>` and each value as `value <name>: <value>`, so a changed number shows on its own line.
 
 Keys it concerns: [`platform.actions.<name>.result`](#platform-actions-name-result), [`platform.actions.<name>.codes`](#platform-actions-name-codes), [`platform.invariants`](#platform-invariants), [`platform.invariants.<name>`](#platform-invariants-name), [`manifest.platform.invariants.<name>.actions`](#manifest-platform-invariants-name-actions).
 
@@ -5440,7 +5490,7 @@ Every action, of the platform or of the model, writes its `changes`, each name o
 
 Every parameter of a platform action writes its `type` or its `value`, and a `value` names a value of `platform.values` or a field of the model (`valueProblems`, a problem at the parameter; see the rule `declared-values`). From version 3 every string parameter is bounded and every code of a field concerns a parameter whose value has the constraint the code names (`attributionProblems`; see the rule `attributed-codes`).
 
-Every invariant an action names under a code exists and refuses with that code, and every invariant of `platform.invariants` is named by an action (`invariantsProblems`); each outcome line, from version 6 a `result` of one string included, each condition of a code and each rule keeps the budget of a description (`behaviourTextsProblems`); from version 6 the `codes` of an action are a map, never a list (`actionFormsProblems`; see the rule `action-outcomes`).
+Every invariant an action names under a code exists and refuses with that code, and every invariant of `platform.invariants` is named by an action, each `{name}` of its rule names one of its `values` and each value is named (`invariantsProblems`); each outcome line, from version 6 a `result` of one string included, each condition of a code and each rule keeps the budget of a description (`behaviourTextsProblems`); from version 6 the `codes` of an action are a map, never a list (`actionFormsProblems`; see the rule `action-outcomes`).
 
 Keys it concerns: [`platform.leaving`](#platform-leaving), [`platform.toasts`](#platform-toasts), [`platform.unsavedInput`](#platform-unsavedinput), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
 
@@ -5622,7 +5672,7 @@ An effect is written `show <anchor>: <codes>`, `clear <anchor>`, `read <anchor>`
 
 A platform action is listed by its name, and its lines as `platform action lines added in <action>` and `platform action lines removed in <action>`, one per fact it declares (`actionLines(action)`, an internal helper): each parameter with its type or the value it refers to, the constraints it writes, each as JSON, and `optional` when it may be left out (`param email: string`, `param login: value email, maxLength 100`, `param kind: string, enum ["a","b"]`), each line of its result (`result: <the line>`, or `result #<n>: <the line>` by its position when there are several, since the first is the plain success; the prose that stays, since it says what the action answers), each code its failure shows with the invariants it refuses for and the condition it answers on (`code invalid-code: "<the condition>"`, `code device-limit: invariant device-limit`, `code rate-limited: invariant failed-sign-ins, address-mails; "<the condition>"`, the condition quoted; a code of the older list, `code rate-limited`), each role that may run it (`role <role>`), its page sizes when it pages (`paged by 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link opens and the search parameter that carries the token) and each notice (`notice password-changed to account language account link user.forgot-password`). An action added or removed whole shows every line, as nothing else in the summary says its mail.
 
-An invariant of the platform is listed by its name, its lines as `invariant lines added in <name>` and `invariant lines removed in <name>`: its rule (`rule: <the text>`) and the code it refuses with (`refuses <code>`). Which actions it limits shows in their own lines, where each names it.
+An invariant of the platform is listed by its name, its lines as `invariant lines added in <name>` and `invariant lines removed in <name>`: its rule with its values written in (`rule: <the text>`), the code it refuses with (`refuses <code>`) and each of its values (`value <name>: <value>`). Which actions it limits shows in their own lines, where each names it.
 
 ### Written descriptions: their place and their length in the diff
 

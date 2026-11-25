@@ -299,6 +299,12 @@ export const manifestSchema = z
           .record(
             kebabNameSchema,
             platformInvariantSchema.extend({
+              rule: z
+                .string()
+                .min(1)
+                .describe(
+                  'Derived: the rule as written, each `{name}` of its values written in. See the rule `action-outcomes`.',
+                ),
               actions: z
                 .array(platformActionNameSchema)
                 .describe(
@@ -308,7 +314,7 @@ export const manifestSchema = z
           )
           .optional()
           .describe(
-            'The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.',
+            'The invariants by name, each once: its rule with its values written in, the code it refuses with, its values and the actions it limits, derived. See the rule `action-outcomes`.',
           ),
       })
       .describe(

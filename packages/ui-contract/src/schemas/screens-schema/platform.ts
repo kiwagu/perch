@@ -114,6 +114,23 @@ const actionResultSchema = z
 
 export type ActionResult = z.infer<typeof actionResultSchema>
 
+const positiveCount = z.number().int().positive()
+
+/** A duration an invariant states, in one unit. */
+const invariantDurationSchema = z.union([
+  z.strictObject({ seconds: positiveCount.describe('The duration in seconds.') }),
+  z.strictObject({ minutes: positiveCount.describe('The duration in minutes.') }),
+  z.strictObject({ hours: positiveCount.describe('The duration in hours.') }),
+])
+
+/** A number an invariant states: a count, or a duration in one unit. */
+export const invariantValueSchema = z.union([
+  positiveCount.describe('A count: a limit, how many.'),
+  invariantDurationSchema.describe('A duration in one unit: `{ minutes: 15 }`.'),
+])
+
+export type InvariantValue = z.infer<typeof invariantValueSchema>
+
 /** A rule several platform actions keep, said once. */
 export const platformInvariantSchema = z
   .strictObject({
@@ -121,6 +138,13 @@ export const platformInvariantSchema = z
     refuses: codeSchema.describe(
       'The code an action refuses with when the rule would break: each action names the invariant under it.',
     ),
+    values: z
+      .record(z.string().regex(/^[a-z][a-zA-Z0-9]*$/), invariantValueSchema)
+      .refine((values) => Object.keys(values).length > 0, { message: 'name a value or leave out' })
+      .optional()
+      .describe(
+        'The numbers the rule states, by camelCase name: a count or a duration; the rule writes each as `{name}`. See the rule `action-outcomes`.',
+      ),
   })
   .describe(
     'A rule several actions keep, said once: each names it under the code it refuses with, and the engine derives the actions it limits. See the rule `action-outcomes`.',
