@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest'
 import { termsModuleOf } from '@workspace/ui-contract'
 import { heldModule } from '@workspace/ui-contract/testing'
 
+import * as generated from './contract-terms.gen'
+import * as kernel from './index'
+
 /**
  * `contract-terms.gen.ts` is what `ui-contract emit terms` writes (`bun run emit`): the roles and
  * the routes of the contract of the working tree, which code and tests name through it. Held as
@@ -22,5 +25,15 @@ describe('the generated contract terms', () => {
     expect(committed).toBe(
       heldModule({ committed, emit: termsModuleOf, root: ROOT, env: process.env }),
     )
+  })
+  it('are each exported from the package, so code imports them from @workspace/kernel', () => {
+    expect(Object.keys(generated).sort()).toEqual([
+      'CONTRACT_INVARIANTS',
+      'CONTRACT_ROLES',
+      'CONTRACT_ROUTES',
+    ])
+    for (const [name, value] of Object.entries(generated)) {
+      expect(kernel[name as keyof typeof kernel], name).toBe(value)
+    }
   })
 })

@@ -118,9 +118,10 @@ The authored files, edited by hand or by a model in the modeling thread:
   behaviour text, an action's, an invariant's, a screen's, an anchor's, a value's or a field's
   name, an enum's value, a route path, a role's name, a row of the vocabulary's tables, an
   activity's names or a scenario's prose; code and
-  tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`
-  (`ui-contract emit terms`), never by hand, which the ESLint rule `workspace/contract-terms`
-  holds ([the rule](REFERENCE.md#rule-terms)).
+  tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`, and an
+  invariant's number through `CONTRACT_INVARIANTS` (`ui-contract emit terms`), never by hand,
+  which the ESLint rule `workspace/contract-terms` holds, and a role SurrealQL writes is held to
+  `CONTRACT_ROLES` by `bun run lint:surql` ([the rule](REFERENCE.md#rule-terms)).
 - `domain/screens/<pathname>.yaml`: one screen per file, named by the path of the screen's
   first binding without the leading `/`. `/sign-in` is `domain/screens/sign-in.yaml` and `/me`
   is `domain/screens/me.yaml`; a nested path is a folder (`/org/$org` would be
@@ -148,7 +149,13 @@ The authored files, edited by hand or by a model in the modeling thread:
   invariant. An invariant, under `invariants`, is a rule
   several actions keep, said once with the code it `refuses` with; each action that keeps it
   names it under that code, and the engine derives the actions it limits, which the manifest
-  carries. Each outcome line, condition and rule keeps the budget of a description. From version
+  carries. A rule that states a number (a limit, a window) declares it under `values`, by a
+  camelCase name, as a count or a duration in one unit, and writes it as `{name}`: a number is
+  said once, the manifest carries the rule with each value written in (`10`, `15 minutes`), the
+  check refuses a `{name}` that names no value, a brace outside a `{name}`, a value the rule
+  never names and two values code would read by one name (`window` beside `windowMs`), and the engine
+  emits the values for code to name, `CONTRACT_INVARIANTS` (`ui-contract emit terms`). Each
+  outcome line, condition and rule keeps the budget of a description. From version
   6 the check refuses the older forms, a list of the codes' names and a `result` of one string
   past the budget; a contract at an older version still loads them:
 
@@ -158,8 +165,9 @@ The authored files, edited by hand or by a model in the modeling thread:
       rule: An account is signed in on ten devices at most at once, each counted once while its session lasts.
       refuses: device-limit
     failed-sign-ins:
-      rule: Ten wrong passwords of one email within a quarter of an hour keep its password out.
+      rule: "{limit} wrong passwords of one email within {window} keep its password out."
       refuses: rate-limited
+      values: { limit: 10, window: { minutes: 15 } }
     address-mails:
       rule: A network address is charged 200 mail requests a quarter of an hour at most.
       refuses: rate-limited
@@ -183,23 +191,34 @@ The authored files, edited by hand or by a model in the modeling thread:
   ```
 
   An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
-  mail goes to, or `account`, the email of the account the action acts on; `language`, the
-  parameter that holds the mail's language, `account`, that account's settings once it has
-  them, else the language it signed up in, or `recipient`, the account whose email the mail
-  goes to, read the same way, and the signed-in account's when no account has that email (an
-  invitation speaks the language of the account it invites, else the inviter's); `link`, the
-  `screen` the mail's link opens and the `search` parameter of that screen's route that carries
-  the link's token. `account` is a reserved word there: it names the account the action acts
-  on, the signed-in account for an action on its own account (a change of email, a request to
-  delete it), else, whoever is signed in, the one its parameters name: the email of the resend
-  of a verification or of the request for a password reset, which send nothing to an email
-  with no account, or the token of a link (a password reset, a confirmed email, a deletion). So
-  an action that sends a mail has no parameter named `account`; nor one named `recipient`. The
-  check holds `to` and `language` to the action's parameters, refuses a parameter named
-  `account` on an action that sends a mail or a notice and one named `recipient` on an action
-  that sends a mail, takes `recipient` only as the language of a mail whose `to` is a
-  parameter, sent by an action whose `roles` leave `guest` out (it falls back on a signed-in
-  account), and holds the link to a screen whose every route declares that search parameter.
+  mail goes to, or `account`, the email of the account the action acts on; `language`, where the
+  mail's language comes from, one source or a list of them in order, the first that has a
+  language speaking; `link`, the `screen` the mail's link opens and the `search` parameter of
+  that screen's route that carries the link's token. A source is the parameter that holds the
+  mail's language; `account`, that account's settings once it has them, else the language it
+  signed up in; `organisation`, the organisation the action runs in: its default language when
+  its settings name one, else the app's built-in English; or `recipient`, the account whose email
+  the mail goes to, read as `account` is, when an account has that email. Every source but
+  `recipient` and an optional parameter left out always has a language, so it ends a list, and a
+  list ends with one: an invitation's `language: [ recipient, organisation ]` speaks the language
+  of the account it invites, else its organisation's.
+  `recipient` written alone, the older form, falls back on the signed-in account's. `account` is
+  a reserved word there: it names the account the action acts on, the signed-in account for an
+  action on its own account (a change of email, a request to delete it), else, whoever is signed
+  in, the one its parameters name: the email of the resend of a verification or of the request
+  for a password reset, which send nothing to an email with no account, or the token of a link
+  (a password reset, a confirmed email, a deletion). So an action that sends a mail has no
+  parameter named `account`; nor one named `organisation` or `recipient`. The check holds `to`
+  and each source to the action's parameters and those three words, refuses a parameter named
+  `account` on an action that sends a mail or a notice and one named `organisation` or
+  `recipient` on an action that sends a mail, refuses a source after one that always has a
+  language (it is never reached) and a last source that may have none (an optional parameter,
+  alone too), takes `recipient`
+  only for a mail whose `to` is a parameter
+  (written alone, only on an action whose `roles` leave `guest` out, as it falls back on a
+  signed-in account) and `organisation` only on an action whose `roles` leave out `guest` and
+  `identity` (it runs in an organisation; the contract does not say which other roles are held
+  in one), and holds the link to a screen whose every route declares that search parameter.
   A scenario names the mail by its action, `[mail:sign-up]`, and a
   test that reads a mail holds it to its declaration: its recipient, the path and the search
   parameter of its link, and the language of its HTML.
@@ -224,7 +243,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   ```
 
   `account` is reserved on an action that sends a notice too. The check holds `to` and
-  `language` as a mail's, but for `recipient`, the language of a mail alone, wants the names
+  `language` as a mail's, but for one source, a parameter or `account`: `organisation` and
+  `recipient` are a mail's language alone, and on a notice they name only a parameter of the
+  action when it has one of that name; it wants the names
   unique within the action, and holds a link to a
   screen with a route, every route of which needs no parameter, as the link carries none (no
   `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario
@@ -822,7 +843,8 @@ opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
 removed whole shows every line, as nothing else in the summary says its mail. An invariant is
 listed by its name, as `invariant lines added in <name>` and `invariant lines removed in
-<name>`, its rule (`rule: <the text>`) and its code (`refuses <code>`). The reads an
+<name>`, its rule with its values written in (`rule: <the text>`), its code (`refuses <code>`)
+and each value (`value limit: 10`, `value window: 15 minutes`), so a changed number shows. The reads an
 action of the model changes are listed by the entity and the action, as `model action lines
 added in <entity>.<action>` and `model action lines removed in <entity>.<action>`, a line each
 in the same form (`model action lines added in profile.updateName: changes accounts.list,
