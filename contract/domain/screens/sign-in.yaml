@@ -142,7 +142,7 @@ flow:
   meta:
     guards:
       emailNotVerified: { codes: [ email-not-verified ] }
-      atDeviceLimit: the account is signed in on as many devices as it may be at once, so this device was not signed in
+      atDeviceLimit: { codes: [ device-limit ] }
       codeRequired: the account's second factor is on, so the right password signed nothing in and a code is asked
       codeStepEnded: { codes: [ code-expired, account-banned, rate-limited, other-account ] }
   states:
@@ -233,22 +233,22 @@ flow:
             guard: codeRequired
             actions:
               - show: { user.sign-in.code.dialog: [ code-required ] }
-          - target: device-limit
-            guard: atDeviceLimit
-            actions:
-              - show: user.sign-in.device-limit-dialog
           - target: done
             actions:
               - show: { app-shell.notice-message: [ welcome ] }
               - navigate: /me
         onError:
+          - target: device-limit
+            guard: atDeviceLimit
+            actions:
+              - show: user.sign-in.device-limit-dialog
           - target: unverified
             guard: emailNotVerified
             actions:
               - show: user.sign-in.error
           - target: sign-in
             actions:
-              - show: { user.sign-in.error: [ invalid-credentials, account-banned, rate-limited, other-account, failed ] }
+              - show: user.sign-in.error
     device-limit:
       description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed.
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.device-limit-dialog ] }
@@ -297,18 +297,18 @@ flow:
         src: platform.confirm-sign-in
         input: { code: user.sign-in.code.code-input }
         onDone:
+          target: done
+          actions:
+            - clear: user.sign-in.code.code-input
+            - show: { app-shell.notice-message: [ welcome ] }
+            - navigate: /me
+        onError:
           - target: device-limit
             guard: atDeviceLimit
-            description: "Past the limit of devices, before the code is checked: nothing is signed in and no code spent; the confirmation signs in again from the password, asking a code again."
+            description: "Past the limit of devices: nothing is signed in; the confirmation signs in again from the password, asking a code again."
             actions:
               - clear: user.sign-in.code.code-input
               - show: user.sign-in.device-limit-dialog
-          - target: done
-            actions:
-              - clear: user.sign-in.code.code-input
-              - show: { app-shell.notice-message: [ welcome ] }
-              - navigate: /me
-        onError:
           - target: sign-in
             guard: codeStepEnded
             actions:
@@ -316,7 +316,7 @@ flow:
               - show: user.sign-in.error
           - target: code
             actions:
-              - show: { user.sign-in.code.error: [ invalid-code, failed ] }
+              - show: user.sign-in.code.error
     code-anyway:
       description: The form in the mode sign-in with the dialog of the code; the device-limit dialog was confirmed already.
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
@@ -358,18 +358,18 @@ flow:
       invoke:
         src: platform.sign-in-passkey
         onDone:
+          target: done
+          actions:
+            - show: { app-shell.notice-message: [ welcome ] }
+            - navigate: /me
+        onError:
           - target: passkey-device-limit
             guard: atDeviceLimit
             actions:
               - show: user.sign-in.device-limit-dialog
-          - target: done
+          - target: sign-in
             actions:
-              - show: { app-shell.notice-message: [ welcome ] }
-              - navigate: /me
-        onError:
-          target: sign-in
-          actions:
-            - show: { user.sign-in.error: [ passkey-cancelled, passkey-unknown, account-banned, other-account, failed ] }
+              - show: user.sign-in.error
     passkey-device-limit:
       description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed, and its confirmation asks for the passkey again.
       meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button, user.sign-in.device-limit-dialog ] }
@@ -382,20 +382,20 @@ flow:
         src: platform.sign-in-passkey
         input: { signOutOldest: { value: true } }
         onDone:
+          target: done
+          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+          actions:
+            - show: { app-shell.notice-message: [ welcome ] }
+            - navigate: /me
+        onError:
           - target: passkey-device-limit
             guard: atDeviceLimit
             description: A passkey of another account was picked, which is at its limit too; the dialog asks about it afresh.
             actions:
               - show: user.sign-in.device-limit-dialog
-          - target: done
-            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+          - target: sign-in
             actions:
-              - show: { app-shell.notice-message: [ welcome ] }
-              - navigate: /me
-        onError:
-          target: sign-in
-          actions:
-            - show: { user.sign-in.error: [ passkey-cancelled, passkey-unknown, account-banned, other-account, failed ] }
+              - show: user.sign-in.error
     signing-up:
       meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
