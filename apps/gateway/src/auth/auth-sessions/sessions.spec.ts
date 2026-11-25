@@ -23,6 +23,7 @@ import deviceSessionExpiriesStatement from '../__fixtures__/device-session-expir
 import deviceSessionRowStatement from '../__fixtures__/device-session-row.surql'
 import identityRoleSetStatement from '../__fixtures__/identity-role-set.surql'
 import { signVerificationToken, verificationKey } from '../account-links'
+import { LAST_PLACE, ONE_SHORT } from '../auth-handler/__fixtures__/devices'
 import { ADMISSION_HEADER } from '../session-hooks'
 
 import type { SessionCaller, SessionRead } from './read'
@@ -395,21 +396,22 @@ describe('AuthSessions, a sign-in judged before its session is written', () => {
     const judged = async (device: string) =>
       (await opened.sessions.judge(ann.identity, device))._unsafeUnwrap()
 
-    for (const device of ['b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']) {
+    // With the laptop, one device short of the limit.
+    for (const device of ONE_SHORT.slice(1)) {
       await opened.auth.api.signInEmail({
         body: { email: 'ann@example.test', password: 'Pass-word-1' },
         headers: deviceHeaders(device),
       })
     }
 
-    // Nine devices signed in, the phone's sign-in waiting: a tenth device still has its place.
+    // One device short of the limit, the phone's sign-in waiting: another device still has the last place.
     expect(await judged('phone')).toBe('admitted')
-    expect(await judged('j')).toBe('admitted')
+    expect(await judged(LAST_PLACE)).toBe('admitted')
     expect((await opened.sessions.admit(ann.identity, ann.phone, false))._unsafeUnwrap()).toEqual({
       kind: 'admitted',
     })
-    // Ten: an eleventh device is asked, as its admission would be; one signed in already is not.
-    expect(await judged('j')).toBe('asked')
+    // At the limit: another device is asked, as its admission would be; one signed in already is not.
+    expect(await judged(LAST_PLACE)).toBe('asked')
     expect(await judged('laptop')).toBe('admitted')
   }, 30_000)
 

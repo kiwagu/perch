@@ -58,8 +58,8 @@ export interface InvitationRoutesOptions {
  * - `POST /invitations/read` `{ token }`: 200 `{ invitation: { organisation: { name }, role,
  *   forYou } }`, for a guest (no `Authorization`) or a signed-in account (`forYou` when it is the
  *   invited one); 404 `link-invalid` for a link that names nothing, 410 `link-expired` for one a
- *   week old; 20 per client address in 10 minutes, taken before the body is read, so a refused
- *   read costs the same whatever the token. A token that holds no live session is 401.
+ *   week old; one of the client address's attempts at that link (`ADDRESS_LINK_ATTEMPTS`), taken
+ *   before the body is read, so a refused read costs the same whatever the token. A token that holds no live session is 401.
  * - `GET /invitations`: 200 `{ invitations }`, the signed-in account's, newest first.
  * - `POST /invitations/accept` `{ invitation }` (an id or a link's token): 200 `{ membership }`;
  *   403 `other-account`, 409 `already-member`, 410 `invitation-gone`; an account deleted while

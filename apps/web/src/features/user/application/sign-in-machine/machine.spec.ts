@@ -7,7 +7,13 @@ import { identityIdFactory } from '@workspace/ids'
 import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import type { Passwords } from '../../domain/password-confirmation.rule'
-import type { SignInError, SignInForm, SignInOutcome, SignInService } from '../sign-in.service'
+import type {
+  DeviceLimitRefusal,
+  SignInError,
+  SignInForm,
+  SignInOutcome,
+  SignInService,
+} from '../sign-in.service'
 
 import { createSignInMachine, type SignInEvent } from '.'
 
@@ -396,8 +402,15 @@ describe('the rules of a new password at sign-up', () => {
 /** Ann, as a sign-in that goes through answers. */
 const annUser: AuthUser = { id: identityIdFactory.create(), email: ann.email }
 
+/** A refusal at the account's limit of devices, naming the account a passkey sign-in asked about. */
+const pastTheLimit = (consentFor?: string): DeviceLimitRefusal => ({
+  code: 'data:DEVICE_LIMIT',
+  message: 'the account is signed in on as many devices as it may be',
+  ...(consentFor === undefined ? {} : { consentFor }),
+})
+
 /** A sign-in that finds the account on as many devices as it may be, signing nothing in. */
-const atTheLimit = () => okAsync<SignInOutcome, SignInError>({ kind: 'device-limit' })
+const atTheLimit = () => errAsync<SignInOutcome, SignInError>(pastTheLimit())
 
 /** A sign-in that signs Ann in. */
 const signedIn = () => okAsync<SignInOutcome, SignInError>({ kind: 'signed-in', user: annUser })
@@ -967,7 +980,7 @@ describe('a sign-in whose account asks for a code', () => {
 
 /** The passkey sign-in of an account at its limit of devices names the account it asks about. */
 const limitedFor = (account: string) => () =>
-  okAsync<SignInOutcome, SignInError>({ kind: 'device-limit', consentFor: account })
+  errAsync<SignInOutcome, SignInError>(pastTheLimit(account))
 
 describe('a sign-in with a passkey', () => {
   /** The form in each state that offers the passkey button, as a sign-in or a sign-up leaves it. */

@@ -88,15 +88,15 @@ export const SECOND_STEPS = {
       src: 'platform.confirm-sign-in',
       input: (args: { readonly context: SignInContext; readonly event: SignInEvent }) =>
         codeInput(args, false),
-      onDone: [
+      onDone: { target: 'done', actions: ['keepOutcome', clearCodeInput, ...welcomed] },
+      onError: [
         {
           target: 'device-limit',
           guard: 'atDeviceLimit',
           actions: ['keepOutcome', clearCodeInput, askPastTheLimit],
         },
-        { target: 'done', actions: ['keepOutcome', clearCodeInput, ...welcomed] },
+        ...refusedCode('code'),
       ],
-      onError: refusedCode('code'),
     },
   },
   'code-anyway': {
@@ -125,15 +125,15 @@ export const SECOND_STEPS = {
     invoke: {
       src: 'platform.sign-in-passkey',
       input: { signOutOldestFor: undefined },
-      onDone: [
+      onDone: { target: 'done', actions: welcomed },
+      onError: [
         {
           target: 'passkey-device-limit',
           guard: 'atDeviceLimit',
           actions: ['keepOutcome', askPastTheLimit],
         },
-        { target: 'done', actions: welcomed },
+        REFUSED_PASSKEY,
       ],
-      onError: REFUSED_PASSKEY,
     },
   },
   // Nothing is signed in unless the dialog is confirmed, which asks for the passkey again.
@@ -158,15 +158,16 @@ export const SECOND_STEPS = {
     invoke: {
       src: 'platform.sign-in-passkey',
       input: consentedInput,
-      onDone: [
+      onDone: { target: 'done', actions: ['keepOutcome', ...welcomed] },
+      onError: [
+        // A passkey of another account at its limit too: the dialog asks about that account.
         {
           target: 'passkey-device-limit',
           guard: 'atDeviceLimit',
           actions: ['keepOutcome', askPastTheLimit],
         },
-        { target: 'done', actions: ['keepOutcome', ...welcomed] },
+        REFUSED_PASSKEY,
       ],
-      onError: REFUSED_PASSKEY,
     },
   },
 } as const

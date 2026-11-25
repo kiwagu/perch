@@ -47,6 +47,7 @@ import { ConnectionRegistry } from '../sync/connections'
 import { AccountDeparture } from '../tenants/account-departure'
 import { InvitationMails, invitationLink, PendingInvitations } from '../tenants/invitations'
 import { InvitedLanguage } from '../tenants/invited-language'
+import { organisationLocale } from '../tenants/organisation-locale'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
@@ -223,6 +224,7 @@ export function createGatewayRoot(
     const invitationMails = new InvitationMails({
       mail: options.mail,
       directory: local,
+      organisationLocale: (key) => organisationLocale(databases, key),
       link: invitationLinkTo,
       log: organisationsLog,
     })

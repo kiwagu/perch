@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { CONTRACT_VALUES } from '@workspace/kernel'
 
+import {
+  ADDRESS_LINK_ATTEMPTS,
+  FAILED_SIGN_INS,
+  IDENTITY_EMAIL_CHANGES,
+} from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
@@ -11,6 +16,7 @@ import {
   ANN,
   ARGON2_WAIT,
   annsLink,
+  freshAddress,
   holdTurn,
   mountedOnRealAuth,
   PASSWORD,
@@ -23,7 +29,7 @@ import {
   signInRequest,
   turnsAsked,
 } from './__fixtures__/mount'
-import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
+import { failAllButLastSignIn, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { CHANGE_EMAIL_FLOOR_MS } from './email-change'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
@@ -47,7 +53,6 @@ const NEW_EMAIL = 'n3w-mailbox@elsewhere-domain.test'
 const BOB = 'bob@example.test'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const MINUTE_MS = 60 * 1000
 
 type Mounted = Awaited<ReturnType<typeof mountedOnRealAuth>>
 
@@ -151,14 +156,16 @@ describe('authHandler, the request to change the email', () => {
     expect(await wrong?.json()).toEqual({ code: 'invalid-credentials' })
     expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
 
-    // Nine more failures, by sign-ins, spend the account's ten.
-    for (let n = 0; n < 9; n += 1) {
+    // The rest of the email's failed sign-ins, spent by sign-ins.
+    for (let n = 1; n < FAILED_SIGN_INS.limit; n += 1) {
       expect(
         (await mounted.route(signInRequest(ANN, 'Wrong-pass-1', 'desk'), ELSEWHERE))?.status,
       ).toBe(401)
     }
 
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), ELSEWHERE))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 30_000)
 
   it("refuses a new email that is not an email with email-invalid, taking none of the account's changes", async () => {
@@ -193,24 +200,29 @@ describe('authHandler, the request to change the email', () => {
     expect(mounted.outbox.to(longest)).toHaveLength(1)
   })
 
-  it('takes three changes of an account within a quarter of an hour; the fourth answers rate-limited and mails nothing', async () => {
+  it('takes the changes of an account the contract allows within its window; the next answers rate-limited and mails nothing', async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const { limit, windowMs } = IDENTITY_EMAIL_CHANGES
 
-    for (let n = 0; n < 3; n += 1) {
+    for (let n = 0; n < limit; n += 1) {
       expect(
         (await asked(mounted, ann, `new-${n}@example.test`, n === 1 ? ELSEWHERE : FROM))?.status,
       ).toBe(202)
     }
 
-    const fourth = await mounted.route(changeTo(ann.on('laptop'), 'new-3@example.test'), ELSEWHERE)
+    // From an address of its own, whose checks and mails are untouched: only the account refuses it.
+    const next = await mounted.route(
+      changeTo(ann.on('laptop'), `new-${limit}@example.test`),
+      freshAddress(),
+    )
 
-    expect(fourth?.status).toBe(429)
-    expect(await fourth?.json()).toEqual({ code: 'rate-limited' })
-    await mounted.outbox.next('new-2@example.test')
-    expect(mounted.outbox.to('new-3@example.test')).toEqual([])
-    await mounted.clock.advance(15 * MINUTE_MS)
-    expect((await asked(mounted, ann, 'new-4@example.test'))?.status).toBe(202)
+    expect(next?.status).toBe(429)
+    expect(await next?.json()).toEqual({ code: 'rate-limited' })
+    await mounted.outbox.next(`new-${limit - 1}@example.test`)
+    expect(mounted.outbox.to(`new-${limit}@example.test`)).toEqual([])
+    await mounted.clock.advance(windowMs)
+    expect((await asked(mounted, ann, `new-${limit + 1}@example.test`))?.status).toBe(202)
   }, 30_000)
 
   it('replaces an earlier request: only the newest link changes the email', async () => {
@@ -229,13 +241,15 @@ describe('authHandler, the request to change the email', () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-    await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+    await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
     expect((await asked(mounted, ann, NEW_EMAIL))?.status).toBe(202)
-    // The right password forgot nothing: the next failure is the tenth, and the sign-in waits.
+    // The right password forgot nothing: the next failure is the last allowed, and the sign-in waits.
     expect(
       (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
     ).toBe(401)
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    expect(
+      (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+    ).toBe(429)
   }, 60_000)
 
   it.each(OUT_OF_LENGTH)(
@@ -244,15 +258,17 @@ describe('authHandler, the request to change the email', () => {
       const mounted = await mountedOnRealAuth()
       const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+      await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
 
       const refused = await mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL, password), FROM)
 
       expect(refused?.status).toBe(400)
       expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
       expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
-      // The tenth failure spent the account's failed sign-ins.
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      // That last failure spent the account's failed sign-ins.
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
     },
     60_000,
   )
@@ -481,10 +497,10 @@ describe('authHandler, the confirmation of a new email', () => {
     expect((await mounted.sessions.identityOf(ANN))._unsafeUnwrap()).toBe(ann.identity)
   })
 
-  it('takes twenty attempts of an address within ten minutes, and answers the next rate-limited', async () => {
+  it("takes an address's attempts the contract allows within its window, and answers the next rate-limited", async () => {
     const mounted = await mountedOnRealAuth()
 
-    for (let n = 0; n < 20; n += 1) {
+    for (let n = 0; n < ADDRESS_LINK_ATTEMPTS.limit; n += 1) {
       expect((await mounted.route(confirm(`not-a-token-${n}`), FROM))?.status).toBe(401)
     }
 
@@ -493,7 +509,7 @@ describe('authHandler, the confirmation of a new email', () => {
     expect(limited?.status).toBe(429)
     expect(await limited?.json()).toEqual({ code: 'rate-limited' })
     expect((await mounted.route(confirm('not-a-token'), ELSEWHERE))?.status).toBe(401)
-    await mounted.clock.advance(10 * MINUTE_MS)
+    await mounted.clock.advance(ADDRESS_LINK_ATTEMPTS.windowMs)
     expect((await mounted.route(confirm('not-a-token'), FROM))?.status).toBe(401)
   })
 

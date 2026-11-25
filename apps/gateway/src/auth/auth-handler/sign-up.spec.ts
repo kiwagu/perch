@@ -4,6 +4,7 @@ import { interceptQueries } from '@workspace/data/testing'
 import { CONTRACT_VALUES, PASSWORD_LENGTH } from '@workspace/kernel'
 
 import { passwordOfLength } from '../../__fixtures__/platform-values'
+import { ADDRESS_MAILS, CREDENTIAL_CHECKS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import invitationsToEmailStatement from '../../tenants/surql/invitations-to-email.surql'
 import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
@@ -107,18 +108,21 @@ describe('authHandler, the sign-up', () => {
   it("takes the address's verification mails for every sign-up, whatever the email", async () => {
     const { route, clock } = mountedOnFakeAuth(accepted)
 
-    for (let n = 0; n < 180; n += 1) {
+    // Resends take the address's mails but its credential checks, which the sign-ups take after.
+    expect(ADDRESS_MAILS.limit).toBeGreaterThan(CREDENTIAL_CHECKS.limit)
+
+    for (let n = 0; n < ADDRESS_MAILS.limit - CREDENTIAL_CHECKS.limit; n += 1) {
       expect((await route(resendRequest(`r${n}@example.test`), FROM))?.status).toBe(202)
     }
 
-    for (let n = 0; n < 20; n += 1) {
+    for (let n = 0; n < CREDENTIAL_CHECKS.limit; n += 1) {
       const pending = route(signUpRequest(`s${n}@example.test`), FROM)
 
       await clock.advance(SIGN_UP_FLOOR_MS)
       expect((await pending)?.status).toBe(202)
     }
 
-    await clock.advance(10_000)
+    await clock.advance(CREDENTIAL_CHECKS.windowMs)
     expect((await route(signUpRequest('one-more@example.test'), FROM))?.status).toBe(429)
 
     const elsewhere = route(signUpRequest('one-more@example.test'), ELSEWHERE)

@@ -36,7 +36,7 @@ import { type Target, targetOf } from './targets'
  * - `POST /console/accounts/:id/email` with `{ email }`: 204 once the mail with the link of the
  *   change is on its way to the new email, the account's earlier pending change ended; 400
  *   `email-invalid`, 409 `email-taken` for an email an account holds, the account's own included,
- *   429 `rate-limited` past the account's three changes in a quarter of an hour (`editHandlers`).
+ *   429 `rate-limited` past the account's changes within their window (`editHandlers`).
  * - `POST /console/accounts/:id/ban` with `{ reason? }` (at most the `ban-reason` value's length
  *   once trimmed, else 400 `bad-request`): 204 once the account is banned with that reason and
  *   every session of it ended `banned`, in one transaction, and then its sockets closed with 4004;

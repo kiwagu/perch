@@ -1,9 +1,8 @@
 import { ResultAsync } from 'neverthrow'
 
-import type { LocalDb } from '@workspace/data'
+import type { DataError, LocalDb } from '@workspace/data'
 import { renderInvitationMail } from '@workspace/email'
-import type { Locale } from '@workspace/i18n/translator'
-import type { IdentityId } from '@workspace/ids'
+import { DEFAULT_LOCALE, type Locale } from '@workspace/i18n/translator'
 import type { Logger } from '@workspace/logger'
 
 import { accountAddressee, addresseeFailure, type MailFailure } from '../../auth/account-addressee'
@@ -16,6 +15,11 @@ export interface InvitationMailsOptions {
   readonly mail: MailPort
   /** The directory: the account an email belongs to, if any, and the language of an account. */
   readonly directory: LocalDb
+  /**
+   * The default language of the organisation `key`, from its own settings: none when it names
+   * none, a failure when it could not be read.
+   */
+  readonly organisationLocale: (key: string) => ResultAsync<Locale | undefined, DataError>
   /** The link to the front's invitation screen carrying `token`. */
   readonly link: (token: string) => string
   /** Hears a mail that did not go out, by its code; the request was answered already. */
@@ -26,9 +30,10 @@ export interface InvitationMailsOptions {
  * The mail of an invitation. It starts at once and returns, so the request that asked for it never
  * waits for it. It speaks the recipient's language: the one the settings of the account with the
  * invited email name, or the one that account signed up in before it has settings; an email with
- * no account gets the inviter's language, read the same way. A language that could not be read
- * sends nothing (`mail:LOCALE_UNREADABLE`), and an account that vanished between the two reads
- * sends nothing either (`mail:SEND_FAILED`), never a mail in a guessed language. The mail greets no
+ * no account gets its organisation's default language, else English, whoever invited it. A
+ * language that could not be read sends nothing (`mail:LOCALE_UNREADABLE`), and an account that
+ * vanished between the two reads sends nothing either (`mail:SEND_FAILED`), never a mail in a
+ * guessed language. The mail greets no
  * one by name and names no inviter. A mail that could not be read, written or sent is logged by
  * its code, never with its address, its organisation or its link.
  */
@@ -51,11 +56,11 @@ export class InvitationMails implements InvitationMailer {
     organisation,
     role,
     token,
-    inviter,
+    key,
   }: Parameters<InvitationMailer['invite']>[0]): void {
     const { link, log, mail } = this.#options
 
-    const language = new ResultAsync(Promise.resolve().then(() => this.#language(email, inviter)))
+    const language = new ResultAsync(Promise.resolve().then(() => this.#language(email, key)))
     const reading = language
       .match(
         () => undefined,
@@ -90,10 +95,10 @@ export class InvitationMails implements InvitationMailer {
 
   /**
    * The language the mail is written in: the account with `email`'s, or, when no account has it,
-   * `inviter`'s.
+   * the default of the organisation `key`, else English.
    */
-  #language(email: string, inviter: IdentityId): ResultAsync<Locale, MailFailure> {
-    const { directory } = this.#options
+  #language(email: string, key: string): ResultAsync<Locale, MailFailure> {
+    const { directory, organisationLocale } = this.#options
 
     return identityByEmail(directory, email)
       .mapErr(
@@ -103,9 +108,18 @@ export class InvitationMails implements InvitationMailer {
         }),
       )
       .andThen((found) =>
-        accountAddressee(directory, found?.id ?? inviter)
-          .map((addressee) => addressee.locale)
-          .mapErr(addresseeFailure),
+        found === undefined
+          ? organisationLocale(key)
+              .map((locale) => locale ?? DEFAULT_LOCALE)
+              .mapErr(
+                (): MailFailure => ({
+                  code: 'mail:LOCALE_UNREADABLE',
+                  message: "the default language of an invitation's organisation could not be read",
+                }),
+              )
+          : accountAddressee(directory, found.id)
+              .map((addressee) => addressee.locale)
+              .mapErr(addresseeFailure),
       )
   }
 }

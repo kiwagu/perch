@@ -4,7 +4,9 @@
 
 The gateway's request limits: how many credential checks, failed sign-ins, mails, attempts at a
 link, invitations and organisation creations a client address, an email or an identity may make
-in a window, and the 429 a refusal answers. The routes ask before the work is done. It has no `index.ts` yet: it
+in a window, and the 429 a refusal answers. The routes ask before the work is done. The numbers the
+contract states as its invariants' values are read from it (`CONTRACT_INVARIANTS` of
+`@workspace/kernel`, in `windows.ts`); the others are the gateway's own. It has no `index.ts` yet: it
 predates the index rule and is imported file by file.
 
 `RequestLimits` (`request-limits.ts`) keeps fixed windows (`fixed-window.ts`, their sizes in
@@ -13,20 +15,20 @@ process's memory, each starting at its key's first attempt that still counts (an
 leaves no window behind); every gateway process keeps its own, so several processes
 multiply them. Credential checks, `POST /auth/sign-up/email`, `POST /auth/sign-in/email` and
 `POST /auth/verify-email` together (a sign-up and a sign-in are each one argon2 run; a
-verification signs a device in as a sign-in does), are limited to 20 per client address in 10 s
-by the auth mount in front of Better Auth's handler (`src/auth/auth-handler/`), before anything
+verification signs a device in as a sign-in does), are limited per client address within a window,
+the contract's `credential-checks` (`CREDENTIAL_CHECKS`), by the auth mount in front of Better Auth's handler (`src/auth/auth-handler/`), before anything
 else is asked.
 Better Auth's own limiter is off (`src/auth/auth-instance.ts`): it restarts its count only after
-a pause as long as its window, so it would refuse an address's 21st request however slowly the
-20 before it came. Failed sign-ins (answered 401) are limited to 10 per email in 15
-minutes, cleared by a successful sign-in, or one answered 403 `EMAIL_NOT_VERIFIED` or
+a pause as long as its window, so it would refuse an address's request past its limit however
+slowly the ones before it came. Failed sign-ins (answered 401) are limited per email within a
+window, the contract's `failed-sign-ins` (`FAILED_SIGN_INS`), cleared by a successful sign-in, or one answered 403 `EMAIL_NOT_VERIFIED` or
 `account-banned` (the password was right, but the email is not verified yet or the account is
 banned), by the same mount. Any other 403, one refusing the request's origin, its Fetch Metadata
 or its callback before the password is checked, judges nothing. An
 email counts in lower case, as
 the directory keeps and matches an account's: an address in any case is one account, and its
 failures in any case share one limit. A sign-in holds one of its
-email's 10 places from the moment it is let through until Better Auth answers, so parallel
+email's places from the moment it is let through until Better Auth answers, so parallel
 guesses are counted while under way: wrong credentials (401) keep the place, a success (200, 409,
 or a 403 `EMAIL_NOT_VERIFIED` or `account-banned`) clears the email's window, and any other answer
 (any other 403 included), or a handler that threw instead of answering,
@@ -45,16 +47,16 @@ JSON, whatever content type it came with, so the email whose password is checked
 counted. A
 refusal answers 429 `{ "code": "rate-limited" }` with `Retry-After` in whole seconds (at least
 1), before the password is checked, and is not logged.
-Mails are limited to 200 per client address in 15 minutes (`ADDRESS_MAILS`): sign-ups, resends
+Mails are limited per client address within a window, the contract's `address-mails`
+(`ADDRESS_MAILS`): sign-ups, resends
 of the verification mail, requests for a reset mail, changes of an email, requests to delete
 an account and invitations together, every attempt counted whatever the email
 (`verificationMail(address)` for a
 sign-up's mail, `verificationMail(address, email)` for a resend, `resetMail(address, email)` for a
 reset mail, `emailChangeMail(address, identity)` for the confirmation of a new email,
 `deletionMail(address, identity)` for the deletion mail, `inviteMail(identity, address)` for an
-invitation's): one client can make at
-most 200 such mails go out per quarter hour, where the credential limit alone would let 1,800
-sign-ups through. The auth mount charges every
+invitation's): one client can make few such mails go out, where the credential limit alone would
+let many times more sign-ups through. The auth mount charges every
 `POST /auth/sign-up/email` before it reads its body, a taken email's and one that names none
 included (each new account's sign-up mails its link, and a taken email's must cost the same), and
 every `POST /auth/send-verification-email` it reads an email from. A resend also takes one of its email's 3 resends in 15 minutes
@@ -83,11 +85,12 @@ a fresh window.
 A request for a reset mail (`POST /auth/request-password-reset`) also takes one of its email's 3
 reset mails in 15 minutes (`EMAIL_RESET_MAILS`, the email in lower case), whatever the email, so
 the limit tells nothing about accounts; a change of an email (`POST /auth/change-email`) one of
-its account's 3 changes in 15 minutes (`IDENTITY_EMAIL_CHANGES`), and a request to delete an
+its account's changes within a window, the contract's `email-changes` (`IDENTITY_EMAIL_CHANGES`),
+and a request to delete an
 account (`POST /auth/request-account-deletion`) one of its account's 3 requests in 15 minutes
 (`IDENTITY_DELETION_REQUESTS`). Each is reserved after the address's mail, which is given back
-when the email's or the account's limit refuses. The attempts at a link are limited to 20 per
-client address in 10 minutes (`ADDRESS_LINK_ATTEMPTS`), the resets of a password
+when the email's or the account's limit refuses. The attempts at a link are limited per client
+address within a window, the contract's `address-attempts` (`ADDRESS_LINK_ATTEMPTS`), the resets of a password
 (`passwordReset`, `POST /auth/reset-password`), the confirmations of a new email
 (`emailConfirmation`, `POST /auth/confirm-email`), the deletions of an account
 (`accountDeletion`, `POST /auth/delete-account`) and the reads of an invitation's link
@@ -98,17 +101,18 @@ delete an account, and each change of the second factor with its password, take 
 address's credential checks, and the password a place among its account's failed sign-ins, as a
 sign-in does: a wrong one keeps its place, a right one gives it back and forgets none of the
 failures, which only a sign-in's last step clears.
-Invitations, `POST /organisations/:key/invitations`, are limited to 30 attempts per inviting
-identity and 60 per client address in 10 minutes, so probing the invites stays slow, and each
-takes one of the client address's 200 mails too (`inviteMail`): the address's mail is reserved
+Invitations, `POST /organisations/:key/invitations`, are limited per inviting identity and per
+client address, each in a window of its own, the contract's `invitation-attempts`
+(`IDENTITY_INVITES`, `ADDRESS_INVITES`), so probing the invites stays slow, and each takes one of
+the client address's mails too (`inviteMail`): the address's mail is reserved
 first, then the identity's invitation, then, only when the identity's limit allows, the
 address's, and the mail is given back when either invitation window refuses, so a refused
 invitation costs no mail and a mail the address refuses moves no invitation window. Every
 attempt counts whatever the answer (an email the gateway does not take, `email-invalid`, and a
 member's `already-member` included), once the body follows its schema (a 400 `bad-request` counts
 nothing); the limit is checked before the service is asked. The reads of an invitation's link,
-`POST /invitations/read`, take one of their address's 20 attempts at that kind of link in 10
-minutes before the request's body is read, so a refused read costs the same whatever the token.
+`POST /invitations/read`, take one of their address's attempts at that kind of link
+(`ADDRESS_LINK_ATTEMPTS`) before the request's body is read, so a refused read costs the same whatever the token.
 Nothing else of an invitation is limited. Organisation creation,
 `POST /organisations`, is limited to 10 per identity and 30 per client address in an hour (each
 one provisions a database, and one address cannot farm identities past the identity's limit),

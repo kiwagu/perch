@@ -1,7 +1,7 @@
 import type { SignInOutcome } from '../sign-in.service'
 
 /** The kinds of what a step of signing in answers. */
-const KINDS: ReadonlySet<unknown> = new Set(['signed-in', 'code-required', 'device-limit'])
+const KINDS: ReadonlySet<unknown> = new Set(['signed-in', 'code-required'])
 
 /** Whether `output` is what a step of signing in answered: the outcome of the service, as its actors give it. */
 function isOutcome(output: unknown): output is SignInOutcome {

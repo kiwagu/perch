@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { ban } from '../__fixtures__/account-ban'
@@ -19,6 +20,7 @@ import {
 } from './__fixtures__/code-step'
 import {
   ANN,
+  freshAddress,
   mountedOnRealAuth,
   PASSWORD,
   pastFloor,
@@ -30,9 +32,6 @@ import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from. */
 const FROM = '203.0.113.7'
-
-/** How long the email's failed sign-ins keep a password out. */
-const WINDOW_MS = 15 * 60_000
 
 /** An email no account has. */
 const GHOST = 'ghost@example.test'
@@ -59,12 +58,12 @@ async function confirm(
   device = 'desk',
   email = ANN,
 ) {
-  return answered(await mounted.route(codeStep(challenge, code, device, { email }), FROM))
+  return answered(await mounted.route(codeStep(challenge, code, device, { email }), freshAddress()))
 }
 
 /** The status of Ann's sign-in with her right password from the desk. */
 async function rightPassword(mounted: Mounted) {
-  return (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status
+  return (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), freshAddress()))?.status
 }
 
 describe("authHandler, a sign-in's code step and the email's failed sign-ins", () => {
@@ -74,16 +73,16 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       const mounted = await mountedOnRealAuth()
       const ann = await withSecondFactor(mounted)
 
-      await wrongPasswords(mounted, 9, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
 
       const challenge = await passwordStep(mounted, 'desk', FROM)
 
       expect(await confirm(mounted, challenge, await wrongCodeOf(ann.secret))).toEqual(invalidCode)
-      // The tenth failure: the right code is kept out before any code is looked at.
+      // The last failure allowed: the right code is kept out before any code is looked at.
       expect(await confirm(mounted, challenge, await codeOf(ann.secret))).toEqual(rateLimited)
       expect(await challengeRows(mounted)).toHaveLength(2)
 
-      await mounted.clock.advance(WINDOW_MS)
+      await mounted.clock.advance(FAILED_SIGN_INS.windowMs)
 
       expect((await confirm(mounted, challenge, await codeOf(ann.secret))).status).toBe(200)
     },
@@ -96,7 +95,7 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       const mounted = await mountedOnRealAuth()
       const ann = await withSecondFactor(mounted)
 
-      await wrongPasswords(mounted, 9, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
 
       const challenge = await passwordStep(mounted, 'desk', FROM)
       const response = await mounted.route(
@@ -119,7 +118,7 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       expect(await settingsOf(mounted).devicesStatus('desk', token)).toBe(200)
       expect(mounted.closes).toEqual([[ann.identity, 'desk', SUPERSEDED]])
       expect(await challengeRows(mounted)).toEqual([])
-      // Nine failures were forgotten: two more are the first two of a new count.
+      // Those failures were forgotten: two more are the first two of a new count.
       await wrongPasswords(mounted, 2, FROM)
     },
     ARGON2_RUNS_MS,
@@ -207,7 +206,7 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       const challenge = await passwordStep(mounted, 'desk', FROM)
 
       ;(await mounted.deps.challenges.end(challenge))._unsafeUnwrap()
-      await wrongPasswords(mounted, 10, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit, FROM)
 
       expect(await confirm(mounted, challenge, await codeOf(ann.secret))).toEqual(rateLimited)
     },
@@ -222,13 +221,13 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       const challenge = await passwordStep(mounted, 'desk', FROM)
 
       ;(await mounted.deps.challenges.end(challenge))._unsafeUnwrap()
-      await wrongPasswords(mounted, 9, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
 
       expect(await confirm(mounted, challenge, await codeOf(ann.secret))).toEqual(codeExpired)
       expect(await confirm(mounted, '2fa-made-up.signature', await codeOf(ann.secret))).toEqual(
         codeExpired,
       )
-      // The tenth failure is the next wrong password, which spends them.
+      // The last failure allowed is the next wrong password, which spends them.
       await wrongPasswords(mounted, 1, FROM)
       expect(await rightPassword(mounted)).toBe(429)
     },
@@ -242,13 +241,15 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       const ann = await withSecondFactor(mounted)
       const challenge = await passwordStep(mounted, 'desk', FROM)
 
-      await wrongPasswords(mounted, 9, FROM, GHOST)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM, GHOST)
 
       expect(await confirm(mounted, challenge, await codeOf(ann.secret), 'desk', GHOST)).toEqual(
         codeExpired,
       )
       await wrongPasswords(mounted, 1, FROM, GHOST)
-      expect((await mounted.route(signInRequest(GHOST, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      expect(
+        (await mounted.route(signInRequest(GHOST, PASSWORD, 'desk'), freshAddress()))?.status,
+      ).toBe(429)
       // Ann's own challenge was left as it was.
       expect((await confirm(mounted, challenge, await codeOf(ann.secret))).status).toBe(200)
     },
@@ -261,7 +262,7 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       const mounted = await mountedOnRealAuth()
       const ann = await withSecondFactor(mounted)
 
-      await wrongPasswords(mounted, 9, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
 
       const challenge = await passwordStep(mounted, 'desk', FROM)
 
@@ -278,7 +279,7 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
         await confirm(mounted, challenge, await codeOf(ann.secret), 'desk', 'ANN@EXAMPLE.TEST'),
       ).toEqual(rateLimited)
 
-      await mounted.clock.advance(WINDOW_MS)
+      await mounted.clock.advance(FAILED_SIGN_INS.windowMs)
 
       expect(
         (await confirm(mounted, challenge, await codeOf(ann.secret), 'desk', 'Ann@Example.Test'))
@@ -401,7 +402,7 @@ describe('authHandler, a change of what a challenge stood for between the steps'
       const mounted = await mountedOnRealAuth()
       const ann = await withSecondFactor(mounted)
 
-      await wrongPasswords(mounted, 9, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
 
       const challenge = await passwordStep(mounted, 'desk', FROM)
 
@@ -411,7 +412,7 @@ describe('authHandler, a change of what a challenge stood for between the steps'
         status: 403,
         body: { code: 'account-banned' },
       })
-      // The refusal judged nothing: the next wrong password is the tenth, which spends them.
+      // The refusal judged nothing: the next wrong password is the last allowed, which spends them.
       await wrongPasswords(mounted, 1, FROM)
       expect(await rightPassword(mounted)).toBe(429)
     },

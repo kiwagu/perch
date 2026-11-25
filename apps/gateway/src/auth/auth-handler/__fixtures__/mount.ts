@@ -64,6 +64,19 @@ export const PASSWORD = 'Pass-word-1'
 /** The front's origin, which the browser names on every request. */
 export const ORIGIN = 'http://localhost'
 
+let freshAddresses = 0
+
+/**
+ * A client address no request of the spec came from yet, one of 250 in turn: a probe the email's
+ * failed sign-ins should refuse goes out from one, so it meets an address's full credential checks
+ * and only the email's limit can answer it 429, whatever the two limits are.
+ */
+export function freshAddress(): string {
+  freshAddresses += 1
+
+  return `192.0.2.${(freshAddresses % 250) + 2}`
+}
+
 /** A close the mount asked the registry for: the identity, the device and the code. */
 export type Close = readonly [IdentityId, string | undefined, number]
 

@@ -1,4 +1,3 @@
-import type { IdentityId } from '@workspace/ids'
 import type { TenantRole } from '@workspace/replica/protocol'
 
 /** What sends the mail of an invitation: the organisations' service takes it, a fake stands in for it in specs. */
@@ -13,7 +12,7 @@ export interface InvitationMailer {
     role: TenantRole
     /** The token of the invitation's link. */
     token: string
-    /** The identity that invited: the language of a recipient with no account comes from it. */
-    inviter: IdentityId
+    /** The organisation's key: its default language speaks to an email no account has. */
+    key: string
   }): void
 }
