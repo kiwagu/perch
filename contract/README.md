@@ -202,8 +202,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   the mail goes to, read as `account` is, when an account has that email. Every source but
   `recipient` and an optional parameter left out always has a language, so it ends a list, and a
   list ends with one: an invitation's `language: [ recipient, organisation ]` speaks the language
-  of the account it invites, else its organisation's.
-  `recipient` written alone, the older form, falls back on the signed-in account's. `account` is
+  of the account it invites, else its organisation's; `recipient` alone is refused, as it may
+  have none. `account` is
   a reserved word there: it names the account the action acts on, the signed-in account for an
   action on its own account (a change of email, a request to delete it), else, whoever is signed
   in, the one its parameters name: the email of the resend of a verification or of the request
@@ -214,10 +214,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   `account` on an action that sends a mail or a notice and one named `organisation` or
   `recipient` on an action that sends a mail, refuses a source after one that always has a
   language (it is never reached) and a last source that may have none (an optional parameter,
-  alone too), takes `recipient`
-  only for a mail whose `to` is a parameter
-  (written alone, only on an action whose `roles` leave `guest` out, as it falls back on a
-  signed-in account) and `organisation` only on an action whose `roles` leave out `guest` and
+  `recipient` alone too), takes `recipient` only for a mail whose `to` is a parameter and
+  `organisation` only on an action whose `roles` leave out `guest` and
   `identity` (it runs in an organisation; the contract does not say which other roles are held
   in one), and holds the link to a screen whose every route declares that search parameter.
   A scenario names the mail by its action, `[mail:sign-up]`, and a
