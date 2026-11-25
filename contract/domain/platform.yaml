@@ -203,7 +203,7 @@ actions:
       - "the failed sign-ins are judged before the challenge and the code: while they keep a password out, a well-formed request answers rate-limited whatever its challenge and code, and no code is looked at"
       - "a backup code is used up when it signs the device in; one the attempt stops at before the check (the device limit, a ban, an ended code step) stays usable"
       - "once the check has started, a server failure, the code step ending or another change to the account during it can leave a backup code used up, nothing signed in"
-      - "past the limit of devices nothing is signed in, no code is checked or spent, the failed sign-ins stay; the confirmation signs in again from the password, asking a code again"
+      - "past the limit of devices nothing is signed in; the confirmation signs in again from the password, asking a code again"
     changes: [ devices.list, accounts.read ]
     codes:
       invalid-code: "the code is wrong; it counts toward the email's failed sign-ins as a wrong password does"
@@ -211,7 +211,9 @@ actions:
       account-banned: { invariant: banned-account }
       rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       other-account: { invariant: one-account-per-browser }
-      device-limit: { invariant: device-limit }
+      device-limit:
+        invariant: device-limit
+        condition: "judged before the code is checked: no code is checked or spent and the failed sign-ins stay; or after a right code, when another device got in meanwhile: that code is spent"
       failed: "anything else fails"
   verify-email:
     description: Verifies the email of an account with the token its verification mail carries, and signs this device in to the account the first time.
