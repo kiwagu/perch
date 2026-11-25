@@ -1,4 +1,4 @@
-import { LoroMap } from 'loro-crdt'
+import type { LoroMap } from 'loro-crdt'
 import { err, ok, type Result, ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
@@ -166,7 +166,16 @@ export class LoroWritePath implements WritePathPort {
 
     match(op)
       .with({ op: 'create' }, ({ fields }) => {
-        const record = records.setContainer(key, new LoroMap())
+        // Every device derives the same container from the key, so two devices that create one
+        // record before either sees the other's create write into one record, never two. A key this
+        // document deleted keeps its old fields hidden in that container: the create drops them.
+        const record = records.ensureMergeableMap(key)
+
+        for (const field of record.keys().map(String)) {
+          if (!Object.hasOwn(fields, field)) {
+            record.delete(field)
+          }
+        }
 
         for (const [field, ref] of Object.entries(fields)) {
           this.#write(record, key, field, ref, params)

@@ -26,7 +26,7 @@ function signingIn(version: number, codes: Codes): Contract {
   return { ...contract, screens: { ...contract.screens, version } }
 }
 
-const LIST = `a list of codes; from version 6 an action's codes are a map, each code with when it answers: \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep`
+const LIST = `a list of codes; from version 6 an action's codes are a map, each code with when it answers: \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep; an empty list is \`codes: {}\``
 const problem = (message: string) => ({ file: PLATFORM_FILE, message })
 
 describe('actionFormsProblems', () => {
