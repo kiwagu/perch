@@ -23,7 +23,16 @@
  * starts so; a regular expression that names a route ending there (`/\/me$/`). A sub-path
  * (`/settings/x`) and a longer word (`/settingsx`) are not routes. Needs type information
  * (typescript-eslint `projectService`); without it the rule fails rather than pass in silence.
+ *
+ * A number of an invariant (`CONTRACT_INVARIANTS`) is reported where the code expects a property
+ * the module itself declares: an object's property whose declared type is an invariant's numbers,
+ * whole or picked (`Pick<…>` keeps the declaration), written as the number the module holds there.
+ * Numbers are common, so only that declaration says the code expects one of the contract's; a
+ * literal type of the code's own (`status: 200`) says nothing, and a number the module does not
+ * hold there is the compiler's to refuse.
  */
+
+import { resolve } from 'node:path'
 
 import ts from 'typescript'
 
@@ -54,6 +63,8 @@ export const contractTerms = {
       role: '"{{value}}" is a role of the contract written by hand: name it {{name}}, from the module the contract emits.',
       route:
         '"{{value}}" names a route of the contract by hand: name it {{name}}, from the module the contract emits.',
+      number:
+        '{{value}} is a number of the contract written by hand: name it {{name}}, from the module the contract emits.',
     },
     schema: [
       {
@@ -66,7 +77,8 @@ export const contractTerms = {
   },
   create(context) {
     const [{ module, routeValues = false }] = context.options
-    const { roles, routes } = readContractTerms(module)
+    const { roles, routes, invariants } = readContractTerms(module)
+    const emitted = resolve(module)
     const services = context.sourceCode.parserServices
 
     if (!services?.program || !services.esTreeNodeToTSNodeMap) {
@@ -101,6 +113,72 @@ export const contractTerms = {
         reportRole(node, value)
       } else if (within(values, routes) && routes.has(value)) {
         reportRoute(node, value)
+      }
+    }
+
+    /**
+     * The invariant whose number the module declares at `property`, the declaration of a property
+     * the code expects: `"limit": 10` under `"failed-sign-ins"`; none for a declaration elsewhere.
+     */
+    function invariantDeclaring(property) {
+      const declaration = (property?.getDeclarations() ?? []).find(
+        (each) => resolve(each.getSourceFile().fileName) === emitted,
+      )
+      const holder = declaration?.parent?.parent
+
+      return holder !== undefined &&
+        ts.isPropertyAssignment(holder) &&
+        ts.isStringLiteral(holder.name)
+        ? holder.name.text
+        : undefined
+    }
+
+    /** Reports the number `node` where the code expects a number the module declares, as it. */
+    function checkNumber(node) {
+      const { parent } = node
+
+      if (
+        parent?.type !== 'Property' ||
+        parent.value !== node ||
+        parent.parent?.type !== 'ObjectExpression'
+      ) {
+        return
+      }
+
+      const name =
+        parent.key.type === 'Identifier' && !parent.computed
+          ? parent.key.name
+          : typeof parent.key.value === 'string'
+            ? parent.key.value
+            : undefined
+      const object = services.program
+        .getTypeChecker()
+        .getContextualType(
+          services.esTreeNodeToTSNodeMap.get(parent.parent),
+          ts.ContextFlags.IgnoreNodeInferences,
+        )
+
+      if (name === undefined || object === undefined) {
+        return
+      }
+
+      for (const member of object.isUnion() ? object.types : [object]) {
+        const invariant = invariantDeclaring(
+          services.program.getTypeChecker().getPropertyOfType(member, name),
+        )
+
+        if (invariant !== undefined && invariants.get(invariant)?.get(name) === node.value) {
+          context.report({
+            node,
+            messageId: 'number',
+            data: {
+              value: String(node.value),
+              name: `${access('CONTRACT_INVARIANTS', invariant)}.${name}`,
+            },
+          })
+
+          return
+        }
       }
     }
 
@@ -144,7 +222,9 @@ export const contractTerms = {
         }
       },
       Literal(node) {
-        if (typeof node.value === 'string') {
+        if (typeof node.value === 'number') {
+          checkNumber(node)
+        } else if (typeof node.value === 'string') {
           checkString(node, node.value)
         } else if (routeValues && node.regex !== undefined) {
           const route = routeInPattern(node.regex.pattern, routes)

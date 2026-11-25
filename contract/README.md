@@ -118,9 +118,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   behaviour text, an action's, an invariant's, a screen's, an anchor's, a value's or a field's
   name, an enum's value, a route path, a role's name, a row of the vocabulary's tables, an
   activity's names or a scenario's prose; code and
-  tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`
-  (`ui-contract emit terms`), never by hand, which the ESLint rule `workspace/contract-terms`
-  holds ([the rule](REFERENCE.md#rule-terms)).
+  tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`, and an
+  invariant's number through `CONTRACT_INVARIANTS` (`ui-contract emit terms`), never by hand,
+  which the ESLint rule `workspace/contract-terms` holds ([the rule](REFERENCE.md#rule-terms)).
 - `domain/screens/<pathname>.yaml`: one screen per file, named by the path of the screen's
   first binding without the leading `/`. `/sign-in` is `domain/screens/sign-in.yaml` and `/me`
   is `domain/screens/me.yaml`; a nested path is a folder (`/org/$org` would be

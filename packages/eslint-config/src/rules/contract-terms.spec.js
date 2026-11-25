@@ -51,6 +51,9 @@ const role = (value, name = `CONTRACT_ROLES.${value}`) => ({
   messageId: 'role',
   data: { value, name },
 })
+const number = (value, name) => ({ messageId: 'number', data: { value: String(value), name } })
+const invariants = (code) =>
+  typed(`import { CONTRACT_INVARIANTS } from '../__fixtures__/contract-terms.gen'\n${code}`)
 const route = (value, id) => ({
   messageId: 'route',
   data: { value, name: `CONTRACT_ROUTES[${JSON.stringify(id)}]` },
@@ -58,6 +61,13 @@ const route = (value, id) => ({
 
 tester.run('contract-terms', contractTerms, {
   valid: [
+    invariants("export const window = CONTRACT_INVARIANTS['failed-sign-ins']"),
+    invariants('export const counted: { limit: number } = { limit: 10 }'),
+    invariants('export const answer: { status: 200 } = { status: 200 }'),
+    invariants('export const ten: number = 10'),
+    invariants(
+      "const mine = { 'failed-sign-ins': { limit: 10 } } as const\nexport const own: (typeof mine)['failed-sign-ins'] = { limit: 10 }",
+    ),
     typed('grant(ROLES.operator)'),
     typed("const table: string = 'identity'"),
     typed("const word = 'admin'"),
@@ -140,6 +150,30 @@ tester.run('contract-terms', contractTerms, {
     byValue("const splat = '/$x'"),
   ],
   invalid: [
+    {
+      ...invariants(
+        "export const window: (typeof CONTRACT_INVARIANTS)['failed-sign-ins'] = { limit: 10, windowMs: 900000 }",
+      ),
+      errors: [
+        number(10, 'CONTRACT_INVARIANTS["failed-sign-ins"].limit'),
+        number(900000, 'CONTRACT_INVARIANTS["failed-sign-ins"].windowMs'),
+      ],
+    },
+    {
+      ...invariants(
+        "export const devices: Pick<(typeof CONTRACT_INVARIANTS)['device-limit'], 'limit'> = { limit: 10 }",
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...invariants(
+        "declare function take(window: (typeof CONTRACT_INVARIANTS)['failed-sign-ins']): void\ntake({ limit: 10, windowMs: 900000 })",
+      ),
+      errors: [
+        number(10, 'CONTRACT_INVARIANTS["failed-sign-ins"].limit'),
+        number(900000, 'CONTRACT_INVARIANTS["failed-sign-ins"].windowMs'),
+      ],
+    },
     { ...typed("grant('operator')"), errors: [role('operator')] },
     { ...typed("holds(['member', 'admin'])"), errors: [role('member'), role('admin')] },
     { ...typed("const platform: PlatformRole = 'operator'"), errors: [role('operator')] },
@@ -353,22 +387,38 @@ describe('readContractTerms', () => {
       readContractTerms(
         written(
           'numbers.ts',
-          'export const CONTRACT_ROLES = { "a": 1 } as const\nexport const CONTRACT_ROUTES = {} as const\n',
+          'export const CONTRACT_ROLES = { "a": 1 } as const\nexport const CONTRACT_ROUTES = {} as const\nexport const CONTRACT_INVARIANTS = {} as const\n',
         ),
       ),
     ).toThrow('an entry of CONTRACT_ROLES is not a string')
+    expect(() =>
+      readContractTerms(
+        written(
+          'no-invariants.ts',
+          'export const CONTRACT_ROLES = {} as const\nexport const CONTRACT_ROUTES = {} as const\n',
+        ),
+      ),
+    ).toThrow('no CONTRACT_INVARIANTS')
+    expect(() =>
+      readContractTerms(
+        written(
+          'invariant-text.ts',
+          'export const CONTRACT_ROLES = {} as const\nexport const CONTRACT_ROUTES = {} as const\nexport const CONTRACT_INVARIANTS = { "x": { "limit": "ten" } } as const\n',
+        ),
+      ),
+    ).toThrow('a number of CONTRACT_INVARIANTS is not a number')
   })
   it('reads a module again once it changed', () => {
     const path = written(
       'changing.ts',
-      'export const CONTRACT_ROLES = { "a": "a" } as const\nexport const CONTRACT_ROUTES = {} as const\n',
+      'export const CONTRACT_ROLES = { "a": "a" } as const\nexport const CONTRACT_ROUTES = {} as const\nexport const CONTRACT_INVARIANTS = {} as const\n',
     )
 
     expect([...readContractTerms(path).roles.keys()]).toEqual(['a'])
 
     writeFileSync(
       path,
-      'export const CONTRACT_ROLES = { "b": "b" } as const\nexport const CONTRACT_ROUTES = {} as const\n',
+      'export const CONTRACT_ROLES = { "b": "b" } as const\nexport const CONTRACT_ROUTES = {} as const\nexport const CONTRACT_INVARIANTS = {} as const\n',
     )
 
     expect([...readContractTerms(path).roles.keys()]).toEqual(['b'])

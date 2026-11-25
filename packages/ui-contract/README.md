@@ -248,8 +248,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     data, `CONTRACT_VALUES`, every value of the platform and every field of the model as the
     contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
     element of each field carries that the contract decides, by its anchor, and
-    `termsModuleOf(contract)` that of `CONTRACT_ROLES` and `CONTRACT_ROUTES`, every role by its
-    name and every route path by its screen's id, a further binding's by `<id>@<path>`
+    `termsModuleOf(contract)` that of `CONTRACT_ROLES`, `CONTRACT_ROUTES` and
+    `CONTRACT_INVARIANTS`, every role by its name, every route path by its screen's id, a further
+    binding's by `<id>@<path>`, and each invariant's numbers, a duration in milliseconds
     (`routeKeyOf`; `contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
     is the text a package's committed module must equal (see `./testing` below).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
@@ -373,7 +374,7 @@ links to as `contract/REFERENCE.md#<slug>`.
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - `ui-contract emit values|fields|terms --out <file>`, from the root or any folder under it:
   writes the module of plain data `CONTRACT_VALUES`, `FIELD_FACTS` or `CONTRACT_ROLES` with
-  `CONTRACT_ROUTES` into `<file>`, relative to the
+  `CONTRACT_ROUTES` and `CONTRACT_INVARIANTS` into `<file>`, relative to the
   working directory, which the caller always names; prints the problems and exits 1, writing
   nothing, when the contract check finds any. From the root, `bun run contract:emit`
   (`turbo run emit`) runs the `emit` script of every package that keeps one. Not part of

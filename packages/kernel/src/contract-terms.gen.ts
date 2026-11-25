@@ -26,3 +26,6 @@ export const CONTRACT_ROUTES = {
   "user.sign-in": "/sign-in",
   "user.verify-email": "/verify-email"
 } as const
+
+/** Every invariant that states numbers, by its name: each count by its name, each duration in milliseconds under its name with `Ms`. */
+export const CONTRACT_INVARIANTS = {} as const

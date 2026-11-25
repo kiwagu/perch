@@ -41,6 +41,7 @@ describe('termsModuleOf', () => {
     expect(moduleConstants(termsModuleOf(loaded()))).toEqual({
       CONTRACT_ROLES: { guest: 'guest', identity: 'identity', member: 'member' },
       CONTRACT_ROUTES: { 'not-found': '/$', sample: '/sample/$key' },
+      CONTRACT_INVARIANTS: {},
     })
   })
   it('holds the roles of the terms file when the contract writes one', () => {
@@ -80,7 +81,38 @@ describe('termsModuleOf', () => {
       },
     })
   })
-  it('writes the two constants as plain data under the generated header, keys sorted', () => {
+  it('holds each invariant that states numbers: a count by its name, a duration in milliseconds under its name with Ms', () => {
+    const contract = sampleContract()
+
+    contract.screens.platform.invariants = {
+      'failed-sign-ins': {
+        rule: '{limit} within {window}.',
+        refuses: 'rate-limited',
+        values: { window: { minutes: 15 }, limit: 10 },
+      },
+      'credential-checks': {
+        rule: '{limit} in {window}.',
+        refuses: 'rate-limited',
+        values: { limit: 20, window: { seconds: 10 } },
+      },
+      'invitation-attempts': {
+        rule: '{accountLimit} and {addressLimit} in {window}.',
+        refuses: 'rate-limited',
+        values: { addressLimit: 60, accountLimit: 30, window: { hours: 1 } },
+      },
+      'last-admin': { rule: 'An organisation keeps an admin.', refuses: 'last-admin' },
+    }
+
+    expect(moduleConstants(termsModuleOf(contract))['CONTRACT_INVARIANTS']).toEqual({
+      'credential-checks': { limit: 20, windowMs: 10_000 },
+      'failed-sign-ins': { limit: 10, windowMs: 900_000 },
+      'invitation-attempts': { accountLimit: 30, addressLimit: 60, windowMs: 3_600_000 },
+    })
+    expect(termsModuleOf(contract)).toContain(
+      '"failed-sign-ins": {\n    "limit": 10,\n    "windowMs": 900000\n  }',
+    )
+  })
+  it('writes the three constants as plain data under the generated header, keys sorted', () => {
     const text = termsModuleOf(loaded())
 
     expect(
@@ -99,6 +131,9 @@ export const CONTRACT_ROUTES = {
   "not-found": "/$",
   "sample": "/sample/$key"
 } as const
+
+/** Every invariant that states numbers, by its name: each count by its name, each duration in milliseconds under its name with \`Ms\`. */
+export const CONTRACT_INVARIANTS = {} as const
 `)
   })
 })
