@@ -74,6 +74,9 @@ tester.run('contract-terms', contractTerms, {
     throughKernel(
       'declare const counts: Record<number, number>\nexport const at = counts[DEVICE_LIMIT] === 10',
     ),
+    throughKernel(
+      'type Sample<T> = [limit: T, attempts: number]\ndeclare function sample(...args: Sample<typeof DEVICE_LIMIT>): void\nsample(DEVICE_LIMIT, 10)',
+    ),
     invariants('declare const count: number\nexport const done = count < 10'),
     invariants('export let tries = 10'),
     invariants(
@@ -200,6 +203,18 @@ tester.run('contract-terms', contractTerms, {
     {
       ...throughKernel(
         'declare function count(...ns: (typeof DEVICE_LIMIT)[]): void\ncount(DEVICE_LIMIT, 10)',
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel(
+        'declare function count(...ns: ReadonlyArray<typeof DEVICE_LIMIT>): void\ncount(10)',
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel(
+        'declare function count(...ns: readonly (typeof DEVICE_LIMIT)[]): void\ncount(10)',
       ),
       errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
     },

@@ -12,6 +12,9 @@ import { resolve } from 'node:path'
 
 import ts from 'typescript'
 
+/** The generic array types whose one type argument is every element's. */
+const ARRAYS = new Set(['Array', 'ReadonlyArray'])
+
 /** How many declarations a value is followed through before the readers give up. */
 const MAX_HOPS = 16
 
@@ -226,17 +229,36 @@ export function numberReaders(services, emitted) {
       return annotatedNumber(parameter.type)
     }
 
-    const listed = parameter.type
-    const element =
-      listed !== undefined && ts.isArrayTypeNode(listed)
-        ? listed.elementType
-        : listed !== undefined &&
-            ts.isTypeReferenceNode(listed) &&
-            listed.typeArguments?.length === 1
-          ? listed.typeArguments[0]
-          : undefined
+    return annotatedNumber(elementOf(parameter.type))
+  }
 
-    return annotatedNumber(element)
+  /**
+   * The element type of a homogeneous array type, `T[]`, `readonly T[]`, `Array<T>` or
+   * `ReadonlyArray<T>`; none for any other type, a tuple or a generic of one argument among them,
+   * whose slots need not share one type.
+   */
+  function elementOf(type) {
+    if (type === undefined) {
+      return undefined
+    }
+
+    if (
+      ts.isParenthesizedTypeNode(type) ||
+      (ts.isTypeOperatorNode(type) && type.operator === ts.SyntaxKind.ReadonlyKeyword)
+    ) {
+      return elementOf(type.type)
+    }
+
+    if (ts.isArrayTypeNode(type)) {
+      return type.elementType
+    }
+
+    return ts.isTypeReferenceNode(type) &&
+      ts.isIdentifier(type.typeName) &&
+      ARRAYS.has(type.typeName.text) &&
+      type.typeArguments?.length === 1
+      ? type.typeArguments[0]
+      : undefined
   }
 
   /**
