@@ -25,11 +25,16 @@
  * (typescript-eslint `projectService`); without it the rule fails rather than pass in silence.
  *
  * A number of an invariant (`CONTRACT_INVARIANTS`) is reported where the code expects a property
- * the module itself declares: an object's property whose declared type is an invariant's numbers,
- * whole or picked (`Pick<…>` keeps the declaration), written as the number the module holds there.
- * Numbers are common, so only that declaration says the code expects one of the contract's; a
- * literal type of the code's own (`status: 200`) says nothing, and a number the module does not
- * hold there is the compiler's to refuse.
+ * the module itself declares, written as the number the module holds there: an object's property
+ * whose declared type is an invariant's numbers, whole or picked (`Pick<…>` keeps the
+ * declaration); a variable annotated with one of its numbers
+ * (`(typeof CONTRACT_INVARIANTS)['device-limit']['limit']`, through a type alias too); the other
+ * side of a comparison (`===`, `!==`, `==`, `!=`, `<`, `<=`, `>`, `>=`) whose value comes from a
+ * number of the module, followed through a member read, a constant's initializer, a destructured
+ * binding and such an annotation. Numbers are common, so only that declaration says the code
+ * expects one of the contract's: a literal type of the code's own (`status: 200`) says nothing, a
+ * bound compared with a counter of its own (`i < 10`) is out of reach, and a number the module
+ * does not hold there is the compiler's to refuse.
  */
 
 import { resolve } from 'node:path'
@@ -37,6 +42,7 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 
 import { readContractTerms } from './contract-terms-module.js'
+import { numberReaders } from './contract-terms-numbers.js'
 import { typeReaders } from './contract-terms-types.js'
 import { routeInPattern, routeNamedBy, routeStartingQuasi } from './route-values.js'
 
@@ -78,7 +84,6 @@ export const contractTerms = {
   create(context) {
     const [{ module, routeValues = false }] = context.options
     const { roles, routes, invariants } = readContractTerms(module)
-    const emitted = resolve(module)
     const services = context.sourceCode.parserServices
 
     if (!services?.program || !services.esTreeNodeToTSNodeMap) {
@@ -86,6 +91,7 @@ export const contractTerms = {
     }
 
     const { expectedAt, expectedKeys } = typeReaders(services, { roles, routes })
+    const { expectedNumber } = numberReaders(services, resolve(module))
 
     function reportRole(node, value) {
       context.report({
@@ -116,69 +122,22 @@ export const contractTerms = {
       }
     }
 
-    /**
-     * The invariant whose number the module declares at `property`, the declaration of a property
-     * the code expects: `"limit": 10` under `"failed-sign-ins"`; none for a declaration elsewhere.
-     */
-    function invariantDeclaring(property) {
-      const declaration = (property?.getDeclarations() ?? []).find(
-        (each) => resolve(each.getSourceFile().fileName) === emitted,
-      )
-      const holder = declaration?.parent?.parent
-
-      return holder !== undefined &&
-        ts.isPropertyAssignment(holder) &&
-        ts.isStringLiteral(holder.name)
-        ? holder.name.text
-        : undefined
-    }
-
     /** Reports the number `node` where the code expects a number the module declares, as it. */
     function checkNumber(node) {
-      const { parent } = node
+      const number = expectedNumber(node)
 
       if (
-        parent?.type !== 'Property' ||
-        parent.value !== node ||
-        parent.parent?.type !== 'ObjectExpression'
+        number !== undefined &&
+        invariants.get(number.invariant)?.get(number.name) === node.value
       ) {
-        return
-      }
-
-      const name =
-        parent.key.type === 'Identifier' && !parent.computed
-          ? parent.key.name
-          : typeof parent.key.value === 'string'
-            ? parent.key.value
-            : undefined
-      const object = services.program
-        .getTypeChecker()
-        .getContextualType(
-          services.esTreeNodeToTSNodeMap.get(parent.parent),
-          ts.ContextFlags.IgnoreNodeInferences,
-        )
-
-      if (name === undefined || object === undefined) {
-        return
-      }
-
-      for (const member of object.isUnion() ? object.types : [object]) {
-        const invariant = invariantDeclaring(
-          services.program.getTypeChecker().getPropertyOfType(member, name),
-        )
-
-        if (invariant !== undefined && invariants.get(invariant)?.get(name) === node.value) {
-          context.report({
-            node,
-            messageId: 'number',
-            data: {
-              value: String(node.value),
-              name: `${access('CONTRACT_INVARIANTS', invariant)}.${name}`,
-            },
-          })
-
-          return
-        }
+        context.report({
+          node,
+          messageId: 'number',
+          data: {
+            value: String(node.value),
+            name: `${access('CONTRACT_INVARIANTS', number.invariant)}.${number.name}`,
+          },
+        })
       }
     }
 

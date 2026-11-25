@@ -65,6 +65,11 @@ tester.run('contract-terms', contractTerms, {
     invariants('export const counted: { limit: number } = { limit: 10 }'),
     invariants('export const answer: { status: 200 } = { status: 200 }'),
     invariants('export const ten: number = 10'),
+    invariants('declare const count: number\nexport const done = count < 10'),
+    invariants('export let tries = 10'),
+    invariants(
+      "const limit = CONTRACT_INVARIANTS['device-limit'].limit\nexport const other = limit === (11 as number)",
+    ),
     invariants(
       "const mine = { 'failed-sign-ins': { limit: 10 } } as const\nexport const own: (typeof mine)['failed-sign-ins'] = { limit: 10 }",
     ),
@@ -164,6 +169,36 @@ tester.run('contract-terms', contractTerms, {
         "export const devices: Pick<(typeof CONTRACT_INVARIANTS)['device-limit'], 'limit'> = { limit: 10 }",
       ),
       errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...invariants(
+        "export const devices: (typeof CONTRACT_INVARIANTS)['device-limit']['limit'] = 10",
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...invariants(
+        "type Devices = (typeof CONTRACT_INVARIANTS)['device-limit']['limit']\nexport const devices: Devices = 10",
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...invariants(
+        "const window = CONTRACT_INVARIANTS['failed-sign-ins']\nexport const at = window.limit === 10",
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["failed-sign-ins"].limit')],
+    },
+    {
+      ...invariants(
+        "const limit = CONTRACT_INVARIANTS['device-limit'].limit\nexport const full = 10 <= limit",
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...invariants(
+        "const { windowMs } = CONTRACT_INVARIANTS['failed-sign-ins']\nexport const long = windowMs > 900000",
+      ),
+      errors: [number(900000, 'CONTRACT_INVARIANTS["failed-sign-ins"].windowMs')],
     },
     {
       ...invariants(
