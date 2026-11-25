@@ -352,7 +352,7 @@ describe('authHandler, the resend of the verification mail', () => {
     const statuses: number[] = []
 
     for (let n = 0; n < 3; n += 1) {
-      statuses.push((await route(resendRequest(GHOST), FROM))?.status ?? 0)
+      statuses.push((await route(resendRequest(GHOST), freshAddress()))?.status ?? 0)
     }
 
     // The fourth from an address of its own, whose mails are untouched: only the email refuses it.

@@ -47,6 +47,9 @@ const ELSEWHERE = '203.0.113.8'
  */
 const APART = '203.0.113.9'
 
+/** The `n`-th of the addresses a test spreads its setup over, one each. */
+const spread = (n: number) => `198.51.${Math.floor(n / 250)}.${(n % 250) + 1}`
+
 /** The answers of `count` calls of `ask`, one after the other. */
 function answers<T>(count: number, ask: (n: number) => T): T[] {
   return Array.from({ length: count }, (_, n) => ask(n))
@@ -290,6 +293,9 @@ describe('RequestLimits', () => {
     const { clock, limits } = limitsOn()
     const rest = ADDRESS_MAILS.windowMs - 5 * minute
 
+    // An identity's invitations from one address all take mails of it: the address has those first.
+    expect(MAILS).toBeGreaterThanOrEqual(INVITES)
+
     answers(MAILS - INVITES, () => limits.verificationMail(FROM))
 
     expect(answers(INVITES, () => limits.inviteMail(ann, FROM).allowed)).toEqual(
@@ -307,7 +313,7 @@ describe('RequestLimits', () => {
     const { limits } = limitsOn()
 
     for (let attempt = 0; attempt < INVITES; attempt += 1) {
-      limits.inviteMail(ann, FROM)
+      expect(limits.inviteMail(ann, spread(attempt))).toEqual({ allowed: true })
     }
 
     // The identity's window refuses these 20 from an address of their own: each gives its mail back.
@@ -409,7 +415,7 @@ describe('RequestLimits', () => {
   it('takes three resends of an email within 15 minutes, refuses the fourth, and the refused one costs its address nothing', async () => {
     const { clock, limits } = limitsOn()
 
-    expect(answers(3, () => limits.verificationMail(FROM, 'ghost@example.test'))).toEqual(
+    expect(answers(3, (n) => limits.verificationMail(spread(n), 'ghost@example.test'))).toEqual(
       answers(3, () => ({ allowed: true })),
     )
     await clock.advance(5 * minute)
@@ -504,7 +510,7 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
   it('takes three reset mails of an email within 15 minutes, refuses the fourth, and the refused one costs its address nothing', async () => {
     const { clock, limits } = limitsOn()
 
-    expect(answers(3, () => limits.resetMail(FROM, 'ann@example.test').allowed)).toEqual([
+    expect(answers(3, (n) => limits.resetMail(spread(n), 'ann@example.test').allowed)).toEqual([
       true,
       true,
       true,

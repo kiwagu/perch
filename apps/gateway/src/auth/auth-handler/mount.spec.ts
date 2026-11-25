@@ -364,7 +364,7 @@ describe('authHandler', () => {
     }
 
     // Each sign-up takes one of the address's mails too: its checks refuse first while mails are left.
-    expect(ADDRESS_MAILS.limit).toBeGreaterThan(CHECKS + 1)
+    expect(ADDRESS_MAILS.limit).toBeGreaterThan(CHECKS)
     expect(await signUps(FROM, CHECKS)).toEqual(times(CHECKS, 202))
     await clock.advance(4_000 - SIGN_UP_FLOOR_MS)
 

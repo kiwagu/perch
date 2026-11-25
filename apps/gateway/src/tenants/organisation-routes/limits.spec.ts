@@ -14,6 +14,11 @@ describe('organisationRoutes', () => {
     const INVITES = IDENTITY_INVITES.limit
     /** An address no request of a test came from but the one that names it. */
     const OTHER = '203.0.113.77'
+    /**
+     * The `n`-th of the addresses a test spreads an admin's invitations over, one each, so no
+     * address's mails or invitations run out before the admin's own window does.
+     */
+    const apart = (n: number) => `198.51.${Math.floor(n / 250)}.${(n % 250) + 1}`
 
     /** The path an admin invites on. */
     const invitationsOf = (key: string) => `/organisations/${key}/invitations`
@@ -32,7 +37,8 @@ describe('organisationRoutes', () => {
 
       for (let n = 0; n < INVITES; n += 1) {
         expect(
-          (await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })).status,
+          (await ask('POST', invitationsOf('acme'), { as: ann, from: apart(n), body: stranger(n) }))
+            .status,
         ).toBe(201)
       }
 
@@ -57,7 +63,7 @@ describe('organisationRoutes', () => {
       for (let n = 0; n < INVITES; n += 1) {
         const answered = routes(
           request('POST', invitationsOf('acme'), { as: ann, body: stranger(n) }),
-          ADDRESS,
+          apart(n),
         )
 
         await vi.waitFor(() => expect(floor.pending()).toBe(1))
@@ -164,7 +170,7 @@ describe('organisationRoutes', () => {
       }
 
       for (let n = 0; n < INVITES; n += 1) {
-        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
+        await ask('POST', invitationsOf('acme'), { as: ann, from: apart(n), body: stranger(n) })
       }
 
       expect(invite).toHaveBeenCalledTimes(INVITES)
@@ -180,6 +186,7 @@ describe('organisationRoutes', () => {
         expect(
           await ask('POST', invitationsOf('acme'), {
             as: ann,
+            from: apart(n),
             body: { email: 'nope', role: CONTRACT_ROLES.member },
           }),
         ).toEqual({ status: 400, body: { code: 'email-invalid' } })
@@ -219,16 +226,11 @@ describe('organisationRoutes', () => {
         })
       }
 
-      // Another address: the rest of ann's invitations are left.
+      // Other addresses, one each: the rest of ann's invitations are left, and no more.
       for (let n = 15; n < INVITES + 10; n += 1) {
         expect(
-          (
-            await ask('POST', invitationsOf('acme'), {
-              as: ann,
-              from: '203.0.113.9',
-              body: stranger(n),
-            })
-          ).status,
+          (await ask('POST', invitationsOf('acme'), { as: ann, from: apart(n), body: stranger(n) }))
+            .status,
         ).toBe(201)
       }
 
@@ -236,7 +238,7 @@ describe('organisationRoutes', () => {
         (
           await ask('POST', invitationsOf('acme'), {
             as: ann,
-            from: '203.0.113.9',
+            from: OTHER,
             body: stranger(INVITES + 10),
           })
         ).status,
@@ -249,7 +251,10 @@ describe('organisationRoutes', () => {
       await founded()
 
       for (let n = 0; n < INVITES; n += 1) {
-        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
+        expect(
+          (await ask('POST', invitationsOf('acme'), { as: ann, from: apart(n), body: stranger(n) }))
+            .status,
+        ).toBe(201)
       }
 
       // The admin's window refuses one from another address: that address keeps all its mails.
@@ -275,9 +280,22 @@ describe('organisationRoutes', () => {
 
       await founded()
 
-      for (let n = 0; n <= INVITES; n += 1) {
-        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
+      for (let n = 0; n < INVITES; n += 1) {
+        expect(
+          (await ask('POST', invitationsOf('acme'), { as: ann, from: apart(n), body: stranger(n) }))
+            .status,
+        ).toBe(201)
       }
+
+      expect(
+        (
+          await ask('POST', invitationsOf('acme'), {
+            as: ann,
+            from: OTHER,
+            body: stranger(INVITES),
+          })
+        ).status,
+      ).toBe(429)
 
       await clock.advance(IDENTITY_INVITES.windowMs)
       // From an address with its mails and invitations untouched: only the admin's window decides.
