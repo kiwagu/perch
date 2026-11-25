@@ -170,7 +170,7 @@ describe('organisationRoutes', () => {
       }
 
       for (let n = 0; n < INVITES; n += 1) {
-        await ask('POST', invitationsOf('acme'), { as: ann, from: apart(n), body: stranger(n) })
+        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
       expect(invite).toHaveBeenCalledTimes(INVITES)
