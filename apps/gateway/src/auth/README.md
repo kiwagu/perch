@@ -165,11 +165,11 @@ Auth serves its routes only under its public URL, `<GATEWAY_PUBLIC_URL>/backend/
 requests from that origin only; the front strips its `/backend` prefix, so the mount puts it back
 before it hands a request over. In front of Better Auth, the mount applies the gateway's own
 limits (see `src/limits/README.md`): every sign-up, sign-in and verification takes one of its
-client address's 20 credential checks in 10 s, a sign-in must find a place among its email's 10
-failed sign-ins in 15 minutes (a 403 `EMAIL_NOT_VERIFIED` or `account-banned`, the password right,
+client address's credential checks (`CREDENTIAL_CHECKS`), a sign-in must find a place among its
+email's failed sign-ins (`FAILED_SIGN_INS`; both the contract's numbers) (a 403 `EMAIL_NOT_VERIFIED` or `account-banned`, the password right,
 clears them as a success does; any other 403, Better Auth's refusal of the request's origin, its
 Fetch Metadata or its callback, comes before the password is checked and counts nothing), a
-sign-up takes one of its address's 200 verification mails in 15 minutes, whatever its email, and a
+sign-up takes one of its address's mails (`ADDRESS_MAILS`), whatever its email, and a
 resend takes one of those and one of its email's 3 resends in 15 minutes. A refusal answers 429
 `rate-limited` with `Retry-After` before any password is checked; Better Auth's own limiter is off.
 A sign-in whose body is not JSON naming an email of at most the `email` value's length and a
@@ -349,7 +349,7 @@ email, and mails only the unverified one. The mount answers every resend it lets
 no body, the same headers whatever the email.
 
 A password is recovered through a reset link. `POST /auth/request-password-reset` `{ email }`
-takes one of its client address's 200 mails in 15 minutes (the budget sign-ups and resends
+takes one of its client address's mails (`ADDRESS_MAILS`, the budget sign-ups and resends
 share) and one of the email's 3 reset mails in 15 minutes, whatever the email (429 when either
 is spent), then, in the account's turn by the email in lower case, asks Better Auth
 (`AccountPasswords.requestReset`): for an email that has an account, it keeps a link in
@@ -359,7 +359,7 @@ earlier links first, so only the newest works, then starts the reset mail to the
 `/reset-password?token=…` (`AccountMails.resetPassword`). Every request it took answers 202 with
 no body, no sooner than `RESET_REQUEST_FLOOR_MS` (800 ms) after it began, alike for any email; one
 whose email is not an email answers 400. `POST /auth/reset-password` `{ token, password }` takes
-one of its address's 20 attempts in 10 minutes first, refused or not (429), then answers 400
+one of its address's attempts at that link (`ADDRESS_LINK_ATTEMPTS`) first, refused or not (429), then answers 400
 `password-rejected` for a password that breaks the rules of a new password, the link kept; 401
 `link-invalid` for a token no link holds (unknown, used, or replaced by a newer link), 401
 `link-expired` for a link past its hour on the gateway's clock. Better Auth's own reset is not
@@ -397,8 +397,8 @@ always that of the account it
 stands for. Since a reset's or a change's transaction ends every session
 present at its commit, a session written before it is ended by it and one written after is ended
 by the sign-in itself: no session outlives the password it was opened with. A sign-in that
-stands is then admitted against the account's limit of devices, `DEVICE_LIMIT` (10, beside
-`SESSION_LIFETIME_MS` in `auth-instance.ts`), in one transaction (`AuthSessions.admit`,
+stands is then admitted against the account's limit of devices, `DEVICE_LIMIT` (the contract's
+`device-limit`, beside `SESSION_LIFETIME_MS` in `auth-instance.ts`), in one transaction (`AuthSessions.admit`,
 `surql/device-sessions-admit.surql`), one admission of an account at a time in the gateway's
 process: the account's devices with a live admitted session are counted, the new session's
 device included and a device with several sessions once (`fn::devices_signed_in_with` of the
@@ -590,7 +590,7 @@ password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid d
 `unauthorized` for a token that holds no live session of it). It takes one of the address's
 credential checks, answers 400 `bad-request` for a body without a current password, 400
 `password-rejected` for a new password that breaks the rules,
-and must find a place among the account's 10 failed sign-ins in 15 minutes, as a sign-in does
+and must find a place among the account's failed sign-ins (`FAILED_SIGN_INS`), as a sign-in does
 (429 when they are spent): a wrong current password keeps its place there and answers 400
 `invalid-credentials`, as one of a length no account's password has does without being checked;
 a right one gives its place back and forgets none of the failures (only a sign-in's last step
@@ -609,7 +609,7 @@ A signed-in device asks to change its email with `POST /auth/change-email` `{ em
 its token and `X-Perch-Device`. After a credential check of its address, a body without a
 password answers 400 `bad-request` and a new email that is not
 an email (empty, longer than the `email` value's length, or of any other shape) answers 400
-`email-invalid`; then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
+`email-invalid`; then one of the address's mails and one of the account's changes (`IDENTITY_EMAIL_CHANGES`) are taken
 (429). Everything after runs in the account's turn, so no reset or change of the password runs in
 between: the caller's session is read again (401 `unauthorized` when it ended while the request
 waited), with the account's email as it is then, and the password must find a place among that
@@ -628,7 +628,7 @@ sooner than `CHANGE_EMAIL_FLOOR_MS` (800 ms) after the request began, so neither
 its time tells whether the new email has an account; a taken email gets no mail. Better Auth's own
 `/change-email` is switched off: it mails through the verification mail and signs the device that
 confirms it in. `POST /auth/confirm-email` `{ token }`, with no session needed and none signed
-in, takes one of its address's 20 attempts in 10 minutes first (429), then answers 401
+in, takes one of its address's attempts at that link (`ADDRESS_LINK_ATTEMPTS`) first (429), then answers 401
 `link-invalid` for a token the gateway did not sign as a confirmation, 401 `link-expired` for one
 asked a day ago or more on the gateway's clock (`CONFIRMATION_LINK_LIFETIME_MS`). In the turn of
 the account and then of the new email (so no sign-up of the new email runs meanwhile), the token
@@ -695,7 +695,7 @@ email starts in its language, its link the front's `/delete-account?token=…`
 (`AccountMails.deleteAccount`): 202 with no body. The request has no floor: it concerns the
 caller's own account, and its answer tells nothing of others. The link only opens a page; the
 account goes on the press of that page's button, `POST /auth/delete-account` `{ token }`, with no
-session needed. It takes one of its address's 20 attempts in 10 minutes first (429), then answers
+session needed. It takes one of its address's attempts at that link (`ADDRESS_LINK_ATTEMPTS`) first (429), then answers
 401 `link-invalid` for a token the gateway did not sign as a deletion (the token is a JWT signed
 with a key derived from the auth secret, `account-links/deletion-token.ts`, so neither Better
 Auth's verification nor the confirmation of an email takes it, nor it one of theirs) and 401
@@ -1055,7 +1055,7 @@ its challenge cookie carried by the device as `challenge`.
   a new code of the key, signing out the device seen least recently and closing its socket; 429
   still first; a ban between the dialog's confirmation and its code answered 403 with the backup
   code kept and taken once the ban is lifted; a challenge past its ten minutes, or after five wrong
-  codes, answered 401 before the limit; within the limit, a tenth device and one signed in already,
+  codes, answered 401 before the limit; within the limit, the device taking the last place and one signed in already,
   a wrong code counted and the right one forgetting) and
   `auth-handler/confirm-sign-in-races.spec.ts` (each of those changes committed in the account's
   turn before a code step and after it, both orders forced by the turn and by a held query, a ban in the turn before the

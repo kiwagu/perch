@@ -12,7 +12,7 @@ import {
 } from '../../support/organisation'
 
 test.describe('Invite an email that has no account yet', { tag: '@full' }, () => {
-  test("An invitation to an email with no account is mailed in the inviter's language and waits; the account later made with that email finds it on the organisation page and joins", async ({
+  test('An invitation to an email with no account is mailed in English, as its organisation sets no language, and waits; the account later made with that email finds it on the organisation page and joins', async ({
     page,
     freshDevices,
   }) => {
@@ -59,9 +59,14 @@ test.describe('Invite an email that has no account yet', { tag: '@full' }, () =>
         'member',
       )
       // Expected: After step 2 [mail:organisations.invite] reaches the invited email in the
-      //   language [value:es], user A's, as no account has that email yet
+      //   language [value:en]: no account has that email and the organisation sets no default
+      //   language, so the built-in English speaks, not user A's Spanish
       await expectInvitationMail(
-        { email: data.invitedEmail, inviter: { email: userA.email, language: 'es' } },
+        {
+          email: data.invitedEmail,
+          inviter: { email: userA.email, language: 'es' },
+          organisationLanguage: 'en',
+        },
         seen,
       )
     })

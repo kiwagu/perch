@@ -6,6 +6,7 @@ import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { CREDENTIAL_CHECKS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { sessionStates } from '../__fixtures__/account-ban'
@@ -20,6 +21,7 @@ import {
   ARGON2_WAIT,
   annsLink,
   fakeConnection,
+  freshAddress,
   heldQueries,
   isSessionInsert,
   mountedOnFakeAuth,
@@ -288,23 +290,23 @@ describe('authHandler, the verification of an email', () => {
     expect(handed?.headers.get('origin')).toBe(ORIGIN)
   })
 
-  it("takes one of its address's 20 credential checks per verification: the 21st within 10 s answers 429", async () => {
+  it("takes one of its address's credential checks per verification: the one past them within their window answers 429", async () => {
     const { route, received } = mountedOnFakeAuth(() =>
       Response.json({ code: 'INVALID_TOKEN' }, { status: 401 }),
     )
     const statuses: number[] = []
 
-    for (let n = 0; n < 20; n += 1) {
+    for (let n = 0; n < CREDENTIAL_CHECKS.limit; n += 1) {
       statuses.push((await route(verify('not-a-token', 'phone'), FROM))?.status ?? 0)
     }
 
     const refused = await route(verify('not-a-token', 'phone'), FROM)
 
-    expect(statuses).toEqual(Array.from({ length: 20 }, () => 401))
+    expect(statuses).toEqual(Array.from({ length: CREDENTIAL_CHECKS.limit }, () => 401))
     expect(refused?.status).toBe(429)
     expect(await refused?.json()).toEqual({ code: 'rate-limited' })
-    expect(refused?.headers.get('Retry-After')).toBe('10')
-    expect(received).toHaveLength(20)
+    expect(refused?.headers.get('Retry-After')).toBe(String(CREDENTIAL_CHECKS.windowMs / 1000))
+    expect(received).toHaveLength(CREDENTIAL_CHECKS.limit)
   })
 })
 
@@ -349,9 +351,12 @@ describe('authHandler, the resend of the verification mail', () => {
     const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true }))
     const statuses: number[] = []
 
-    for (let n = 0; n < 4; n += 1) {
-      statuses.push((await route(resendRequest(GHOST), FROM))?.status ?? 0)
+    for (let n = 0; n < 3; n += 1) {
+      statuses.push((await route(resendRequest(GHOST), freshAddress()))?.status ?? 0)
     }
+
+    // The fourth from an address of its own, whose mails are untouched: only the email refuses it.
+    statuses.push((await route(resendRequest(GHOST), freshAddress()))?.status ?? 0)
 
     expect(statuses).toEqual([202, 202, 202, 429])
     expect(received).toHaveLength(3)

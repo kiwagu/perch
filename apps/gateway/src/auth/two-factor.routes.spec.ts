@@ -6,6 +6,7 @@ import { z } from '@workspace/zod'
 
 import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
+import { FAILED_SIGN_INS } from '../limits/windows'
 
 import {
   AUTH_SECRET,
@@ -380,13 +381,13 @@ describe('twoFactorRoutes', () => {
     expect(await confirm(started.enrolment, await codeOf(keyOf(started.uri)))).toEqual(changed)
   }, 60_000)
 
-  it("counts a wrong password at enable, disable and renewal among the email's failed sign-ins: the eleventh answers 429", async () => {
+  it("counts a wrong password at enable, disable and renewal among the email's failed sign-ins: the one past them answers 429", async () => {
     const { ann, ask } = await harness()
-    const paths = [
-      ...Array<string>(4).fill('/two-factor/enable'),
-      ...Array<string>(3).fill('/two-factor/disable'),
-      ...Array<string>(3).fill('/two-factor/renew-codes'),
-    ]
+    const doors = ['/two-factor/enable', '/two-factor/disable', '/two-factor/renew-codes']
+    const paths = Array.from(
+      { length: FAILED_SIGN_INS.limit },
+      (_, n) => doors[n % doors.length] ?? '/two-factor/enable',
+    )
 
     for (const path of paths) {
       expect(await ask('POST', path, { as: ann, body: { password: 'Wrong-pass-1' } })).toEqual(
@@ -394,12 +395,12 @@ describe('twoFactorRoutes', () => {
       )
     }
 
-    const eleventh = await ask('POST', '/two-factor/enable', {
+    const next = await ask('POST', '/two-factor/enable', {
       as: ann,
       body: { password: PASSWORD },
     })
 
-    expect(eleventh).toEqual({ status: 429, body: { code: 'rate-limited' } })
+    expect(next).toEqual({ status: 429, body: { code: 'rate-limited' } })
   }, 60_000)
 
   it('refuses an enable the policy does not allow, and a disable it requires, with 403 failed, changing nothing', async () => {
@@ -433,12 +434,12 @@ describe('twoFactorRoutes', () => {
 
       await turnedOn()
 
-      // Nine failed sign-ins of the account: one short of the ten the limit allows.
-      for (let failures = 0; failures < 9; failures += 1) {
+      // Failed sign-ins of the account, one short of those the limit allows.
+      for (let failures = 1; failures < FAILED_SIGN_INS.limit; failures += 1) {
         const attempt = limits.signInAttempt(ANN)
 
         if (!attempt.allowed) {
-          expect.unreachable('nine failures are within the limit')
+          expect.unreachable('these failures are within the limit')
         }
 
         attempt.settle('failed')
@@ -448,7 +449,7 @@ describe('twoFactorRoutes', () => {
         (await ask('POST', `/two-factor/${name}`, { as: ann, body: { password: PASSWORD } }))
           .status,
       ).toBe(status)
-      // The right password forgot nothing: the next failure is the tenth, and the limit holds.
+      // The right password forgot nothing: the next failure is the last allowed, and the limit holds.
       expect(
         await ask('POST', '/two-factor/disable', { as: ann, body: { password: 'Wrong-pass-1' } }),
       ).toEqual(invalidCredentials)

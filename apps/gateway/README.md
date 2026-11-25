@@ -118,14 +118,17 @@ the update; each device's next hello is then refused with 4401.
   it finds there, which signs its first device in (every identity the smoke signs up is verified
   so), and drives two of its devices through sync and sign-out (the signed-out device's token
   then refused at hello with 4401); then the credential steps, each from a device, so a
-  simulated client address, of its own (21 sign-ins of unknown emails within 10 s, the 21st
-  answered 429 with `Retry-After` by the gateway's limit per address; 11 wrong passwords for a
-  further identity, the 11th answered 429 by its limit per email; a sign-up of a taken email
-  answered 202 with no body and the same headers as a new one's, and mailed nothing; a sign-up
-  whose password breaks the rules of a new password answered 400 `weak-password`; an
-  unverified account's sign-in answered 403 `EMAIL_NOT_VERIFIED`; a resend answered 202 for an
-  unverified, a verified and an unknown email, mailing the unverified one only; a fourth resend
-  of one email within 15 minutes answered 429 with `Retry-After`; a verification with a made-up
+  simulated client address, of its own (one sign-in of unknown emails more than an address's
+  credential checks within their window, the last answered 429 with `Retry-After` by the
+  gateway's limit per address; one wrong password more than an email's failed sign-ins for a
+  further identity, each from an address apart (`addressApart`, `198.19.x`, outside the range a
+  device's id maps to), the last answered 429 by its limit per email; both limits the
+  contract's, `CREDENTIAL_CHECKS` and `FAILED_SIGN_INS`; a sign-up of a taken email answered 202
+  with no body and the same headers as a new one's, and mailed nothing; a sign-up whose password
+  breaks the rules of a new password answered 400 `weak-password`; an unverified account's
+  sign-in answered 403 `EMAIL_NOT_VERIFIED`; a resend answered 202 for an unverified, a verified
+  and an unknown email, mailing the unverified one only; a fourth resend of one email within 15
+  minutes, each from an address apart, answered 429 with `Retry-After`; a verification with a made-up
   token answered 401 `link-invalid`, the right link opened again answered `{ token: null }`;
   and a verification naming no device answered 400, the email staying unverified, a sign-in
   refused 403, until a verification that names one); then the reset of a password on a fresh

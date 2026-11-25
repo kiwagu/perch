@@ -5,7 +5,7 @@ import { twoFactor } from 'better-auth/plugins/two-factor'
 import type { LocalDb } from '@workspace/data'
 import { surrealAuthAdapter } from '@workspace/data/better-auth-adapter'
 import { SUPPORTED_LOCALES } from '@workspace/i18n/translator'
-import { PASSWORD_LENGTH } from '@workspace/kernel'
+import { CONTRACT_INVARIANTS, PASSWORD_LENGTH } from '@workspace/kernel'
 import type { Clock } from '@workspace/replica'
 import { z } from '@workspace/zod'
 
@@ -31,10 +31,11 @@ import { verificationMailer } from './verification-mail'
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
 
 /**
- * How many devices one account keeps signed in at once: a sign-in that would bring it past them
- * asks first, then signs out the device seen least recently (`AuthSessions.admit`).
+ * How many devices one account keeps signed in at once, the contract's `device-limit`: a sign-in
+ * that would bring it past them asks first, then signs out the device seen least recently
+ * (`AuthSessions.admit`).
  */
-export const DEVICE_LIMIT = 10
+export const DEVICE_LIMIT = CONTRACT_INVARIANTS['device-limit'].limit
 
 /** How long a verification link verifies, in seconds: a day. */
 export const VERIFICATION_LINK_LIFETIME_S = 24 * 60 * 60

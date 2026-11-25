@@ -1,7 +1,5 @@
-import { ResultAsync } from 'neverthrow'
-
-import type { DataError, LocalDb } from '@workspace/data'
-import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n'
+import type { LocalDb } from '@workspace/data'
+import type { Locale } from '@workspace/i18n'
 import type { Clock } from '@workspace/replica'
 import { z } from '@workspace/zod'
 
@@ -9,9 +7,9 @@ import type { AuthLog } from '../auth/auth-log'
 import type { StartingLanguage } from '../auth/starting-language.port'
 
 import { answered } from './invitations'
+import { organisationLocale } from './organisation-locale'
 import { reading } from './organisation-rows'
 import invitationsToEmailStatement from './surql/invitations-to-email.surql'
-import organisationLocaleStatement from './surql/organisation-locale.surql'
 import type { TenantDatabases } from './tenant-databases'
 
 export interface InvitedLanguageDeps {
@@ -26,7 +24,6 @@ export interface InvitedLanguageDeps {
 }
 
 const invitedBy = z.array(z.object({ key: z.string() }))
-const localeOf = z.string().nullish()
 
 /** What the lookup found: a language, none, or a failure to read, by the organisation. */
 type Found = Locale | undefined
@@ -90,7 +87,7 @@ export class InvitedLanguage implements StartingLanguage {
         return undefined
       }
 
-      const locale = await this.#localeOf(key)
+      const locale = await organisationLocale(this.#deps.databases, key)
 
       if (locale.isErr()) {
         this.#unreadable(`the default language of the organisation ${key} could not be read`)
@@ -104,28 +101,6 @@ export class InvitedLanguage implements StartingLanguage {
     }
 
     return undefined
-  }
-
-  /** The default language of the organisation `key`'s own settings row; none when it names none. */
-  #localeOf(key: string): ResultAsync<Found, DataError> {
-    return this.#deps.databases.acquire(key).andThen((handle) => {
-      const read = async () => {
-        try {
-          return await reading(
-            handle.local.db.query(organisationLocaleStatement, { id: `ost_${key}` }),
-            `the default language of ${key} could not be read`,
-          ).andThen((answer) =>
-            answered(localeOf, answer, `the answer to the default language of ${key}`),
-          )
-        } finally {
-          handle.release()
-        }
-      }
-
-      return new ResultAsync(read()).map((locale) =>
-        SUPPORTED_LOCALES.find((supported) => supported === locale),
-      )
-    })
   }
 
   #unreadable(message: string): void {

@@ -77,9 +77,14 @@ test.describe("An invited account starts in its organisation's default language"
 
       await inviteEmail(page, data.invitedEmail)
       // Expected: After step 3 the invitation is pending, and [mail:organisations.invite] reaches
-      //   the invited email in the language [value:en], user A's, as no account has that email yet
+      //   the invited email in the language [value:es], the organisation's, as no account has that
+      //   email yet
       await expectInvitationMail(
-        { email: data.invitedEmail, inviter: { email: userA.email, language: 'en' } },
+        {
+          email: data.invitedEmail,
+          inviter: { email: userA.email, language: 'en' },
+          organisationLanguage: 'es',
+        },
         seen,
       )
     })
@@ -167,9 +172,14 @@ test.describe("An invited account starts in its organisation's default language"
       const seen = await mailbox.count(data.secondInvitedEmail)
 
       await inviteEmail(page, data.secondInvitedEmail)
-      // The invitation's mail reaches the second email before its sign-up.
+      // Expected: After step 9 [mail:organisations.invite] reaches the second invited email in the
+      //   language [value:en]: the organisation's default was removed, so the built-in English speaks
       await expectInvitationMail(
-        { email: data.secondInvitedEmail, inviter: { email: userA.email, language: 'en' } },
+        {
+          email: data.secondInvitedEmail,
+          inviter: { email: userA.email, language: 'en' },
+          organisationLanguage: 'en',
+        },
         seen,
       )
     })

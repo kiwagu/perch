@@ -5,13 +5,21 @@ import { dataError } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 
+import { FAILED_SIGN_INS } from '../../limits/windows'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { deviceHeaders, signUpOn } from '../__fixtures__/auth-instance'
+import { DEVICE_LIMIT } from '../auth-instance'
 import type { AuthSessions } from '../auth-sessions'
 import { DeviceSessions } from '../device-sessions'
 import { ADMISSION_HEADER } from '../session-hooks'
 
-import { seenInTurn } from './__fixtures__/devices'
+import {
+  AT_THE_LIMIT,
+  LAST_PLACE,
+  ONE_SHORT,
+  PAST_THE_LIMIT,
+  seenInTurn,
+} from './__fixtures__/devices'
 import { ANN, mountedOnRealAuth, PASSWORD, signedInOn, signInRequest } from './__fixtures__/mount'
 
 /** The client address a request comes from, unless a test names another. */
@@ -19,9 +27,6 @@ const FROM = '203.0.113.7'
 
 /** How long a test of many password checks may run: each is an argon2 run, slow on a busy host. */
 const ARGON2_RUNS_MS = 30_000
-
-/** Ten devices, the most one account keeps signed in at once; `a` signed in first. */
-const TEN = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const
 
 type Mounted = Awaited<ReturnType<typeof mountedOnRealAuth>>
 
@@ -87,11 +92,11 @@ function heldAdmissions() {
 
 describe('authHandler, the limit of devices an account keeps signed in at once', () => {
   it(
-    'admits the sign-in that brings the account to ten devices',
+    'admits the sign-in that takes the last place of the devices an account keeps',
     async () => {
       const mounted = await mountedOnRealAuth()
-      const ann = await signedInOn(mounted, ANN, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'])
-      const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'j'), FROM)
+      const ann = await signedInOn(mounted, ANN, ONE_SHORT)
+      const answer = await mounted.route(signInRequest(ANN, PASSWORD, LAST_PLACE), FROM)
 
       expect(answer?.status).toBe(200)
       expect(await endedOf(mounted, ann.identity)).toEqual([])
@@ -101,17 +106,19 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
   )
 
   it(
-    'asks before an eleventh device, which it leaves no session, signing no device out',
+    'asks before a device past the limit, which it leaves no session, signing no device out',
     async () => {
       const mounted = await mountedOnRealAuth()
-      const ann = await signedInOn(mounted, ANN, TEN)
-      const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'k'), FROM)
+      const ann = await signedInOn(mounted, ANN, AT_THE_LIMIT)
+      const answer = await mounted.route(signInRequest(ANN, PASSWORD, PAST_THE_LIMIT), FROM)
 
       expect(answer?.status).toBe(409)
       expect(await answer?.json()).toEqual({ code: 'device-limit' })
       expect(answer?.headers.get('set-cookie')).toBeNull()
-      // No row of the eleventh device: the devices list shows nothing of the sign-in.
-      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      // No row of the device past the limit: the devices list shows nothing of the sign-in.
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([
+        ...AT_THE_LIMIT,
+      ])
       expect(await endedOf(mounted, ann.identity)).toEqual([])
       expect(limitCloses(mounted)).toEqual([])
     },
@@ -122,19 +129,21 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
     'signs out the device seen least recently once confirmed, not the one signed in first',
     async () => {
       const mounted = await mountedOnRealAuth()
-      const ann = await signedInOn(mounted, ANN, TEN)
+      const ann = await signedInOn(mounted, ANN, AT_THE_LIMIT)
 
       await seenInTurn(
         mounted,
         ann,
-        TEN.filter((device) => device !== 'c'),
+        AT_THE_LIMIT.filter((device) => device !== 'c'),
       )
 
-      const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'k', true), FROM)
+      const answer = await mounted.route(signInRequest(ANN, PASSWORD, PAST_THE_LIMIT, true), FROM)
 
       expect(answer?.status).toBe(200)
       expect(await endedOf(mounted, ann.identity)).toEqual([['c', 'device-limit']])
-      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toContain('k')
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toContain(
+        PAST_THE_LIMIT,
+      )
       expect(limitCloses(mounted)).toEqual([[ann.identity, 'c', CLOSE.deviceLimit]])
       expect(ann.sockets.get('c')?.ended).toEqual([CLOSE.deviceLimit])
     },
@@ -145,14 +154,14 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
     'signs no device out for a confirmed sign-in once a place freed',
     async () => {
       const mounted = await mountedOnRealAuth()
-      const ann = await signedInOn(mounted, ANN, TEN)
+      const ann = await signedInOn(mounted, ANN, AT_THE_LIMIT)
       const c =
         (await devicesOf(mounted, ann.identity)).find(({ device }) => device === 'c') ??
         expect.unreachable('a row of c')
 
       ;(await mounted.sessions.revoke(ann.identity, c.id))._unsafeUnwrap()
 
-      const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'k', true), FROM)
+      const answer = await mounted.route(signInRequest(ANN, PASSWORD, PAST_THE_LIMIT, true), FROM)
 
       expect(answer?.status).toBe(200)
       expect(await endedOf(mounted, ann.identity)).toEqual([['c', 'revoked']])
@@ -165,7 +174,7 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
     'takes no place for a new sign-in of a device signed in already',
     async () => {
       const mounted = await mountedOnRealAuth()
-      const ann = await signedInOn(mounted, ANN, TEN)
+      const ann = await signedInOn(mounted, ANN, AT_THE_LIMIT)
       const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'a'), FROM)
 
       expect(answer?.status).toBe(200)
@@ -180,15 +189,17 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
     async () => {
       const held = heldAdmissions()
       const mounted = await mountedOnRealAuth({ admission: held.admission })
-      const ann = await signedInOn(mounted, ANN, TEN)
+      const ann = await signedInOn(mounted, ANN, AT_THE_LIMIT)
 
       held.arm(1)
 
-      const eleventh = mounted.route(signInRequest(ANN, PASSWORD, 'k'), FROM)
+      const past = mounted.route(signInRequest(ANN, PASSWORD, PAST_THE_LIMIT), FROM)
 
       await held.reached
-      // The eleventh device's session is written and waits for its admission: no device lists it.
-      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      // The session of the device past the limit is written and waits for its admission: no device lists it.
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([
+        ...AT_THE_LIMIT,
+      ])
 
       const again = await mounted.route(signInRequest(ANN, PASSWORD, 'a'), FROM)
 
@@ -196,8 +207,10 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
 
       held.release()
 
-      expect((await eleventh)?.status).toBe(409)
-      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      expect((await past)?.status).toBe(409)
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([
+        ...AT_THE_LIMIT,
+      ])
       expect(await endedOf(mounted, ann.identity)).toEqual([])
       expect(limitCloses(mounted)).toEqual([])
     },
@@ -209,7 +222,7 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
     async () => {
       const held = heldAdmissions()
       const mounted = await mountedOnRealAuth({ admission: held.admission })
-      const ann = await signedInOn(mounted, ANN, TEN)
+      const ann = await signedInOn(mounted, ANN, AT_THE_LIMIT)
 
       held.arm(1)
 
@@ -221,14 +234,16 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
       expect(await endedOf(mounted, ann.identity)).toEqual([])
       expect(ann.sockets.get('a')?.ended).toEqual([])
 
-      const eleventh = await mounted.route(signInRequest(ANN, PASSWORD, 'k'), FROM)
+      const past = await mounted.route(signInRequest(ANN, PASSWORD, PAST_THE_LIMIT), FROM)
 
-      expect(eleventh?.status).toBe(409)
+      expect(past?.status).toBe(409)
 
       held.release()
 
       expect((await again)?.status).toBe(200)
-      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([
+        ...AT_THE_LIMIT,
+      ])
       expect(await endedOf(mounted, ann.identity)).toEqual([])
       // The admission ended the device's earlier session: the socket it opened closed.
       expect(ann.sockets.get('a')?.ended).toEqual([SUPERSEDED])
@@ -242,20 +257,22 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
     async () => {
       const held = heldAdmissions()
       const mounted = await mountedOnRealAuth({ admission: held.admission })
-      const ann = await signedInOn(mounted, ANN, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'])
+      const ann = await signedInOn(mounted, ANN, ONE_SHORT)
 
       held.arm(2)
 
       // Both sessions are written before either sign-in is admitted.
       const answers = Promise.all(
-        ['j', 'k'].map((device) => mounted.route(signInRequest(ANN, PASSWORD, device), FROM)),
+        [LAST_PLACE, PAST_THE_LIMIT].map((device) =>
+          mounted.route(signInRequest(ANN, PASSWORD, device), FROM),
+        ),
       )
 
       await held.reached
       held.release()
 
       expect((await answers).map((answer) => answer?.status).sort()).toEqual([200, 409])
-      expect(await devicesOf(mounted, ann.identity)).toHaveLength(10)
+      expect(await devicesOf(mounted, ann.identity)).toHaveLength(DEVICE_LIMIT)
       expect(limitCloses(mounted)).toEqual([])
     },
     ARGON2_RUNS_MS,
@@ -270,7 +287,7 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
           failing ? errAsync(dataError('data:QUERY_FAILED', 'the directory is away')) : admit(),
         signOutFails: true,
       })
-      const ann = await signedInOn(mounted, ANN, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'])
+      const ann = await signedInOn(mounted, ANN, ONE_SHORT)
 
       failing = true
 
@@ -280,10 +297,12 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
 
       failing = false
 
-      const tenth = await mounted.route(signInRequest(ANN, PASSWORD, 'j'), FROM)
+      const last = await mounted.route(signInRequest(ANN, PASSWORD, LAST_PLACE), FROM)
 
-      expect(tenth?.status).toBe(200)
-      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      expect(last?.status).toBe(200)
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([
+        ...AT_THE_LIMIT,
+      ])
       expect(limitCloses(mounted)).toEqual([])
     },
     ARGON2_RUNS_MS,
@@ -310,18 +329,23 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
     async () => {
       const mounted = await mountedOnRealAuth()
 
-      await signedInOn(mounted, ANN, TEN)
+      await signedInOn(mounted, ANN, AT_THE_LIMIT)
 
-      const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'k'), FROM)
+      const wrong = () =>
+        mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', PAST_THE_LIMIT), FROM)
 
-      for (let failed = 0; failed < 9; failed++) {
+      for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
         expect((await wrong())?.status).toBe(401)
       }
 
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'k'), FROM))?.status).toBe(409)
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, PAST_THE_LIMIT), FROM))?.status,
+      ).toBe(409)
       expect((await wrong())?.status).toBe(401)
-      // Ten failures, had the sign-in asked about the limit not forgotten the nine before it.
-      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'k'), FROM))?.status).toBe(409)
+      // The last failure allowed, had the sign-in asked about the limit not forgotten those before it.
+      expect(
+        (await mounted.route(signInRequest(ANN, PASSWORD, PAST_THE_LIMIT), FROM))?.status,
+      ).toBe(409)
     },
     ARGON2_RUNS_MS * 2,
   )

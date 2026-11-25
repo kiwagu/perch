@@ -28,4 +28,33 @@ export const CONTRACT_ROUTES = {
 } as const
 
 /** Every invariant that states numbers, by its name: each count by its name, each duration in milliseconds under its name with `Ms`. */
-export const CONTRACT_INVARIANTS = {} as const
+export const CONTRACT_INVARIANTS = {
+  "address-attempts": {
+    "limit": 20,
+    "windowMs": 600000
+  },
+  "address-mails": {
+    "limit": 200,
+    "windowMs": 900000
+  },
+  "credential-checks": {
+    "limit": 20,
+    "windowMs": 10000
+  },
+  "device-limit": {
+    "limit": 10
+  },
+  "email-changes": {
+    "limit": 3,
+    "windowMs": 900000
+  },
+  "failed-sign-ins": {
+    "limit": 10,
+    "windowMs": 900000
+  },
+  "invitation-attempts": {
+    "addressLimit": 60,
+    "limit": 30,
+    "windowMs": 600000
+  }
+} as const
