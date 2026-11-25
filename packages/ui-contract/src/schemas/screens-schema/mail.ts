@@ -26,7 +26,7 @@ export const ACCOUNT = 'account'
 /**
  * The account a mail goes to, as a source of its language: the account whose email the mail's
  * `to` names, when an account has that email. In a list of sources the next one speaks when none
- * has it; written alone, the older form, the signed-in account's. A mail's language alone, never a
+ * has it, so it is never the last source of a mail's language. A mail's language alone, never a
  * notice's, and a reserved word on an action that sends a mail (`check/mails.ts`).
  */
 export const RECIPIENT = 'recipient'
@@ -60,7 +60,7 @@ export const platformMailSchema = z
           }),
       ])
       .describe(
-        "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient`, or a list of them, the first that has a language speaking. See the rule `mail-recipients`.",
+        "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient` (never last), or a list of them, the first that has one speaking. See the rule `mail-recipients`.",
       ),
     link: z
       .strictObject({

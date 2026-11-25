@@ -158,10 +158,16 @@ describe('mailsProblems', () => {
       'contract/domain/platform.yaml:1: actions["invite.send"].params.organisation: "organisation" names the language of the organisation the action runs in, so an action that sends a mail gives no parameter that name',
     ])
   })
-  it('takes the recipient as the language of a mail to a parameter, sent only for a signed-in account', () => {
+  it('refuses the recipient written alone: it may have no language, and nothing speaks after it', () => {
+    const refusal = `${AT}.language: "recipient" may have no language: a mail's language ends with a source that always has one`
+
     expect(
       printed(sending({ to: 'email', language: 'recipient', link: LINK }, ['member'])),
-    ).toEqual([])
+    ).toEqual([refusal])
+    expect(printed(sending({ to: 'email', language: 'recipient', link: LINK }))).toEqual([refusal])
+    expect(
+      printed(sending({ to: 'email', language: 'recipient', link: LINK }, ['guest', 'member'])),
+    ).toEqual([refusal])
   })
   it('refuses the recipient as whom a mail goes to: it names a language', () => {
     expect(printed(sending({ to: 'recipient', language: 'locale', link: LINK }))).toEqual([
@@ -174,14 +180,6 @@ describe('mailsProblems', () => {
     ).toEqual([
       `${AT}.language: "recipient" of a mail to account is the account itself: write account`,
     ])
-  })
-  it('refuses the recipient on an action a guest may run: it falls back on the signed-in account', () => {
-    const refusal = `${AT}.language: "recipient" falls back on the signed-in account's language, so "invite.send" lists its roles, guest not among them`
-
-    expect(printed(sending({ to: 'email', language: 'recipient', link: LINK }))).toEqual([refusal])
-    expect(
-      printed(sending({ to: 'email', language: 'recipient', link: LINK }, ['guest', 'member'])),
-    ).toEqual([refusal])
   })
   it('refuses a parameter named recipient on an action that sends a mail, and leaves it to one that sends only notices', () => {
     const contract = sending({ to: 'email', language: 'locale', link: LINK }, ['member'])
