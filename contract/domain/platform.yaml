@@ -96,6 +96,15 @@ invariants:
   address-mails:
     rule: "A network address is charged 200 mail requests a quarter of an hour at most, whatever the email, sign-ups included; one another limit refuses is given back. The next answers rate-limited."
     refuses: rate-limited
+  credential-checks:
+    rule: "A network address makes twenty credential checks within ten seconds: each of these actions takes one before reading the request's body, whatever it then answers; the next answers rate-limited."
+    refuses: rate-limited
+  email-changes:
+    rule: "An account's email takes three change requests a quarter of an hour, its own or an operator's, each counted once the new email is well formed if address-mails allows; the next answers rate-limited."
+    refuses: rate-limited
+  invitation-attempts:
+    rule: "An account makes thirty invitations in ten minutes, its network address sixty of those the account allows, counted before the email is checked if address-mails allows; the next answers rate-limited."
+    refuses: rate-limited
 actions:
   sign-up:
     description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
@@ -121,9 +130,7 @@ actions:
     changes: [ accounts.list ]
     codes:
       sign-up-rejected: "the sign-up's details are refused: the email is not an email, the password breaks the password rules, or the language is not one the app speaks"
-      rate-limited:
-        invariant: address-mails
-        condition: "the network address made twenty credential checks within ten seconds"
+      rate-limited: { invariant: [ credential-checks, address-mails ] }
       name-required: "the name, trimmed, is empty"
       name-too-long: "the name, trimmed, is longer than its value allows"
       failed: "anything else fails"
@@ -157,7 +164,7 @@ actions:
       invalid-credentials: "the email or the password is wrong; a wrong password counts toward the email's failed sign-ins"
       email-not-verified: "the email is not verified yet; nothing is sent"
       account-banned: { invariant: banned-account }
-      rate-limited: { invariant: failed-sign-ins }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       other-account: { invariant: one-account-per-browser }
       device-limit: { invariant: device-limit }
       failed: "anything else fails"
@@ -193,7 +200,7 @@ actions:
         description: Sign in past the account's limit of devices as for sign-in, once the dialog device-limit is confirmed.
     result:
       - "the device is signed in as by sign-in; a right code forgets the email's failed sign-ins"
-      - "the failed sign-ins are judged first: while they keep a password out, the answer is rate-limited whatever else holds, and no code is looked at"
+      - "the failed sign-ins are judged before the challenge and the code: while they keep a password out, a well-formed request answers rate-limited whatever its challenge and code, and no code is looked at"
       - "a backup code is used up when it signs the device in; one the attempt stops at before the check (the device limit, a ban, an ended code step) stays usable"
       - "once the check has started, a server failure, the code step ending or another change to the account during it can leave a backup code used up, nothing signed in"
       - "past the limit of devices nothing is signed in, no code is checked or spent, the failed sign-ins stay; the confirmation signs in again from the password, asking a code again"
@@ -202,7 +209,7 @@ actions:
       invalid-code: "the code is wrong; it counts toward the email's failed sign-ins as a wrong password does"
       code-expired: "five wrong codes were given, about ten minutes passed since the password, or its password or email changed since; the sign-in starts again from the password"
       account-banned: { invariant: banned-account }
-      rate-limited: { invariant: failed-sign-ins }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       other-account: { invariant: one-account-per-browser }
       device-limit: { invariant: device-limit }
       failed: "anything else fails"
@@ -224,7 +231,7 @@ actions:
       link-expired: "the link is older than a day"
       account-banned: { invariant: banned-account }
       other-account: "the link's exchange signs in an account other than the one this browser holds, which it keeps; it queues the new session for sign-out and schedules a revocation attempt when online"
-      rate-limited: "the network address made twenty credential checks within ten seconds"
+      rate-limited: { invariant: credential-checks }
       failed: "anything else fails"
   resend-verification:
     description: Sends the mail whose link verifies an account's email again.
@@ -309,7 +316,7 @@ actions:
     codes:
       invalid-credentials: "the current password is wrong; it counts toward the email's failed sign-ins"
       password-rejected: "the new password breaks the rules"
-      rate-limited: { invariant: failed-sign-ins }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       failed: "anything else fails"
     notices:
       - name: password-changed
@@ -333,9 +340,7 @@ actions:
     codes:
       invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
       email-invalid: "the new email is not an email"
-      rate-limited:
-        invariant: [ failed-sign-ins, address-mails ]
-        condition: "a fourth change by the account within a quarter of an hour"
+      rate-limited: { invariant: [ credential-checks, address-mails, email-changes, failed-sign-ins ] }
       failed: "anything else fails"
     mail:
       to: email
@@ -377,7 +382,7 @@ actions:
       invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
       last-admin: { invariant: last-admin }
       rate-limited:
-        invariant: [ failed-sign-ins, address-mails ]
+        invariant: [ credential-checks, address-mails, failed-sign-ins ]
         condition: "a fourth request by the account within a quarter of an hour; nothing is sent"
       failed: "anything else fails"
     mail:
@@ -428,7 +433,7 @@ actions:
     codes:
       invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
       two-factor-changed: "the second factor is on already, turned on meanwhile from another device; nothing changes"
-      rate-limited: { invariant: failed-sign-ins }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       failed: "anything else fails"
   two-factor.confirm:
     description: Turns the signed-in account's second factor on with a code of the key two-factor.enable answered.
@@ -443,7 +448,7 @@ actions:
     codes:
       invalid-code: "the code is not one the key gives now"
       two-factor-changed: "a later two-factor.enable replaced the key, here or on another device, or the factor was turned on from another device; whatever the code, nothing changes"
-      rate-limited: "the network address made twenty credential checks within ten seconds"
+      rate-limited: { invariant: credential-checks }
       failed: "anything else fails"
   two-factor.disable:
     description: Turns the signed-in account's second factor off, with its password.
@@ -458,7 +463,7 @@ actions:
     changes: [ two-factor.read ]
     codes:
       invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
-      rate-limited: { invariant: failed-sign-ins }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       failed: "anything else fails"
   two-factor.renew-codes:
     description: Replaces the backup codes of the signed-in account's second factor, with its password.
@@ -472,7 +477,7 @@ actions:
     codes:
       invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
       two-factor-changed: "the second factor is off, turned off meanwhile from another device; no codes are made"
-      rate-limited: { invariant: failed-sign-ins }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       failed: "anything else fails"
   passkeys.list:
     description: Reads the passkeys of the signed-in account.
@@ -627,7 +632,7 @@ actions:
       already-member: "the email is a member's"
       email-invalid: "the email is not an email"
       not-admin: { invariant: admins-only }
-      rate-limited: { invariant: address-mails }
+      rate-limited: { invariant: [ address-mails, invitation-attempts ] }
       failed: "anything else fails"
     roles:
       - admin
@@ -830,7 +835,7 @@ actions:
     codes:
       email-invalid: "the new email is not an email"
       email-taken: "the new email has an account; nothing is sent"
-      rate-limited: { invariant: address-mails }
+      rate-limited: { invariant: [ address-mails, email-changes ] }
       not-operator: { invariant: operators-only }
       account-gone: { invariant: existing-account }
       failed: "anything else fails"
