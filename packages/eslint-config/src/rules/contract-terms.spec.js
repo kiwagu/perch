@@ -71,6 +71,9 @@ tester.run('contract-terms', contractTerms, {
     invariants('export const ten: number = 10'),
     throughKernel('declare function count(n: number): void\ncount(10)'),
     throughKernel('export const big = DEVICE_LIMIT < (11 as number)'),
+    throughKernel(
+      'declare const counts: Record<number, number>\nexport const at = counts[DEVICE_LIMIT] === 10',
+    ),
     invariants('declare const count: number\nexport const done = count < 10'),
     invariants('export let tries = 10'),
     invariants(
@@ -186,6 +189,24 @@ tester.run('contract-terms', contractTerms, {
     },
     {
       ...throughKernel('declare function count(n: typeof DEVICE_LIMIT): void\ncount(10)'),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel(
+        'declare function count(this: void, n: typeof DEVICE_LIMIT): void\ncount(10)',
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel(
+        'declare function count(...ns: (typeof DEVICE_LIMIT)[]): void\ncount(DEVICE_LIMIT, 10)',
+      ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel(
+        'const a = DEVICE_LIMIT\nconst b = a\nconst c = b\nconst d = c\nexport const full = d === 10',
+      ),
       errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
     },
     {

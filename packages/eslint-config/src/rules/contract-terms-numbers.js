@@ -12,6 +12,9 @@ import { resolve } from 'node:path'
 
 import ts from 'typescript'
 
+/** How many declarations a value is followed through before the readers give up. */
+const MAX_HOPS = 16
+
 /** The comparisons whose other side may say a number of the contract. */
 const NUMBER_COMPARISONS = new Set(['===', '!==', '==', '!=', '<', '<=', '>', '>='])
 
@@ -54,7 +57,7 @@ export function numberReaders(services, emitted) {
    * one; an alias (an import, a re-export) by what it names.
    */
   function symbolNumber(found, depth) {
-    if (found === undefined || depth > 8) {
+    if (found === undefined || depth > MAX_HOPS) {
       return undefined
     }
 
@@ -104,12 +107,12 @@ export function numberReaders(services, emitted) {
    * holds one (`typeof DEVICE_LIMIT`), through parentheses and a type alias.
    */
   function annotatedNumber(type, depth = 0) {
-    if (type === undefined || depth > 8) {
+    if (type === undefined || depth > MAX_HOPS) {
       return undefined
     }
 
     if (ts.isParenthesizedTypeNode(type)) {
-      return annotatedNumber(type.type, depth + 1)
+      return annotatedNumber(type.type, depth)
     }
 
     if (ts.isTypeQueryNode(type)) {
@@ -149,7 +152,7 @@ export function numberReaders(services, emitted) {
    * anywhere else.
    */
   function derivedNumber(expression, depth = 0) {
-    if (expression === undefined || depth > 8) {
+    if (expression === undefined || depth > MAX_HOPS) {
       return undefined
     }
 
@@ -159,22 +162,28 @@ export function numberReaders(services, emitted) {
       ts.isAsExpression(expression) ||
       ts.isSatisfiesExpression(expression)
     ) {
-      return derivedNumber(expression.expression, depth + 1)
+      return derivedNumber(expression.expression, depth)
     }
 
-    if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
-      return symbolNumber(
-        checker.getSymbolAtLocation(
-          ts.isPropertyAccessExpression(expression)
-            ? expression.name
-            : expression.argumentExpression,
-        ),
-        depth + 1,
-      )
+    if (ts.isPropertyAccessExpression(expression)) {
+      return symbolNumber(checker.getSymbolAtLocation(expression.name), depth)
+    }
+
+    // A computed index names the member it selects only when it is a literal; the value of any
+    // other index (`counts[DEVICE_LIMIT]`) is that of an entry, not of the index.
+    if (ts.isElementAccessExpression(expression)) {
+      const key = expression.argumentExpression
+
+      return ts.isStringLiteralLike(key) || ts.isNumericLiteral(key)
+        ? symbolNumber(
+            checker.getPropertyOfType(checker.getTypeAtLocation(expression.expression), key.text),
+            depth,
+          )
+        : undefined
     }
 
     return ts.isIdentifier(expression)
-      ? symbolNumber(checker.getSymbolAtLocation(expression), depth + 1)
+      ? symbolNumber(checker.getSymbolAtLocation(expression), depth)
       : undefined
   }
 
@@ -194,16 +203,40 @@ export function numberReaders(services, emitted) {
     return at
   }
 
-  /** The number of the module the parameter a call or a `new` passes `argument` to is annotated with. */
+  /**
+   * The number of the module the parameter a call or a `new` passes `argument` to is annotated
+   * with: an explicit `this` parameter takes no argument, and an argument a rest parameter takes is
+   * held to its element (`...ns: (typeof DEVICE_LIMIT)[]`).
+   */
   function parameterNumber(call, argument) {
     const index = call.arguments.indexOf(argument)
     const signature = checker.getResolvedSignature(tsNodeOf(call))
-    const parameters = signature?.getDeclaration()?.parameters ?? []
+    const parameters = (signature?.getDeclaration()?.parameters ?? []).filter(
+      (parameter) => !(ts.isIdentifier(parameter.name) && parameter.name.text === 'this'),
+    )
+    const rest = parameters.at(-1)?.dotDotDotToken === undefined ? undefined : parameters.at(-1)
     const parameter =
-      parameters[index] ??
-      (parameters.at(-1)?.dotDotDotToken === undefined ? undefined : parameters.at(-1))
+      index >= parameters.length - 1 && rest !== undefined ? rest : parameters[index]
 
-    return index === -1 || parameter === undefined ? undefined : annotatedNumber(parameter.type)
+    if (index === -1 || parameter === undefined) {
+      return undefined
+    }
+
+    if (parameter !== rest) {
+      return annotatedNumber(parameter.type)
+    }
+
+    const listed = parameter.type
+    const element =
+      listed !== undefined && ts.isArrayTypeNode(listed)
+        ? listed.elementType
+        : listed !== undefined &&
+            ts.isTypeReferenceNode(listed) &&
+            listed.typeArguments?.length === 1
+          ? listed.typeArguments[0]
+          : undefined
+
+    return annotatedNumber(element)
   }
 
   /**
