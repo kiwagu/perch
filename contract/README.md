@@ -74,12 +74,13 @@ developer approved; the code takes no architectural decision of its own.
    rename or a removal keeps the old name declared until the code no longer renders it, then
    that commit drops it, with no new stop. Any other contract change found while writing the
    code goes back to step 1 on the trunk and is taken as one more commit, a meta one through
-   `feat/contract-first-pass` and its landing, after which `main` is merged into the trunk and
-   into the feature branch. A business commit written on the feature's branch instead, a
-   feature begun there before the trunk or an amendment the developer allows there, stops
-   here for the developer's OK on its hash, as `.cursor/rules/ui-contract.mdc` says. A fix that
-   brings the code back to what the contract already says, correctly, has no contract diff and
-   no stop.
+   `feat/contract-first-pass` and its landing. The trunk then merges `main` as it sets out to
+   model the change, and the feature branch merges `main` when it starts the take, the merge
+   followed by the take's commit, not when the facet lands. A business commit written on the
+   feature's branch instead, a feature begun there before the trunk or an amendment the
+   developer allows there, stops here for the developer's OK on its hash, as
+   `.cursor/rules/ui-contract.mdc` says. A fix that brings the code back to what the contract
+   already says, correctly, has no contract diff and no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
 5. **The tests.** The test of the scenario uses the anchors, codes, states and values of the
