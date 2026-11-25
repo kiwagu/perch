@@ -135,7 +135,8 @@ logs, and no error names a token or an address.
 `InvitedLanguage` (`invited-language.ts`, the auth module's `StartingLanguage`) names the language
 an account an invitation creates starts in: the email's pending invitations (not expired, to
 ready organisations, the newest first), then each organisation's own settings row
-(`organisation_settings:ost_<key>` in its database, never another row) in that order; the first
+(`organisation_settings:ost_<key>` in its database, never another row, read by
+`organisationLocale`, `organisation-locale.ts`) in that order; the first
 that names a default language wins, and none names none. A read that fails names none, logged as
 `sign-up:STARTING_LANGUAGE_UNREADABLE` with the organisation's key, and so does a lookup that
 outlasts the auth port's `STARTING_LANGUAGE_BUDGET_MS` (250 ms) on the gateway's clock
@@ -146,8 +147,9 @@ they settle. Nothing is thrown, and no line names the email.
 invitation: it starts at once and returns, never awaited, so the request that invited never waits
 for the mail server. It speaks the recipient's language: the one the
 settings of the account with the invited email name, or the one that account signed up in before
-it has settings; an email with no account gets the inviter's, read the same way. A language that
-could not be read sends nothing (`mail:LOCALE_UNREADABLE`) and an account gone between the two
+it has settings; an email with no account gets its organisation's default language
+(`organisationLocale`, the same read), else English, whoever invited it. A language that could
+not be read sends nothing (`mail:LOCALE_UNREADABLE`) and an account gone between the two
 reads sends nothing either (`mail:SEND_FAILED`), never a mail in a guessed language. The mail
 greets no one by name and names no inviter (the recipient may have no account, and the name people
 see lives in the replicated profile, which mails do not read). A mail that did not go out is
@@ -251,6 +253,8 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   seven-day lifetime and the link to the front's `/invitation` screen), `InvitationMails` and the
   `InvitationMailer` interface it implements (`invitations/mails.ts`, `invitations/mailer.ts`).
   `InvitedLanguage` (`invited-language.ts`): the starting language of an invited account.
+  `organisationLocale` (`organisation-locale.ts`): an organisation's default language, which both
+  read.
 - `regionDatabases` (`region-databases.ts`): the database of each region, for the region hub.
 - Queries: `surql/` (organisations, memberships, members, invitations, the organisation
   database's schema, a departing identity's memberships, the removal of a whole organisation, and

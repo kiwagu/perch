@@ -42,9 +42,14 @@ test.describe("Open an invitation's link elsewhere than in the invited account",
 
         await inviteEmail(page, data.invitedEmail)
 
-        // No account has the invited email: its mail speaks the inviter's language.
+        // No account has the invited email and the organisation sets no default language: its
+        // mail speaks English.
         return expectInvitationMail(
-          { email: data.invitedEmail, inviter: { email: userA.email, language: 'en' } },
+          {
+            email: data.invitedEmail,
+            inviter: { email: userA.email, language: 'en' },
+            organisationLanguage: 'en',
+          },
           seen,
         )
       })

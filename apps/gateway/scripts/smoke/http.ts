@@ -34,6 +34,8 @@ export interface SignedIn {
 export interface NamedDevice {
   readonly id: string
   readonly label: string
+  /** The client address it comes from, where a step needs it distinct; else one from its id. */
+  readonly address?: string
 }
 
 /** What a device signs up or in with. */
@@ -68,6 +70,27 @@ function bodyOf(text: string): unknown {
   }
 }
 
+/** How many addresses apart the run has handed out so far. */
+let handedOut = 0
+
+/**
+ * A client address no request of the run came from yet: `198.19.<n / 255>.<n % 255 + 1>`, the `n`-th
+ * handed out, outside the `198.18.x` range a device's id maps to. A step sends from one the request
+ * whose refusal must be one limit's alone; past the range's 65,280 the run fails rather than share
+ * one.
+ */
+export function addressApart(): string {
+  if (handedOut >= 255 * 256) {
+    throw new Error('the smoke has handed out every address apart')
+  }
+
+  const n = handedOut
+
+  handedOut += 1
+
+  return `198.19.${Math.floor(n / 255)}.${(n % 255) + 1}`
+}
+
 /** The client address of a simulated device: `198.18.<a>.<b>` from a stable hash of its id. */
 function simulatedAddress(device: string): string {
   const hash = Bun.hash.crc32(device)
@@ -81,7 +104,8 @@ function deviceHeaders(device: string | NamedDevice): Record<string, string> {
 
   return {
     'X-Perch-Device': id,
-    'X-Forwarded-For': simulatedAddress(id),
+    'X-Forwarded-For':
+      typeof device === 'string' ? simulatedAddress(id) : (device.address ?? simulatedAddress(id)),
     ...(typeof device === 'string' ? {} : { 'X-Perch-Device-Label': device.label }),
   }
 }

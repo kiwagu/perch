@@ -2,6 +2,8 @@ import { expect } from 'vitest'
 
 import { CONTRACT_VALUES } from '@workspace/kernel'
 
+import { FAILED_SIGN_INS } from '../../../limits/windows'
+
 import { signInRequest } from './mount'
 
 const { minLength, maxLength } = CONTRACT_VALUES.password
@@ -17,11 +19,16 @@ export const OUT_OF_LENGTH = [
 type Route = (request: Request, from: string) => Promise<Response | undefined>
 
 /**
- * Signs `email` in nine times with a wrong password of an account's length, each refused 401: one
- * failure short of the ten its failed sign-ins allow, so the next failure of any kind spends them.
+ * Signs `email` in with a wrong password of an account's length, each refused 401, until it is one
+ * failure short of the failed sign-ins it is allowed (`FAILED_SIGN_INS`), so the next failure of
+ * any kind spends them.
  */
-export async function failNineSignIns(route: Route, email: string, from: string): Promise<void> {
-  for (let failed = 0; failed < 9; failed += 1) {
+export async function failAllButLastSignIn(
+  route: Route,
+  email: string,
+  from: string,
+): Promise<void> {
+  for (let failed = 0; failed < FAILED_SIGN_INS.limit - 1; failed += 1) {
     expect((await route(signInRequest(email, 'Wrong-pass-word-9', 'probe'), from))?.status).toBe(
       401,
     )

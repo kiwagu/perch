@@ -388,7 +388,7 @@ describe('OrganisationInvitations', () => {
           organisation: 'Acme',
           role: CONTRACT_ROLES.admin,
           token,
-          inviter: ann.id,
+          key: 'acme',
         },
       ])
       expect(await rows()).toEqual([`acme ${dan.email}`])
@@ -410,10 +410,10 @@ describe('OrganisationInvitations', () => {
       expect(Object.keys(withAccount).sort()).toEqual(Object.keys(without).sort())
       expect(withAccount.id).toMatch(/^inv_/)
       expect(mailed.map((mail) => Object.keys(mail).sort())).toEqual([
-        ['email', 'inviter', 'organisation', 'role', 'token'],
-        ['email', 'inviter', 'organisation', 'role', 'token'],
+        ['email', 'key', 'organisation', 'role', 'token'],
+        ['email', 'key', 'organisation', 'role', 'token'],
       ])
-      expect(mailed.map((mail) => mail.inviter)).toEqual([ann.id, ann.id])
+      expect(mailed.map((mail) => mail.key)).toEqual(['acme', 'acme'])
       expect(
         (await organisations.invitations.pending({ actor: ann.id, key: 'acme' }))
           ._unsafeUnwrap()

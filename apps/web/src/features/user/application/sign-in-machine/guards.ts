@@ -38,8 +38,8 @@ function passwordsOf(event: SignInEvent): Passwords {
 /**
  * The guards of the screen's flow, by the names of its `meta.guards`: whether a sign-in was refused
  * for an email not verified yet (the gateway's 403 that names no ban; a banned account's is
- * `data:ACCOUNT_BANNED`, which goes back to the form like any other refusal), whether it found
- * the account signed in on as many devices as it may be (its outcome `device-limit`), whether it
+ * `data:ACCOUNT_BANNED`, which goes back to the form like any other refusal), whether it was
+ * refused at the account's limit of devices (`data:DEVICE_LIMIT`), whether it
  * found the account's second factor on, so that a code is asked (its outcome `code-required`),
  * whether the code step failed in a way that ends it, and those of a new password typed twice at
  * sign-up.
@@ -47,7 +47,8 @@ function passwordsOf(event: SignInEvent): Passwords {
 export const signInGuards = {
   emailNotVerified: ({ event }: GuardArgs) =>
     failureOf(event, UNKNOWN_FAILURE) === 'data:EMAIL_NOT_VERIFIED',
-  atDeviceLimit: ({ event }: GuardArgs) => outcomeOf(event)?.kind === 'device-limit',
+  atDeviceLimit: ({ event }: GuardArgs) =>
+    failureOf(event, UNKNOWN_FAILURE) === 'data:DEVICE_LIMIT',
   codeRequired: ({ event }: GuardArgs) => outcomeOf(event)?.kind === 'code-required',
   codeStepEnded: ({ event }: GuardArgs) => CODE_STEP_ENDED.has(failureOf(event, UNKNOWN_FAILURE)),
   ...newPasswordGuards(passwordsOf),

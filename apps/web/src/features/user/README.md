@@ -34,8 +34,8 @@ machine in its folder `application/sign-in-machine/` (the flow of
 `contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
 state, sign-up where it renders the fields of a new account, an attempt invokes
 `platform.sign-in`, `platform.sign-in-passkey`, `platform.confirm-sign-in`, `platform.sign-up` or
-`platform.resend-verification`, a sign-in that finds the account at its limit of devices (its
-outcome `device-limit`, the guard `atDeviceLimit`) asks in its dialog and, confirmed, invokes
+`platform.resend-verification`, a sign-in refused at the account's limit of devices (the failure
+`data:DEVICE_LIMIT`, the guard `atDeviceLimit`) asks in its dialog and, confirmed, invokes
 `platform.sign-in` again with `signOutOldest`, a sign-in of an account whose second factor is on
 (its outcome `code-required`, the guard `codeRequired`) asks the code in its dialog and keeps the
 challenge and the email typed until the step ends, a refusal that ends the step (the guard
@@ -233,8 +233,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   that names it), signs nothing in, keeps the form in the mode sign-in with the email typed and
   offers no resend;
   a sign-in that finds the account signed in on as many devices as it may be at once
-  (the session's outcome `device-limit`, which `SignInService` answers as its outcome of the same
-  name) signs nothing in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
+  (the session's outcome `device-limit`, which `SignInService` refuses as `data:DEVICE_LIMIT`, a
+  passkey's naming the account it asked about) signs nothing in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
   `user.sign-in.device-limit.*`) whether to sign in all the same, which signs out the device used
   least recently, its cancel going back to the form; a sign-in of an account whose second factor is
   on answers `code-required` from the session (`SignInService` answers its outcomes as the session
