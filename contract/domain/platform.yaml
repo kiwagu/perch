@@ -109,7 +109,7 @@ invariants:
     refuses: rate-limited
     values: { limit: 3, window: { minutes: 15 } }
   invitation-attempts:
-    rule: "An account makes {limit} invitations in {window}, its network address {addressLimit} of those it allows, counted before the email is checked if address-mails allows; the next answers rate-limited."
+    rule: "An account makes {limit} invitations in {window}, a network address {addressLimit} of those, each in its own window, before the email's check if address-mails allows; the next answers rate-limited."
     refuses: rate-limited
     values: { limit: 30, addressLimit: 60, window: { minutes: 10 } }
 actions:
