@@ -266,7 +266,7 @@ flow:
             actions:
               - show: { user.sign-in.code.dialog: [ code-required ] }
           - target: done
-            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be past its limit of devices.
             actions:
               - show: { app-shell.notice-message: [ welcome ] }
               - navigate: /me
@@ -337,7 +337,7 @@ flow:
         input: { code: user.sign-in.code.code-input, signOutOldest: { value: true } }
         onDone:
           - target: done
-            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be past its limit of devices.
             actions:
               - clear: user.sign-in.code.code-input
               - show: { app-shell.notice-message: [ welcome ] }
@@ -383,7 +383,7 @@ flow:
         input: { signOutOldest: { value: true } }
         onDone:
           target: done
-          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be past its limit of devices.
           actions:
             - show: { app-shell.notice-message: [ welcome ] }
             - navigate: /me
