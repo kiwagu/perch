@@ -25,17 +25,22 @@ const weakPassword = z.object({ code: z.literal('weak-password') })
 /** What a first verification answers, as far as these steps read it. */
 const verifiedFirst = z.object({ token: z.string().min(1) })
 
-/** Signs in `count` times one after the other from `device`, each time with `credentials()`. */
+/**
+ * Signs in `count` times one after the other, the `attempt`-th from `deviceOf(attempt)` (a device
+ * stands for a client address of its own), each time with `credentials()`.
+ */
 async function signIns(
   base: string,
-  device: Credentials['device'],
+  deviceOf: (attempt: number) => Credentials['device'],
   count: number,
   credentials: () => Pick<Credentials, 'email' | 'password'>,
 ): Promise<Answer[]> {
   const answers: Answer[] = []
 
   for (let attempt = 0; attempt < count; attempt += 1) {
-    answers.push(await call(base, 'POST', '/auth/sign-in/email', undefined, credentials(), device))
+    answers.push(
+      await call(base, 'POST', '/auth/sign-in/email', undefined, credentials(), deviceOf(attempt)),
+    )
   }
 
   return answers
@@ -125,7 +130,10 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
     async () => {
       const device = { id: 'smoke-device-unknown-emails', label: 'Smoke' }
 
-      checkLimited(await signIns(base, device, CREDENTIAL_CHECKS.limit + 1, freshAccount), 401)
+      checkLimited(
+        await signIns(base, () => device, CREDENTIAL_CHECKS.limit + 1, freshAccount),
+        401,
+      )
     },
   )
 
@@ -135,10 +143,16 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       const device = { id: 'smoke-device-wrong-passwords', label: 'Smoke' }
       const { identity } = await signUp(base, mailbox, { ...freshAccount(), device })
       const last = checkLimited(
-        await signIns(base, device, FAILED_SIGN_INS.limit + 1, () => ({
-          email: identity.email,
-          password: crypto.randomUUID(),
-        })),
+        // Each wrong password from an address of its own: only the email's limit can refuse the last.
+        await signIns(
+          base,
+          (attempt) => ({ ...device, id: `${device.id}-${attempt}` }),
+          FAILED_SIGN_INS.limit + 1,
+          () => ({
+            email: identity.email,
+            password: crypto.randomUUID(),
+          }),
+        ),
         401,
       )
 

@@ -250,6 +250,8 @@ describe('RequestLimits', () => {
     expect(
       limits.inviteMail(idSchemas.identity.schema.parse('idn_cat'), '203.0.113.7').allowed,
     ).toBe(false)
+    // The address's mails were left: its invitations refused, not its mails.
+    expect(limits.verificationMail('203.0.113.7').allowed).toBe(true)
     expect(
       limits.inviteMail(idSchemas.identity.schema.parse('idn_cat'), '203.0.113.8').allowed,
     ).toBe(true)
@@ -528,11 +530,9 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
       true,
       true,
     ])
-    expect(answers(3, () => limits.emailChangeMail(ELSEWHERE, bob).allowed)).toEqual([
-      true,
-      true,
-      true,
-    ])
+    expect(
+      answers(IDENTITY_EMAIL_CHANGES.limit, () => limits.emailChangeMail(ELSEWHERE, bob).allowed),
+    ).toEqual(answers(IDENTITY_EMAIL_CHANGES.limit, () => true))
   })
 
   it("takes an identity's email changes within their window and refuses the next", async () => {

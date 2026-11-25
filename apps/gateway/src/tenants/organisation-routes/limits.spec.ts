@@ -91,7 +91,7 @@ describe('organisationRoutes', () => {
     })
 
     it("takes an address's invites the contract allows across three admins and answers the next 429", async () => {
-      const { root, ann, bob, cat, ask, founded } = await harness()
+      const { root, ann, bob, cat, ask, founded, limits } = await harness()
       const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
       await founded()
@@ -122,6 +122,8 @@ describe('organisationRoutes', () => {
         body: { code: 'rate-limited' },
       })
       expect(invite).toHaveBeenCalledTimes(ADDRESS_INVITES.limit)
+      // The address's mails were left: its invitations refused, not its mails.
+      expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
       // The same admin from another address is let in: cat's own bucket was charged only once.
       expect(
         (

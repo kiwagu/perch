@@ -37,8 +37,11 @@ interface HarnessOptions {
   readonly settingsAnswer?: unknown
   /** Makes every query of the directory throw at once, not reject. */
   readonly throwingAtOnce?: boolean
-  /** The default language of the invitation's organisation: none unless named; `unreadable` fails its read. */
-  readonly organisationLocale?: Locale | 'unreadable'
+  /**
+   * The default language of the invitation's organisation: none unless named; `unreadable` fails
+   * its read, and a promise answers it once settled.
+   */
+  readonly organisationLocale?: Locale | 'unreadable' | Promise<Locale | undefined>
 }
 
 /**
@@ -145,12 +148,18 @@ async function harness(
     organisationLocale: (key) => {
       asked.push(key)
 
-      return options.organisationLocale === 'unreadable'
+      const named = options.organisationLocale
+
+      if (named instanceof Promise) {
+        return ResultAsync.fromSafePromise<Locale | undefined, DataError>(named)
+      }
+
+      return named === 'unreadable'
         ? errAsync<Locale | undefined, DataError>({
             code: 'data:QUERY_FAILED',
             message: `the settings of ${key} could not be read`,
           })
-        : okAsync<Locale | undefined, DataError>(options.organisationLocale)
+        : okAsync<Locale | undefined, DataError>(named)
     },
     link: (token) => invitationLink(PUBLIC_URL, token),
     log,
@@ -386,6 +395,31 @@ describe('InvitationMails', () => {
 
     expect(invite(mails, CAROL)).toBeUndefined()
 
+    await expect.poll(reached).toBe(1)
+  })
+
+  it("holds a closing gateway until an invitation's organisation answered its default language, not until the mail server does", async () => {
+    const { port, reached } = silentPort()
+    let answer: (locale: Locale | undefined) => void = () => undefined
+    const held = new Promise<Locale | undefined>((resolve) => {
+      answer = resolve
+    })
+    const { mails, asked } = await harness('en', 'en', { mail: port, organisationLocale: held })
+    let read = false
+
+    invite(mails, CAROL)
+
+    const reading = mails.languagesRead().then(() => {
+      read = true
+    })
+
+    await expect.poll(() => asked).toEqual([KEY])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(read).toBe(false)
+
+    answer('es')
+    await reading
+    // Read, then handed to a mail server that never answers.
     await expect.poll(reached).toBe(1)
   })
 

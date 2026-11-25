@@ -4,7 +4,7 @@ import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, profileIdFactory } from '@workspace/ids'
 import { CONTRACT_ROLES } from '@workspace/kernel'
 
-import { CREDENTIAL_CHECKS, FAILED_SIGN_INS } from '../../limits/windows'
+import { FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban, sessionStates } from '../__fixtures__/account-ban'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
@@ -647,17 +647,21 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
     expect([refused?.status, await refused?.json()]).toEqual([403, { code: 'EMAIL_NOT_VERIFIED' }])
 
     // The right password was checked: as many wrong ones as are allowed reach Better Auth before the
-    // limit, once the address's credential checks open again; the email's failures would not.
-    await mounted.clock.advance(CREDENTIAL_CHECKS.windowMs)
-
+    // limit, each from an address of its own, so only the email's limit can refuse the next.
     for (let failed = 0; failed < FAILED_SIGN_INS.limit; failed += 1) {
       expect(
-        (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+        (
+          await mounted.route(
+            signInRequest(ANN, 'Wrong-pass-word-9', 'desk'),
+            `198.51.100.${failed}`,
+          )
+        )?.status,
       ).toBe(401)
     }
 
     expect(
-      (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+      (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), '198.51.100.250'))
+        ?.status,
     ).toBe(429)
   }, 90_000)
 })

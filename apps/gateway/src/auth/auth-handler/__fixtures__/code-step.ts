@@ -30,6 +30,7 @@ import {
   signedInOn,
   signInRequest,
 } from './mount'
+import { expectEmailLimitFirst } from './out-of-length'
 
 type Mounted = Awaited<ReturnType<typeof mountedOnRealAuth>>
 
@@ -168,6 +169,8 @@ export async function wrongPasswords(
   from: string,
   email = ANN,
 ): Promise<void> {
+  expectEmailLimitFirst()
+
   for (let failed = 0; failed < count; failed++) {
     expect(
       (await mounted.route(signInRequest(email, 'Wrong-pass-word-9', 'probe'), from))?.status,

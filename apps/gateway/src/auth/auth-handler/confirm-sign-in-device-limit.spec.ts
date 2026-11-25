@@ -181,7 +181,7 @@ describe("authHandler, a sign-in's code step past the account's limit of devices
   )
 
   it(
-    "answers a code of the key on an eleventh device 409 device-limit before checking it, and signs it in from the password again with a new code once confirmed, the device seen least recently signed out and the email's failed sign-ins forgotten",
+    "answers a code of the key on a device past the limit 409 device-limit before checking it, and signs it in from the password again with a new code once confirmed, the device seen least recently signed out and the email's failed sign-ins forgotten",
     async () => {
       const mounted = await mountedOnRealAuth()
       const ann = await withSecondFactor(mounted, AT_THE_LIMIT)
