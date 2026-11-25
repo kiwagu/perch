@@ -60,7 +60,7 @@ export const platformMailSchema = z
           }),
       ])
       .describe(
-        "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient`, or a list of them, the first that has a language speaking. See the rule `mail-recipients`.",
+        "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient` (never last), or a list of them, the first that has one speaking. See the rule `mail-recipients`.",
       ),
     link: z
       .strictObject({
