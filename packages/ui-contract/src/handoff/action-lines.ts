@@ -4,14 +4,14 @@
  * it may be left out, each line of its result (with its position when there are several), each code its failure shows with the invariants it
  * refuses for and the condition it answers on (quoted, so a text never reads as invariants), each role that may run it, the page
  * sizes it answers with its default when it pages, each read it changes, the mail it
- * sends (who it goes to, the language it speaks, the screen its link opens and the search
+ * sends (who it goes to, the sources of its language in order, the screen its link opens and the search
  * parameter that carries the token) and each notice (its name, who it goes to, its language and
  * the screen of its plain link). The descriptions are left out, as a flow's are; the result
  * stays, as it is what holds once the action succeeds. The diff compares the lines as sets.
  */
 
 import type { Contract } from '../check'
-import { codeEntriesOf, outcomesOf } from '../files'
+import { codeEntriesOf, languageSources, outcomesOf } from '../files'
 
 import { valueWords } from './value-words'
 
@@ -75,7 +75,7 @@ export function actionLines(action: PlatformAction | undefined): string[] {
     ...(mail === undefined
       ? []
       : [
-          `mail to ${mail.to} language ${mail.language} link ${mail.link.screen}?${mail.link.search}`,
+          `mail to ${mail.to} language ${languageSources(mail.language).join(', ')} link ${mail.link.screen}?${mail.link.search}`,
         ]),
     ...(action.notices ?? []).map(
       ({ name, to, language, link }) =>

@@ -50,6 +50,20 @@ describe('platformSchema mail', () => {
       ).toBe(true)
     }
   })
+  it('takes a list of two sources or more for the language, each named once', () => {
+    const link = { screen: 'organisation.invitation', search: 'token' }
+    const parses = (language: unknown): boolean =>
+      platformSchema.safeParse({
+        ...PLATFORM,
+        actions: { send: { ...ACTION, mail: { to: 'email', language, link } } },
+      }).success
+
+    expect(parses(['recipient', 'organisation'])).toBe(true)
+    expect(parses(['recipient', 'locale'])).toBe(true)
+    for (const language of [[], ['recipient'], ['recipient', 'recipient'], ['Recipient', 'x']]) {
+      expect(parses(language), JSON.stringify(language)).toBe(false)
+    }
+  })
   it('refuses a mail without a link, or with a key of its own', () => {
     for (const mail of [
       { to: 'email', language: 'account' },

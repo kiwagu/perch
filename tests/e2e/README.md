@@ -342,9 +342,11 @@ moment a test saw the answer to an action that must send none until `MAIL_DELIVE
 `src/support/mail-contract.ts`: every mail a test reads is held to its declaration in
 `platform.yaml`: `expectDeclaredMail` (its one recipient, the path of the screen its link opens
 with the declared search parameter set, and the `lang` of its HTML's root element as parse5
-reads it, from the action's parameters, the account, or, for an invitation to an email that has
-an account, that account's language (`recipient`; an email with none is mailed in the inviter's
-language); each check asserts a comparison's outcome
+reads it, the language `languageOf` (`src/support/mail-language.ts`) reads from what the test
+gave: the first source of the declared `language` it gave a value for, among the action's
+parameters, the account, the organisation (its default language, else English) and, for an
+email that has an account, that account's language (`recipient`, which written alone falls back
+on the account's); each check asserts a comparison's outcome
 under a fixed message), `openMailLink` (opens a mail's link; its failure names no link) and
 `openDeclaredMail` (waits for the action's mail to its declared recipient after the ones a test
 has seen, holds it to its declaration and opens its link).

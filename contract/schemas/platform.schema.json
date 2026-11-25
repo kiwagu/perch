@@ -352,9 +352,21 @@
                 "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`."
               },
               "language": {
-                "type": "string",
-                "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                  },
+                  {
+                    "minItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$"
+                    }
+                  }
+                ],
+                "description": "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient`, or a list of them, the first that has a language speaking. See the rule `mail-recipients`."
               },
               "link": {
                 "type": "object",

@@ -183,23 +183,31 @@ The authored files, edited by hand or by a model in the modeling thread:
   ```
 
   An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
-  mail goes to, or `account`, the email of the account the action acts on; `language`, the
-  parameter that holds the mail's language, `account`, that account's settings once it has
-  them, else the language it signed up in, or `recipient`, the account whose email the mail
-  goes to, read the same way, and the signed-in account's when no account has that email (an
-  invitation speaks the language of the account it invites, else the inviter's); `link`, the
-  `screen` the mail's link opens and the `search` parameter of that screen's route that carries
-  the link's token. `account` is a reserved word there: it names the account the action acts
-  on, the signed-in account for an action on its own account (a change of email, a request to
-  delete it), else, whoever is signed in, the one its parameters name: the email of the resend
-  of a verification or of the request for a password reset, which send nothing to an email
-  with no account, or the token of a link (a password reset, a confirmed email, a deletion). So
-  an action that sends a mail has no parameter named `account`; nor one named `recipient`. The
-  check holds `to` and `language` to the action's parameters, refuses a parameter named
-  `account` on an action that sends a mail or a notice and one named `recipient` on an action
-  that sends a mail, takes `recipient` only as the language of a mail whose `to` is a
-  parameter, sent by an action whose `roles` leave `guest` out (it falls back on a signed-in
-  account), and holds the link to a screen whose every route declares that search parameter.
+  mail goes to, or `account`, the email of the account the action acts on; `language`, where the
+  mail's language comes from, one source or a list of them in order, the first that has a
+  language speaking; `link`, the `screen` the mail's link opens and the `search` parameter of
+  that screen's route that carries the link's token. A source is the parameter that holds the
+  mail's language; `account`, that account's settings once it has them, else the language it
+  signed up in; `organisation`, the organisation the action runs in: its default language when
+  its settings name one, else the app's built-in English; or `recipient`, the account whose email
+  the mail goes to, read as `account` is, when an account has that email. Every source but
+  `recipient` always has a language, so it ends a list: an invitation's `language: [ recipient,
+  organisation ]` speaks the language of the account it invites, else its organisation's.
+  `recipient` written alone, the older form, falls back on the signed-in account's. `account` is
+  a reserved word there: it names the account the action acts on, the signed-in account for an
+  action on its own account (a change of email, a request to delete it), else, whoever is signed
+  in, the one its parameters name: the email of the resend of a verification or of the request
+  for a password reset, which send nothing to an email with no account, or the token of a link
+  (a password reset, a confirmed email, a deletion). So an action that sends a mail has no
+  parameter named `account`; nor one named `organisation` or `recipient`. The check holds `to`
+  and each source to the action's parameters and those three words, refuses a parameter named
+  `account` on an action that sends a mail or a notice and one named `organisation` or
+  `recipient` on an action that sends a mail, refuses a source after one that always has a
+  language (it is never reached), takes `recipient` only for a mail whose `to` is a parameter
+  (written alone, only on an action whose `roles` leave `guest` out, as it falls back on a
+  signed-in account) and `organisation` only on an action whose `roles` leave out `guest` and
+  `identity` (it runs in an organisation; the contract does not say which other roles are held
+  in one), and holds the link to a screen whose every route declares that search parameter.
   A scenario names the mail by its action, `[mail:sign-up]`, and a
   test that reads a mail holds it to its declaration: its recipient, the path and the search
   parameter of its link, and the language of its HTML.
@@ -224,7 +232,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   ```
 
   `account` is reserved on an action that sends a notice too. The check holds `to` and
-  `language` as a mail's, but for `recipient`, the language of a mail alone, wants the names
+  `language` as a mail's, but for one source, never `organisation` or `recipient`, which a
+  mail's language alone takes, wants the names
   unique within the action, and holds a link to a
   screen with a route, every route of which needs no parameter, as the link carries none (no
   `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario

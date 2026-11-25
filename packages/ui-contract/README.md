@@ -102,7 +102,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     `authoredFlowSchema`, `draftPatternSchema`, `controlRegionSchema`, `authoredAnchorDefSchema`
     (the source of `contract/schemas/screen.schema.json`), `platformFileSchema`,
     `platformMailSchema` (`PlatformMail`), `platformNoticeSchema` (`PlatformNotice`), `ACCOUNT`,
-    `RECIPIENT`, `flowSchema` with `codeGuardSchema`, `effectSchema`, `branchReadOptOutSchema` and
+    `ORGANISATION`, `RECIPIENT`, `languageSources` (a mail's language as its list of sources),
+    `flowSchema` with `codeGuardSchema`, `effectSchema`, `branchReadOptOutSchema` and
     `transitionSchema` and the types `Flow`, `FlowState`, `FlowParallelState`, `FlowRegion`,
     `FlowRegionState`, `FlowTransition` and `Effect`, `activitySchema` (`Activity`, `ActivityState`,
     `ActivityTransition`), `flatJsonSchema`, `scenarioSchema`, `entityDefinitionSchema` and
