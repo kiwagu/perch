@@ -12,11 +12,11 @@ data:
   Note by B, edited by B: generate
   Note by B, edited by A: generate
 ---
-# Edit only your own notes; an administrator edits any
+# Edit only your own notes; an admin edits any
 
-Where: [/org] on device A (user A, administrator) and [/org] on device B (user B, member, another browser)
+Where: [/org] on device A (user A, admin) and [/org] on device B (user B, member, another browser)
 
-## Scenario: A member changes only its own notes, an administrator any, and both see every change
+## Scenario: A member changes only its own notes, an admin any, and both see every change
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]

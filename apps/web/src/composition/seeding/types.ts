@@ -21,9 +21,10 @@ import type {
 import type { SignInError } from '../../features/user/application/sign-in.service'
 import type { InvitationsPort } from '../../platform/invitations.port'
 import type { OrganisationsPort } from '../../platform/organisations.port'
-import type { SessionPort } from '../../platform/session.port'
 import type { CommandLogger } from '../commands'
 import type { Fetcher } from '../gateway-auth'
+
+import type { SeedSession } from './session'
 
 /**
  * Where the seed reads an account's verification link: the stand's mailbox (`@workspace/mailbox`'s
@@ -139,7 +140,7 @@ export interface SeedStarts {
 
 /** The seed client's device as its account steps use it: its session, services and mailbox. */
 export interface SeedDevice {
-  readonly session: Pick<SessionPort, 'signIn' | 'signUp' | 'verifyEmail' | 'resendVerification'>
+  readonly session: Pick<SeedSession, 'signIn' | 'signUp' | 'verifyEmail' | 'resendVerification'>
   readonly profiles: Pick<ProfileService, 'read' | 'updateBio'>
   readonly settings: Pick<SettingsService, 'read' | 'updateLocale'>
   /** The app's starts of new accounts, which create an account's settings and profile. */
@@ -156,7 +157,7 @@ export interface SeedDevice {
 
 /** The seed client's device as its organisation steps use it. */
 export interface SeedOrganisationDevice {
-  readonly session: Pick<SessionPort, 'signIn' | 'memberships' | 'selectTenant' | 'currentTenant'>
+  readonly session: Pick<SeedSession, 'signIn' | 'memberships' | 'selectTenant' | 'currentTenant'>
   readonly organisations: Pick<OrganisationsPort, 'create' | 'invite'>
   readonly invitations: Pick<InvitationsPort, 'accept'>
   readonly notes: Pick<NotesService, 'read'>

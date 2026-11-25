@@ -1,20 +1,18 @@
 import { idSchemas } from '@workspace/ids'
-import { isTenantKey } from '@workspace/kernel'
 import { tenantRole } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
+import { newOrganisationOf } from '../new-organisation'
 import { badRequest, callerErrorAnswer, errorAnswer, type Handler } from '../organisation-http'
+import { refused } from '../organisation-refusal'
 import type { Organisations } from '../organisations'
 
 import type { OrganisationRoutesOptions } from './options'
 
-/** What a device sends to create an organisation. */
-const createBody = z.object({
-  key: z.string().refine(isTenantKey),
-  name: z.string().trim().min(1).max(80),
-})
+/** What a device sends to create an organisation: its key and its name, judged by their rules below. */
+const createBody = z.object({ key: z.string(), name: z.string() })
 
 /** What an admin sends to change a member's role. */
 const roleBody = z.object({ role: tenantRole })
@@ -43,6 +41,13 @@ export function membershipHandlers(
       return badRequest()
     }
 
+    // A key or a name that breaks its rule is refused before the attempt is counted.
+    const organisation = newOrganisationOf(body.data)
+
+    if (organisation.isErr()) {
+      return errorResponse(refused(organisation.error))
+    }
+
     const allowance = options.limits.createOrganisation(identity, from)
 
     if (!allowance.allowed) {
@@ -50,7 +55,7 @@ export function membershipHandlers(
     }
 
     // The identity goes last: it is the one whose session the token holds, whatever the body holds.
-    return (await organisations.create({ ...body.data, identity })).match(
+    return (await organisations.create({ ...organisation.value, identity })).match(
       (membership) => Response.json({ membership }, { status: 201 }),
       callerErrorAnswer(options.onFailure),
     )

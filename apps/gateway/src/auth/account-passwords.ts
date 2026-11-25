@@ -44,14 +44,16 @@ export interface AccountStart {
  * password changed. `banned` tells whether an operator banned the account. The read a sign-in
  * makes before the password was checked carries it, but nothing refuses on it then: a ban is
  * refused only after the password was checked (by Better Auth's gate, then by the admission), so
- * nobody without the password learns of a ban. `start` is there while the account has not
- * started: its profile or its settings have not reached the directory through its private region
- * yet.
+ * nobody without the password learns of a ban. `secondFactor` tells whether the account's second
+ * factor is on, so its right password alone signs nothing in. `start` is there while the account
+ * has not started: its profile or its settings have not reached the directory through its private
+ * region yet.
  */
 export interface SignInCredential {
   readonly identity: IdentityId
   readonly hash: string | undefined
   readonly banned: boolean
+  readonly secondFactor: boolean
   readonly start: AccountStart | undefined
 }
 
@@ -84,6 +86,7 @@ const credentialRow = z.object({
   identity: idSchemas.identity.schema,
   hash: z.string().min(1).nullish(),
   banned: z.boolean(),
+  second_factor: z.boolean(),
   name: z.string(),
   locale: z.enum(SUPPORTED_LOCALES),
   started: z.boolean(),
@@ -221,10 +224,11 @@ export class AccountPasswords {
 
   /**
    * The account `email` signs in to, in any case, the hash on its credential row, whether it is
-   * banned and, while the account has not started, what it starts from; none when no account has
-   * the email. A sign-in reads it before Better Auth checks the password and again once Better Auth
-   * wrote the session (`signInStands`), and a verification likewise, whose second read, or its
-   * read after Better Auth failed, tells a banned account's refusal from a failure.
+   * banned, whether its second factor is on and, while the account has not started, what it starts
+   * from; none when no account has the email. A sign-in reads it before Better Auth checks the
+   * password and again once Better Auth wrote the session or its challenge (`signInStands`), and a
+   * verification likewise, whose second read, or its read after Better Auth failed, tells a banned
+   * account's refusal from a failure.
    */
   credentialOf(email: string): ResultAsync<SignInCredential | undefined, DataError> {
     return reading(
@@ -243,12 +247,13 @@ export class AccountPasswords {
         )
       }
 
-      const { identity, hash, banned, name, locale, started } = row.data
+      const { identity, hash, banned, second_factor, name, locale, started } = row.data
 
       return ok({
         identity,
         hash: hash ?? undefined,
         banned,
+        secondFactor: second_factor,
         start: started ? undefined : { name, locale },
       })
     })

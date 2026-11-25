@@ -19,7 +19,9 @@ any open page scrolls sideways. At the end of every test a check fails it when a
 script of the front came without the front's security headers, or when a page or one of its
 workers reported a Content-Security-Policy violation on the console. Every test blocks the app's
 service worker (`serviceWorkers: 'block'`, so requests and page loads stay the network's) but
-`app-shell/base/open-offline`, which lets it run to open the app offline. Each test signs up fresh accounts in fresh browser contexts,
+`app-shell/base/open-offline`, which lets it run to open the app offline; there the browser, which
+never asked for the settings' script (named by the worker's precache list, `src/support/precache.ts`),
+then opens `/settings` offline, and the worker answers that script, so a lazy script comes from the precache. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog, each through the link of its verification mail, read
 from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
 (`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
@@ -48,8 +50,10 @@ goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
 `user/base/` (one account on its own) and `organisation/base/` but the tests named below,
 `not-found/base/`, `console/flows/not-operator` (an account and a guest at the console's
 addresses), `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
-`open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
-tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
+`open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`, and
+`user/flows/sign-in-with-code`. `@full`: `user/flows/` (one account across devices,
+tabs or time) but that one, `device/base/my-devices`, `user/base/passkeys`, the `user/base/`
+tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
@@ -86,10 +90,10 @@ emails. A test uses as few emails, sign-ins and links as its scenario needs; a n
 up, mails, opens a link or creates an organisation counts against these.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
-  (`no-store`) is valid against the schema served beside it and names contract version 1; on
-  `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in the manifest's `ids` with
-  the same kind, or derived from one with a suffix it lists, and the helper reports the page's
-  URL with `app-shell.status` in `ready`.
+  (`no-store`) is valid against the schema served beside it and names the contract version the
+  stand was built from; on `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in
+  the manifest's `ids` with the same kind, or derived from one with a suffix it lists, and the
+  helper reports the page's URL with `app-shell.status` in `ready`.
 - `app-shell/base/open-before-data`: a signed-in device reloaded while its database engines
   are held back shows `app-shell.status` in `opening-data` on `/me`, with the account's four
   navigation links and `user.profile.status` in `loading`; once the engines load, it reaches
@@ -148,6 +152,20 @@ up, mails, opens a link or creates an organisation counts against these.
   page with the notice `signed-out-elsewhere` within 5 seconds and its database is gone;
   signing out everywhere sends both devices to the sign-in page, and the account signs in
   again after it.
+- `user/base/two-factor`: the settings turn the second factor on only with a code of the key
+  they show (a wrong one answers `invalid-code`), show the ten backup codes once, renew them
+  with the password and turn the factor off with it, the device signed in through all of it.
+- `user/base/passkeys`: the browser's virtual authenticator makes a passkey the settings list
+  (`passkey-added`), which is removed only once the frame's question `passkeys-remove` is
+  confirmed (`passkey-removed`).
+- `user/flows/sign-in-with-code`: the right password of an account with the second factor on
+  opens the code dialog and signs nothing in; cancelling it starts from the password again, a
+  wrong code answers `invalid-code`, and a code of the key signs in onto `/me`.
+- `user/flows/sign-in-with-backup-code`: a backup code signs in once and answers `invalid-code`
+  the second time, while the second code kept still signs in.
+- `user/flows/sign-in-with-passkey`: the sign-in page's passkey button signs the account in
+  with no password and no code although its second factor is on; once the passkey is removed
+  from the account, the authenticator that still keeps it signs nothing in (`passkey-unknown`).
 - `organisation/flows/shared-notes`: user A creates an organisation and invites user B; B
   accepts the invitation on its organisation page and sees the organisation and A's note
   without a reload, B's note reaches A within 5 seconds, and B sees neither the members nor
@@ -211,7 +229,7 @@ devices of such an account as the test opens, each a browser context of its own)
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
-the gateway answers a sign-up no sooner than 800 ms, by when an assertion would look only every
+the gateway answers a sign-up no sooner than 1050 ms, by when an assertion would look only every
 500 ms), `signUp` (counts the email's mails, `startSignUp`, then
 opens the link of the declared `sign-up` mail, the first after those counted, in the same page,
 which signs the account in, on `/me`: an email invited before it signs up holds the invitation
@@ -248,6 +266,10 @@ same way, and the step check reads `browsers`.
 front (`CLIENT_ADDRESS_HEADER`, `clientAddressOf`), one per worker slot, from 198.18.0.0/15, a
 range set aside for benchmarks: the front names it to the gateway as the request's address, so
 each worker spends per-address limits of its own.
+`src/support/routes.ts`: `atRoute`, the address a test expects a page at by a route of the
+contract: the URL ends with the route's path, then with what a pattern allows after it (nothing by
+default). Tests name a route through `CONTRACT_ROUTES` and a role through `CONTRACT_ROLES`, both
+from `@workspace/kernel`, never by hand: the ESLint rule `workspace/contract-terms` refuses one.
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and
@@ -277,6 +299,24 @@ its send button and waits for the gateway's answer), `resetRequested` (its messa
 `src/support/email-change.ts`: the change of an email from `/settings`: `askToChangeEmail`
 (sends the confirmation and waits for its message), `emailChangeRequested` (that message) and
 `openChangeEmailMail` (opens the link of the mail to the new email, held to its declaration).
+`src/support/totp.ts`: the codes of an authenticator app for the key the settings show, by Better
+Auth's own `createOTP` (`@better-auth/utils`) as the gateway checks them: `totpFor` (the code the
+key gives now, computed just before it is typed; one asked in the last 3 seconds of its 30-second
+step waits for the next) and `wrongCodeFor` (a code of another key that is none of the enrolled
+key's codes of the steps around now).
+`src/support/precache.ts`: `precachedScript`, which reads the stand's service worker script
+(`/sw.js`, the build's own file list) and answers the path of the one precached script whose name a
+pattern matches, failing when the precache lists none or several.
+`src/support/virtual-authenticator.ts`: `addVirtualAuthenticator`, which gives a page a platform
+authenticator through the DevTools protocol (it keeps discoverable credentials, verifies the user
+and answers every test of presence at once) for the passkey tests; it keeps its passkeys until the
+page's browser context closes.
+`src/support/second-factor.ts`: the second factor the tests share: `turnSecondFactorOn` (from the
+settings with the factor off: password, key, code of the key, confirmation; answers the key and the
+ten backup codes, still shown), `expectTwoFactorRead`, `twoFactorSection`, `backupCodesShown`, and
+the sign-in page's steps written out by hand (`signIn` asserts `/me`): `submitCredentials`,
+`codeDialog` (by its anchor alone: a test asserts the `code-required` it carries when it expects
+it, and its absence when it expects it gone) and `submitCode`.
 `src/support/account-deletion.ts`: the deletion of an account: `openSettings` (opens `/settings`
 and waits for its deletion form), `sendDeletionRequest` (types the password into the deletion
 form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends it and waits for
@@ -337,17 +377,19 @@ parameters expected), `expectRange` (the list's range by its `data-from`, `data-
 ## Commands
 
 - `bun run test:e2e` (repository root): runs the launcher through `mcproc exec`, under a 4G
-  memory lease (the run waits its turn when the host is short of memory), in mcproc's `e2e`
-  group (`--exclusive e2e`: one e2e run or `perf:measure` at a time on the host, whichever
-  checkout starts it; a waiting run says whom it waits for, for up to an hour) and with
-  `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
+  memory lease (the run waits its turn when the host is short of memory, for up to an hour:
+  `--timeout 3600`) and with `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright in a network namespace of its own (below); extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
   `playwright.config.ts`, measured on the dev host), and its log is
-  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
+  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own. The runs of two
+  checkouts go at the same time, each on its own stand (its ports come from the checkout's
+  slot) with its browser in a network of its own, so a gate never waits for another checkout's.
+  Within one checkout a run and `perf:measure` share its stand, and the later one's `--reload`
+  empties it under the earlier one: one at a time there.
 - The browser's own network (`scripts/isolated-network.ts`): Chromium on Linux aborts every
   request in flight (`net::ERR_NETWORK_CHANGED`) when a network interface it can see comes, goes
   or changes its address, and every container started or stopped on the host adds or removes one,
@@ -364,8 +406,10 @@ parameters expected), `expectRange` (the list's range by its `data-from`, `data-
   stops before the build and names the package; it never runs the browser on the host's network.
   `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
-  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease and in the
-  `e2e` group, so no e2e run shares the CPU with its timings). It builds
+  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease and in
+  mcproc's `e2e` group, `--exclusive e2e`, so two measurements never run at once). The e2e runs
+  stay out of that group, so a measurement taken while `mcproc leases` shows one running
+  shares the CPU with it: measure when none runs. It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
   a Pixel 7 with the CPU slowed four times and the service worker blocked, a guest's first
   visit (first paint 500 ms, ready 1 s) and a signed-in reload with the cache kept and cleared

@@ -24,6 +24,10 @@ export function otherAccountSaved(storage: KeyValueStorage, email: string): bool
   return saved !== undefined && !sameEmail(saved.email, email)
 }
 
+/** Whether any account is signed in on this browser. */
+export const anyAccountSaved = (storage: KeyValueStorage): boolean =>
+  savedIdentity(storage) !== undefined
+
 /** Whether an identity other than `identity` is signed in on this browser. */
 export function otherIdentitySaved(storage: KeyValueStorage, identity: IdentityId): boolean {
   const saved = savedIdentity(storage)

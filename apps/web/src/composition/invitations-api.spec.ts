@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { invitationIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { fakeFetch, noContent, respond, respondText } from './__fixtures__/gateway-fetch'
@@ -8,7 +9,7 @@ import { invitationsApi } from './invitations-api'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const signedIn = {
@@ -28,14 +29,14 @@ describe('invitationsApi', () => {
     it("posts the link's token in the body, not the path, and parses the organisation, the role and forYou", async () => {
       const { fetcher, sent } = fakeFetch(
         respond(200, {
-          invitation: { organisation: { name: 'Acme' }, role: 'admin', forYou: true },
+          invitation: { organisation: { name: 'Acme' }, role: CONTRACT_ROLES.admin, forYou: true },
         }),
       )
       const api = invitationsApi('/backend', { ...signedIn, fetcher })
 
       expect((await api.read('link-token'))._unsafeUnwrap()).toEqual({
         organisation: { name: 'Acme' },
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
         forYou: true,
       })
       expect(sent).toEqual([
@@ -52,14 +53,18 @@ describe('invitationsApi', () => {
     it('sends no Authorization and no device when the device holds no session, and asks anyway', async () => {
       const { fetcher, sent } = fakeFetch(
         respond(200, {
-          invitation: { organisation: { name: 'Acme' }, role: 'member', forYou: false },
+          invitation: {
+            organisation: { name: 'Acme' },
+            role: CONTRACT_ROLES.member,
+            forYou: false,
+          },
         }),
       )
       const api = invitationsApi('/backend', { ...guest, fetcher })
 
       expect((await api.read('link-token'))._unsafeUnwrap()).toEqual({
         organisation: { name: 'Acme' },
-        role: 'member',
+        role: CONTRACT_ROLES.member,
         forYou: false,
       })
       expect(sent).toEqual([
@@ -133,8 +138,8 @@ describe('invitationsApi', () => {
       const first = invitationIdFactory.create()
       const second = invitationIdFactory.create()
       const listed = [
-        { id: first, organisation: { name: 'Zeta' }, role: 'admin' },
-        { id: second, organisation: { name: 'Acme' }, role: 'member' },
+        { id: first, organisation: { name: 'Zeta' }, role: CONTRACT_ROLES.admin },
+        { id: second, organisation: { name: 'Acme' }, role: CONTRACT_ROLES.member },
       ]
       const { fetcher, sent } = fakeFetch(respond(200, { invitations: listed }))
       const api = invitationsApi('/backend', { ...signedIn, fetcher })
@@ -162,7 +167,9 @@ describe('invitationsApi', () => {
     it("fails an id that is no invitation's", async () => {
       const { fetcher } = fakeFetch(
         respond(200, {
-          invitations: [{ id: 'not-an-id', organisation: { name: 'Acme' }, role: 'member' }],
+          invitations: [
+            { id: 'not-an-id', organisation: { name: 'Acme' }, role: CONTRACT_ROLES.member },
+          ],
         }),
       )
 

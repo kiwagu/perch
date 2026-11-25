@@ -1,5 +1,9 @@
 // scenario: user/base/settings
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, signUp, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 
 test.describe('Choose the theme and the language of the account', {
   tag: '@smoke',
@@ -16,7 +20,7 @@ test.describe('Choose the theme and the language of the account', {
       await expect(page.getByTestId('user.settings.heading')).toBeVisible()
       // Expected: After step 1 the URL is [/settings], [user.settings.theme-select] shows
       //   [value:system] and [user.settings.locale-select] shows [value:en]
-      await expect(page).toHaveURL(/\/settings$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.settings']))
       await expect(theme).toHaveAttribute('data-value', 'system')
       await expect(language).toHaveAttribute('data-value', 'en')
     })

@@ -4,6 +4,7 @@ import { createActor, waitFor } from 'xstate'
 
 import { type AuthUser, type DataErrorCode, dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import type { EmailVerified } from '../../../platform/session.port'
 
@@ -77,7 +78,7 @@ describe('verify-email machine', () => {
     expect(done.context).toEqual({ error: undefined, message: undefined })
     expect(emitted).toEqual([
       { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
-      { type: 'navigate', to: '/me' },
+      { type: 'navigate', to: CONTRACT_ROUTES['user.profile'] },
     ])
   })
 

@@ -1,6 +1,8 @@
 // scenario: app-shell/base/sync-status
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, signUp, test, toast } from '../../support/fixtures'
 import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
@@ -43,7 +45,7 @@ test.describe("See the state of this device's sync in every tab", { tag: '@full'
         const tab = await page.context().newPage()
 
         networks.push(await SyncNetwork.attach(tab))
-        await tab.goto('/me')
+        await tab.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(tab)
         // Expected: After step 2 [app-shell.sync-message] carries [code:synced] in both tabs
         await syncSays(tab, 'synced')

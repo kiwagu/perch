@@ -21,6 +21,7 @@
     "i18n:check": "i18n-check --root src"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@workspace/cqrs": "workspace:*",
     "@workspace/data": "workspace:*",
@@ -42,6 +43,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "ts-pattern": "catalog:",
+    "uqr": "catalog:",
     "workbox-window": "catalog:",
     "xstate": "catalog:"
   },

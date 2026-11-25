@@ -3,8 +3,9 @@ import { match, P } from 'ts-pattern'
 import type { DataError } from '@workspace/data'
 
 export type OrganisationRefusalCode =
-  | 'invalid-key'
-  | 'invalid-name'
+  | 'key-invalid'
+  | 'name-required'
+  | 'name-too-long'
   | 'key-taken'
   | 'no-such-tenant'
   | 'not-a-member'
@@ -35,7 +36,7 @@ export function refused(code: OrganisationRefusalCode): OrganisationRefusal {
 /** The HTTP status a route answers a refusal with. */
 export function refusalStatus(code: OrganisationRefusalCode): number {
   return match(code)
-    .with(P.union('invalid-key', 'invalid-name', 'email-invalid'), () => 400)
+    .with(P.union('key-invalid', 'name-required', 'name-too-long', 'email-invalid'), () => 400)
     .with(P.union('not-a-member', 'not-admin', 'other-account'), () => 403)
     .with(
       P.union('no-such-tenant', 'no-such-identity', 'no-such-member', 'link-invalid'),

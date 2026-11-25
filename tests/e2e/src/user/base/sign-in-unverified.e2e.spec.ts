@@ -1,4 +1,7 @@
 // scenario: user/base/sign-in-unverified
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   appReady,
@@ -11,6 +14,7 @@ import {
 } from '../../support/fixtures'
 import { expectDeclaredMail, openDeclaredMail } from '../../support/mail-contract'
 import { mailbox } from '../../support/mailbox'
+import { atRoute } from '../../support/routes'
 
 test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
   test('An account whose email is not verified cannot sign in; the page sends the mail again, and its link signs in', async ({
@@ -40,7 +44,7 @@ test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
         'email-not-verified',
       )
       await expect(page.getByTestId('user.sign-in.resend-button')).toBeVisible()
-      await expect(page).toHaveURL(/\/sign-in$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']))
     })
 
     await test.step('3. Click [user.sign-in.resend-button]', async () => {
@@ -58,7 +62,7 @@ test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible()
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

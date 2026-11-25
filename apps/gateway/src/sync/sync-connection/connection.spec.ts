@@ -12,6 +12,7 @@ import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { type IdentityId, idSchemas, noteIdFactory, profileIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { createLogger } from '@workspace/logger'
 import { RegionDoc } from '@workspace/replica'
 import {
@@ -41,7 +42,7 @@ import {
 import endWithStatement from '../../auth/__fixtures__/device-session-end-with.surql'
 import identityRoleSetStatement from '../../auth/__fixtures__/identity-role-set.surql'
 import { authHandler } from '../../auth/auth-handler'
-import { noAccounts } from '../../auth/auth-handler/__fixtures__/mount'
+import { noAccounts, ORIGIN } from '../../auth/auth-handler/__fixtures__/mount'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
 import { DeviceSessions } from '../../auth/device-sessions'
 import { ProfileEmails } from '../../auth/profile-emails'
@@ -258,11 +259,17 @@ async function openGateway(options: GatewayOptions = {}) {
     auth: opened.auth,
     sessions,
     ...accounts,
-    // No account is deleted here.
+    // No account is deleted here, and none has its second factor on.
+    challenges: noAccounts.challenges,
+    twoFactor: noAccounts.twoFactor,
+    passkeys: noAccounts.passkeys,
+    passkeyChallenges: noAccounts.passkeyChallenges,
+    publicUrl: ORIGIN,
     deletions: noAccounts.deletions,
     departure: noAccounts.departure,
     teardown: noAccounts.teardown,
     profiles,
+    startingLanguage: noAccounts.startingLanguage,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,
@@ -599,8 +606,8 @@ describe('SyncConnection', () => {
       return socket.sent.flatMap((message) => (message.type === 'welcome' ? [message.roles] : []))
     }
 
-    await roleOf('operator')
-    expect(await welcomedRoles()).toEqual([['operator']])
+    await roleOf(CONTRACT_ROLES.operator)
+    expect(await welcomedRoles()).toEqual([[CONTRACT_ROLES.operator]])
 
     // Taken back: the next hello reads it so, nothing kept from the one before.
     await roleOf('user')
@@ -1531,7 +1538,7 @@ describe('SyncConnection', () => {
     expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'updates'])
     expect(socket.sent[1]).toEqual({
       type: 'memberships',
-      memberships: [{ tenant: acme.tenant, role: 'member' }],
+      memberships: [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }],
     })
     expect(socket.closedWith).toBeUndefined()
   })
@@ -1834,8 +1841,8 @@ function heldQuery() {
 }
 
 describe('SyncConnection, a role change', () => {
-  const member: TenantRole = 'member'
-  const admin: TenantRole = 'admin'
+  const member: TenantRole = CONTRACT_ROLES.member
+  const admin: TenantRole = CONTRACT_ROLES.admin
 
   it("judges a device's next push by its new role: an admin's edit of another's note is acknowledged, a member's again refused", async () => {
     const { gateway, anns, bobs } = await withAcme(true)

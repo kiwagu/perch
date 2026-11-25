@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { signedIn, signedOut } from '../__fixtures__/signed-in'
 import {
@@ -42,16 +43,16 @@ describe('SessionRoles', () => {
   it("reads the roles of the identity shown from that identity's record", () => {
     const { storage, session, roles } = rolesOf(ann, () => ann)
 
-    saveRoles(storage, session, ['operator'])
+    saveRoles(storage, session, [CONTRACT_ROLES.operator])
     roles.followSaved()
 
-    expect([...roles.current()]).toEqual(['operator'])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('holds no role while nobody is shown', () => {
     const { storage, session, roles } = rolesOf(ann, () => undefined)
 
-    saveRoles(storage, session, ['operator'])
+    saveRoles(storage, session, [CONTRACT_ROLES.operator])
 
     expect(roles.current().size).toBe(0)
   })
@@ -60,7 +61,7 @@ describe('SessionRoles', () => {
     // Bob's sign-in is the one saved on the browser now; this tab still shows Ann.
     const { storage, session, roles } = rolesOf(bob, () => ann)
 
-    saveRoles(storage, session, ['operator'])
+    saveRoles(storage, session, [CONTRACT_ROLES.operator])
     roles.followSaved()
 
     expect(roles.current().size).toBe(0)
@@ -69,9 +70,11 @@ describe('SessionRoles', () => {
   it('reads the roles kept for the identity it is first asked about, as a restore shows it', () => {
     const storage = memoryStorage()
 
-    saveRoles(storage, signedInAs(storage, ann), ['operator'])
+    saveRoles(storage, signedInAs(storage, ann), [CONTRACT_ROLES.operator])
 
-    expect([...new SessionRoles({ storage, shown: () => ann }).current()]).toEqual(['operator'])
+    expect([...new SessionRoles({ storage, shown: () => ann }).current()]).toEqual([
+      CONTRACT_ROLES.operator,
+    ])
   })
 
   it('gives the same set until the roles change', () => {
@@ -82,7 +85,7 @@ describe('SessionRoles', () => {
 
     expect(roles.current()).toBe(before)
 
-    roles.apply(session, ['operator'])
+    roles.apply(session, [CONTRACT_ROLES.operator])
 
     expect(roles.current()).not.toBe(before)
   })
@@ -90,22 +93,22 @@ describe('SessionRoles', () => {
   it('keeps the roles a welcome of the signed-in identity carries, and tells the subscribers', () => {
     const { storage, session, roles, heard } = rolesOf(ann, () => ann)
 
-    roles.apply(session, ['operator'])
+    roles.apply(session, [CONTRACT_ROLES.operator])
 
-    expect(savedRoles(storage, session)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard).toEqual([['operator']])
+    expect(savedRoles(storage, session)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator]])
   })
 
   it('takes a role away when a later welcome does not carry it', () => {
     const { storage, session, roles, heard } = rolesOf(ann, () => ann)
 
-    roles.apply(session, ['operator'])
+    roles.apply(session, [CONTRACT_ROLES.operator])
     roles.apply(session, [])
 
     expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
-    expect(heard).toEqual([['operator'], []])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator], []])
   })
 
   it.each([
@@ -123,7 +126,7 @@ describe('SessionRoles', () => {
 
     const set = vi.spyOn(storage, 'set')
 
-    roles.apply(session, ['operator'])
+    roles.apply(session, [CONTRACT_ROLES.operator])
 
     expect(set).not.toHaveBeenCalled()
     expect(storage.get(rolesKeyOf(session.signIn))).toBeUndefined()
@@ -136,7 +139,7 @@ describe('SessionRoles', () => {
 
     storage.changeElsewhere(
       rolesKeyOf(session.signIn),
-      JSON.stringify({ identity: ann, roles: ['operator'] }),
+      JSON.stringify({ identity: ann, roles: [CONTRACT_ROLES.operator] }),
     )
 
     const set = vi.spyOn(storage, 'set')
@@ -144,8 +147,8 @@ describe('SessionRoles', () => {
 
     roles.followSaved()
 
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard).toEqual([['operator']])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator]])
     expect(set).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
   })
@@ -154,7 +157,7 @@ describe('SessionRoles', () => {
     let shown: IdentityId | undefined = ann
     const { storage, session, roles, heard } = rolesOf(ann, () => shown)
 
-    saveRoles(storage, session, ['operator'])
+    saveRoles(storage, session, [CONTRACT_ROLES.operator])
     roles.followSaved()
     shown = undefined
     roles.tell()
@@ -164,60 +167,60 @@ describe('SessionRoles', () => {
     shown = ann
     roles.tell()
 
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard).toEqual([['operator'], [], ['operator']])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator], [], [CONTRACT_ROLES.operator]])
   })
 
   it('drops a role from the record of the sign-in that asked, whichever sign-in is shown or current', () => {
     // Ann's sign-in is the one saved on the browser; this tab still shows Bob.
     const { storage, session: anns, roles, heard } = rolesOf(ann, () => bob)
 
-    saveRoles(storage, anns, ['operator'])
-    roles.drop(anns, 'operator')
+    saveRoles(storage, anns, [CONTRACT_ROLES.operator])
+    roles.drop(anns, CONTRACT_ROLES.operator)
 
     expect(savedRoles(storage, anns)).toEqual([])
 
     // Bob signs in with the role, and is shown; a refusal of Ann's earlier request lands after it.
     const bobs = signedInAs(storage, bob)
 
-    saveRoles(storage, bobs, ['operator'])
+    saveRoles(storage, bobs, [CONTRACT_ROLES.operator])
     roles.followSaved()
-    roles.drop(anns, 'operator')
+    roles.drop(anns, CONTRACT_ROLES.operator)
 
-    expect(savedRoles(storage, bobs)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
-    expect(heard.at(-1)).toEqual(['operator'])
+    expect(savedRoles(storage, bobs)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard.at(-1)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it("takes the role off the shown identity's roles when it asked", () => {
     const { storage, session, roles, heard } = rolesOf(ann, () => ann)
 
-    roles.apply(session, ['operator'])
-    roles.drop(session, 'operator')
+    roles.apply(session, [CONTRACT_ROLES.operator])
+    roles.drop(session, CONTRACT_ROLES.operator)
 
     expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
-    expect(heard).toEqual([['operator'], []])
+    expect(heard).toEqual([[CONTRACT_ROLES.operator], []])
   })
 
   it("leaves the role of the same account's later sign-in, asked for by an earlier one", () => {
     const { storage, session: first, roles } = rolesOf(ann, () => ann)
 
-    saveRoles(storage, first, ['operator'])
+    saveRoles(storage, first, [CONTRACT_ROLES.operator])
 
     const again = signedInAs(storage, ann)
 
-    saveRoles(storage, again, ['operator'])
-    roles.drop(first, 'operator')
+    saveRoles(storage, again, [CONTRACT_ROLES.operator])
+    roles.drop(first, CONTRACT_ROLES.operator)
 
-    expect(savedRoles(storage, again)).toEqual(['operator'])
-    expect([...roles.current()]).toEqual(['operator'])
+    expect(savedRoles(storage, again)).toEqual([CONTRACT_ROLES.operator])
+    expect([...roles.current()]).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('creates no record when it drops a role of a sign-in without one', () => {
     const { storage, session, roles } = rolesOf(ann, () => ann)
 
-    roles.drop(session, 'operator')
+    roles.drop(session, CONTRACT_ROLES.operator)
 
     expect(storage.get(rolesKeyOf(session.signIn))).toBeUndefined()
   })
@@ -228,7 +231,7 @@ describe('SessionRoles', () => {
     const stop = roles.subscribe((held) => heard.push(held))
 
     stop()
-    roles.apply(session, ['operator'])
+    roles.apply(session, [CONTRACT_ROLES.operator])
 
     expect(heard).toEqual([])
   })

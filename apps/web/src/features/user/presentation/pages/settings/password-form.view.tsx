@@ -8,7 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/componen
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 
-import { SETTINGS_PASSWORDS_DIFFER } from '../../../application/settings/settings-machine'
+import { concernsOf } from '../../../../../platform/concerns'
+import {
+  SETTINGS_PASSWORDS_DIFFER,
+  type SettingsEvent,
+} from '../../../application/settings/settings-machine'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
 
 /** The anchor of the form's error, drawn above the form or under the field its code concerns. */
@@ -36,36 +40,41 @@ export interface PasswordFormViewProps {
   readonly values: PasswordFormValues
   /** The code of the last failure, or of the password typed again differing. */
   readonly error?: string | undefined
-  /** Whether the flow takes the save now: the button is enabled while it does. */
-  readonly canSave: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: SettingsEvent) => boolean
   /** A keystroke in `field`, with every value as it is after it. */
   readonly onChange: (field: keyof PasswordFormValues, values: PasswordFormValues) => void
   /** Changes the password: resolves whether it did. */
   readonly onSave: () => Promise<boolean>
 }
 
-/** The contract code of a failure, the field it concerns if any, and its text. */
+/** The codes of `user.settings.password.error`. */
+type PasswordErrorCode =
+  | 'invalid-credentials'
+  | 'password-rejected'
+  | 'passwords-differ'
+  | 'rate-limited'
+  | 'failed'
+
+/** The contract code of a failure, with its text. */
 function errorOf(
   t: ReturnType<typeof useT>,
   code: string,
-): { code: string; field?: keyof PasswordFormValues; text: string } {
+): { code: PasswordErrorCode; text: string } {
   switch (code) {
     case 'data:INVALID_CREDENTIALS':
       return {
         code: 'invalid-credentials',
-        field: 'current',
         text: t('user.settings.password.error.invalid-credentials'),
       }
     case 'data:PASSWORD_REJECTED':
       return {
         code: 'password-rejected',
-        field: 'password',
         text: t('user.settings.password.error.password-rejected'),
       }
     case SETTINGS_PASSWORDS_DIFFER:
       return {
         code: 'passwords-differ',
-        field: 'confirmation',
         text: t('user.settings.password.error.passwords-differ'),
       }
     case 'data:RATE_LIMITED':
@@ -73,6 +82,13 @@ function errorOf(
     default:
       return { code: 'failed', text: t('user.settings.password.error.failed') }
   }
+}
+
+/** The field each code of `user.settings.password.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<PasswordErrorCode, keyof PasswordFormValues>> = {
+  'invalid-credentials': 'current',
+  'password-rejected': 'password',
+  'passwords-differ': 'confirmation',
 }
 
 /** The account's password, changed with the current one; the account's other devices sign out. */
@@ -86,6 +102,7 @@ export function PasswordFormView(props: PasswordFormViewProps) {
     error: useId(),
   }
   const error = props.error ? errorOf(t, props.error) : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
   const field = (name: keyof PasswordFormValues) => ({
     id: ids[name],
     value: props.values[name],
@@ -93,16 +110,15 @@ export function PasswordFormView(props: PasswordFormViewProps) {
       props.onChange(name, { ...props.values, [name]: event.target.value }),
     required: true,
     autoComplete: name === 'current' ? 'current-password' : 'new-password',
-    'aria-invalid': error?.field === name ? true : undefined,
     'aria-describedby':
-      [name === 'password' ? ids.rules : undefined, error?.field === name ? ids.error : undefined]
+      [name === 'password' ? ids.rules : undefined, concerns === name ? ids.error : undefined]
         .filter(Boolean)
         .join(' ') || undefined,
     showLabel: t('user.password.show'),
     hideLabel: t('user.password.hide'),
   })
-  const underField = (name: keyof PasswordFormValues) =>
-    error?.field === name ? (
+  const under = (key: keyof PasswordFormValues) =>
+    error && concerns === key ? (
       <FieldError id={ids.error} data-testid={PASSWORD_ERROR_TEST_ID} data-code={error.code}>
         {error.text}
       </FieldError>
@@ -118,25 +134,27 @@ export function PasswordFormView(props: PasswordFormViewProps) {
       <CardContent>
         <Form onSubmit={props.onSave} data-testid="user.settings.password.form">
           <FieldGroup>
-            {error && error.field === undefined ? (
+            {error && concerns === undefined ? (
               <Alert variant="destructive">
                 <AlertDescription data-testid={PASSWORD_ERROR_TEST_ID} data-code={error.code}>
                   {error.text}
                 </AlertDescription>
               </Alert>
             ) : null}
-            <Field data-invalid={error?.field === 'current' ? true : undefined}>
+            <Field data-invalid={concerns === 'current' ? true : undefined}>
               <FieldLabel htmlFor={ids.current}>{t('user.settings.password.current')}</FieldLabel>
               <PasswordInput
                 {...field('current')}
+                aria-invalid={concerns === 'current' ? true : undefined}
                 testId="user.settings.password.current-password-input"
               />
-              {underField('current')}
+              {under('current')}
             </Field>
-            <Field data-invalid={error?.field === 'password' ? true : undefined}>
+            <Field data-invalid={concerns === 'password' ? true : undefined}>
               <FieldLabel htmlFor={ids.password}>{t('user.settings.password.new')}</FieldLabel>
               <PasswordInput
                 {...field('password')}
+                aria-invalid={concerns === 'password' ? true : undefined}
                 testId="user.settings.password.new-password-input"
               />
               <PasswordRuleList
@@ -145,21 +163,29 @@ export function PasswordFormView(props: PasswordFormViewProps) {
                 testId="user.settings.password-rule-list"
                 items={RULES}
               />
-              {underField('password')}
+              {under('password')}
             </Field>
-            <Field data-invalid={error?.field === 'confirmation' ? true : undefined}>
+            <Field data-invalid={concerns === 'confirmation' ? true : undefined}>
               <FieldLabel htmlFor={ids.confirmation}>
                 {t('user.settings.password.confirmation')}
               </FieldLabel>
               <PasswordInput
                 {...field('confirmation')}
+                aria-invalid={concerns === 'confirmation' ? true : undefined}
                 testId="user.settings.password.password-confirmation-input"
               />
-              {underField('confirmation')}
+              {under('confirmation')}
             </Field>
             <Button
               type="submit"
-              disabled={!props.canSave}
+              disabled={
+                !props.can({
+                  type: 'user.settings.password.save-button',
+                  currentPassword: props.values.current,
+                  password: props.values.password,
+                  confirmation: props.values.confirmation,
+                })
+              }
               data-testid="user.settings.password.save-button"
             >
               {t('user.settings.password.save')}

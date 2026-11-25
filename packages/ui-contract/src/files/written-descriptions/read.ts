@@ -1,16 +1,17 @@
 /**
  * Reads every description written in the files of `contract/domain`, as the files write them:
- * the screen files, the platform file, the activities and the model, each through YAML (the
- * model's JSON is YAML too, so each description has its line), in the order the loaders read
- * them. Never a description the engine derives or the loader fills in as it expands a shorter
+ * the screen files, the platform file, the activities, the model and the terms file when the
+ * contract writes one, each through YAML (the model's JSON is YAML too, so each description has
+ * its line), in the order the loaders read them. Never a description the engine derives or the loader fills in as it expands a shorter
  * form: those are not written. The budget of `contract:check` and the description lines of the
  * hand-over diff read them here, the contract at a ref included.
  */
 
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { filesUnder } from '../files-under'
-import { ACTIVITIES_DIR, MODEL_FILE, PLATFORM_FILE, SCREENS_DIR } from '../paths'
+import { ACTIVITIES_DIR, MODEL_FILE, PLATFORM_FILE, SCREENS_DIR, TERMS_FILE } from '../paths'
 import { lineAt, type Problem } from '../problems'
 import { readYaml } from '../read-yaml'
 
@@ -19,6 +20,7 @@ import type { Found } from './found'
 import { modelDescriptions } from './model'
 import { platformDescriptions } from './platform'
 import { screenDescriptions } from './screen'
+import { termsDescriptions } from './terms'
 
 /** A description as a file of `contract/domain` writes it: its file, its line, its place. */
 export interface WrittenDescription extends Found {
@@ -50,6 +52,9 @@ export function readDescriptions(root: string): {
       descriptionsOf: activityDescriptions,
     })),
     { file: MODEL_FILE, descriptionsOf: modelDescriptions },
+    ...(existsSync(join(root, TERMS_FILE))
+      ? [{ file: TERMS_FILE, descriptionsOf: termsDescriptions }]
+      : []),
   ]
   const problems: Problem[] = []
   const descriptions = files.flatMap(({ file, descriptionsOf }) => {

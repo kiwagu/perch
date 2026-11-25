@@ -90,7 +90,11 @@ const passwordPair: ReferenceRule = {
     ].join('\n'),
     'Refused, each at its key: a `confirms` on anything but a secret input, on an input with a binding, or naming anything but another secret input of its screen with a composite; a second `confirms` on a screen, the first making the pair; and a guard of a pair a screen file writes, `{ confirms }` or `{ composite }`, at every version, since only the loader derives one. From version 4 a screen with a pair never writes one of the four names either: a guard written under one of them beside `confirms` is a problem (derived from the confirms; leave it out). Before version 4 a name the screen writes keeps its written guard, and the others are derived. A screen without a `confirms` writes its guards as sentences, these four names included.',
   ].join('\n\n'),
-  keys: ['screen.anchors.<name>.confirms', 'screen.flow.meta.guards'],
+  keys: [
+    'screen.anchors.<name>.confirms',
+    'screen.flow.meta.guards',
+    'manifest.screens.anchors.<name>.confirms',
+  ],
 }
 
 /** The rules of a password pair: the overview, then each meaning in the order of the guards. */

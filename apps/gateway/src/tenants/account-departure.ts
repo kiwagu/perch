@@ -10,7 +10,7 @@ import {
   tenantRegionId,
 } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
-import { isTenantKey } from '@workspace/kernel'
+import { CONTRACT_ROLES, isTenantKey } from '@workspace/kernel'
 import { tenantRole } from '@workspace/replica/protocol'
 import type { RegionHub } from '@workspace/replica/server'
 import { z } from '@workspace/zod'
@@ -65,7 +65,12 @@ export interface DepartureSteps<T, Stop> {
 
 /** Whether the identity's departure would leave the others of this organisation without an admin. */
 function lastAdmin(row: DepartingMembership): boolean {
-  return row.status === 'ready' && row.role === 'admin' && row.admins === 1 && row.members > 1
+  return (
+    row.status === 'ready' &&
+    row.role === CONTRACT_ROLES.admin &&
+    row.admins === 1 &&
+    row.members > 1
+  )
 }
 
 export interface AccountDepartureOptions {

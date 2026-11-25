@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -7,34 +7,46 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@workspace/ui/c
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { OrganisationEvent } from '../../../application/organisation-machine'
+import {
+  type OrganisationErrorCode,
+  organisationErrorOf,
+} from '../organisation-error-line/organisation-error'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
+
+/** What the create form's fields hold: the organisation's key and its name. */
+export interface CreateDraft {
+  readonly key: string
+  readonly name: string
+}
+
+/** The field each code of `organisation.create.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<OrganisationErrorCode, 'key' | 'name'>> = {
+  'key-invalid': 'key',
+  'key-taken': 'key',
+  'name-required': 'name',
+  'name-too-long': 'name',
+}
 
 /** The form that creates an organisation; the creator becomes its administrator. */
 export function OrganisationCreate(props: {
+  readonly draft: CreateDraft
   readonly error: string | undefined
   /** Whether the page's flow takes the event now. */
   readonly can: (event: OrganisationEvent) => boolean
-  readonly onCreate: (input: { readonly key: string; readonly name: string }) => Promise<boolean>
+  readonly onChange: (draft: CreateDraft) => void
+  readonly onCreate: (input: CreateDraft) => Promise<boolean>
 }) {
   const t = useT()
   const keyId = useId()
   const nameId = useId()
   const hintId = useId()
-  const [key, setKey] = useState('')
-  const [name, setName] = useState('')
-  const submit = () => {
-    const created = props.onCreate({ key, name })
-
-    void created.then((done) => {
-      if (done) {
-        setKey('')
-        setName('')
-      }
-    })
-
-    return created
-  }
+  const { draft } = props
+  const error = props.error ? organisationErrorOf(t, props.error) : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  // One message: under the field its code concerns, or above Submit when it concerns the form.
+  const message = <OrganisationErrorLine code={props.error} testId="organisation.create.error" />
 
   return (
     <Card>
@@ -44,36 +56,40 @@ export function OrganisationCreate(props: {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Form onSubmit={submit} data-testid="organisation.create.form">
+        <Form onSubmit={() => props.onCreate(draft)} data-testid="organisation.create.form">
           <FieldGroup>
-            <Field>
+            <Field data-invalid={concerns === 'key' ? true : undefined}>
               <FieldLabel htmlFor={keyId}>{t('organisation.create.key')}</FieldLabel>
               <Input
                 id={keyId}
-                value={key}
-                onChange={(event) => setKey(event.target.value)}
+                value={draft.key}
+                onChange={(event) => props.onChange({ ...draft, key: event.target.value })}
                 autoCapitalize="none"
                 autoComplete="off"
+                aria-invalid={concerns === 'key' ? true : undefined}
                 aria-describedby={hintId}
                 data-testid="organisation.create.key-input"
               />
               <FieldDescription id={hintId}>{t('organisation.create.key-hint')}</FieldDescription>
+              {concerns === 'key' ? message : null}
             </Field>
-            <Field>
+            <Field data-invalid={concerns === 'name' ? true : undefined}>
               <FieldLabel htmlFor={nameId}>{t('organisation.create.name')}</FieldLabel>
               <Input
                 id={nameId}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
+                value={draft.name}
+                onChange={(event) => props.onChange({ ...draft, name: event.target.value })}
                 autoComplete="organization"
+                aria-invalid={concerns === 'name' ? true : undefined}
                 data-testid="organisation.create.name-input"
               />
+              {concerns === 'name' ? message : null}
             </Field>
-            <Field data-invalid={props.error ? true : undefined}>
-              <OrganisationErrorLine code={props.error} testId="organisation.create.error" />
+            <Field>
+              {concerns === undefined ? message : null}
               <Button
                 type="submit"
-                disabled={!props.can({ type: 'organisation.create.submit-button', key, name })}
+                disabled={!props.can({ type: 'organisation.create.submit-button', ...draft })}
                 data-testid="organisation.create.submit-button"
               >
                 {t('organisation.create.submit')}

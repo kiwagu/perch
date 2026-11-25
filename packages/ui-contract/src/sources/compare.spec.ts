@@ -6,7 +6,13 @@ import { describe, expect, it } from 'vitest'
 import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, type ScreensFile } from '../files'
 
-import { type Collected, collectFromSource, RUNTIME_SUFFIX } from './collect'
+import {
+  type Collected,
+  collectFromSource,
+  DEEP_SPREAD,
+  RUNTIME_SUFFIX,
+  UNFOLLOWED_SPREAD,
+} from './collect'
 import { compareWithContract } from './compare'
 
 const { vocabulary, screens: sample } = sampleContract()
@@ -39,6 +45,7 @@ const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected
   codes: [],
   inputs: [],
   colours: [],
+  props: [],
   problems: [],
   ...part,
 })
@@ -57,6 +64,19 @@ const agreeing = (): Collected[] => [
 
 const printed = (collected: readonly Collected[]): string[] =>
   compareWithContract(collected, SCREENS, vocabulary).map(formatProblem)
+
+/** Why a view writes none of the props the contract decides for a field, as the problems say it. */
+const KIT = "the kit takes it from the contract's field facts; leave it out"
+
+/** The problems of `collected` against `screens`, in strict mode and in ahead mode. */
+const strictAndAhead = (
+  collected: readonly Collected[],
+  screens: ScreensFile,
+  vocab: typeof vocabulary = vocabulary,
+): { strict: string[]; ahead: string[] } => ({
+  strict: compareWithContract(collected, screens, vocab).map(formatProblem),
+  ahead: compareWithContract(collected, screens, vocab, { ahead: true }).map(formatProblem),
+})
 
 /** The contract with a field that holds input and one whose own change runs its action. */
 const WITH_FIELDS: ScreensFile = {
@@ -157,12 +177,6 @@ const pagedProblems = (
   screens: ScreensFile = WITH_PAGED_LIST,
 ): string[] => compareWithContract(collected, screens, PAGED_VOCABULARY).map(formatProblem)
 
-/** The full check and ahead mode: a wrong opt-out is refused in both, and none is wanted in either. */
-const MODES = [
-  { name: 'the full check', ahead: false },
-  { name: 'ahead mode', ahead: true },
-] as const
-
 describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
     expect(printed(agreeing())).toEqual([])
@@ -181,6 +195,27 @@ describe('compareWithContract', () => {
     ).toEqual([
       'b.tsx:2: "sample.other-button" is not in contract/domain/screens; add it there or rename it',
     ])
+  })
+  it('reports an anchor an object writes under a computed key a const holds, in ahead mode too', () => {
+    const view = (override: string): Collected[] => [
+      collectFromSource(
+        [
+          "const TEST_ID_PROP = 'data-testid'",
+          `const a = <Page data-testid="sample.page" {...(compact ? ${override} : {})} />`,
+          'const b = <Select testId="sample.mode-select" />',
+        ].join('\n'),
+        'x.tsx',
+      ),
+    ]
+    const typo = strictAndAhead(view("{ [TEST_ID_PROP]: 'sample.seach-input' }"), SCREENS)
+    const plain = strictAndAhead(view("{ [TEST_ID_PROP]: 'sample.mode-select' }"), SCREENS)
+    const reported =
+      'x.tsx:2: "sample.seach-input" is not in contract/domain/screens; add it there or rename it'
+
+    expect(typo.strict).toContain(reported)
+    expect(typo.ahead).toContain(reported)
+    expect(plain.strict).not.toContain(reported)
+    expect(plain.ahead).not.toContain(reported)
   })
   it('keeps every other problem when the contract runs ahead', () => {
     const collected = [
@@ -201,78 +236,113 @@ describe('compareWithContract', () => {
     ).toEqual(printed(collected))
     expect(printed(collected).length).toBeGreaterThanOrEqual(5)
   })
-  it.each(MODES)(
-    'refuses a holdsInput the contract does not call for on a field, in $name',
-    ({ ahead }) => {
-      expect(
-        compareWithContract(
-          withInputs([
-            { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
-            { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
-          ]),
-          WITH_FIELDS,
-          vocabulary,
-          { ahead },
-        ).map(formatProblem),
-      ).toEqual([
-        'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
-        'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
+  it('refuses a holdsInput a view writes on a declared field, true or false, in ahead mode too', () => {
+    // The contract says `name-input` holds input and `kind-select` holds none: neither is written.
+    const found = strictAndAhead(
+      withInputs([
+        { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
+        { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
+      ]),
+      WITH_FIELDS,
+    )
+    const expected = [
+      `x.tsx:3: "sample.form.name-input": holdsInput={false}, but ${KIT}`,
+      `x.tsx:4: "sample.page.kind-select": holdsInput={true}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(expected)
+    expect(found.ahead).toEqual(expected)
+  })
+  it('refuses a holdsInput and a marksState a view writes as a name or a member, in ahead mode too', () => {
+    const inputs = strictAndAhead(
+      withInputs([
+        { anchor: 'sample.form.name-input', holdsInput: 'localFlag', line: 3 },
+        { anchor: 'sample.page.kind-select', holdsInput: 'props.hold', line: 4 },
+      ]),
+      WITH_FIELDS,
+    )
+    const colours = strictAndAhead(
+      withColours([
+        { anchor: 'sample.form.name-input', marksState: 'props.mark', line: 3 },
+        { anchor: 'sample.form.code-input', marksState: 'mark', line: 4 },
+      ]),
+      WITH_COLOURS,
+    )
+
+    for (const found of [inputs.strict, inputs.ahead]) {
+      expect(found).toEqual([
+        `x.tsx:3: "sample.form.name-input": holdsInput={localFlag}, but ${KIT}`,
+        `x.tsx:4: "sample.page.kind-select": holdsInput={props.hold}, but ${KIT}`,
       ])
-    },
-  )
-  it.each(MODES)(
-    'lets a holdsInput={false} the contract calls for stand, in $name',
-    ({ ahead }) => {
-      expect(
-        compareWithContract(
-          withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
-          WITH_FIELDS,
-          vocabulary,
-          { ahead },
-        ),
-      ).toEqual([])
-    },
-  )
-  it.each(MODES)(
-    'refuses a marksState the contract does not call for on a field, in $name',
-    ({ ahead }) => {
-      expect(
-        compareWithContract(
-          withColours([
-            { anchor: 'sample.form.name-input', marksState: false, line: 3 },
-            { anchor: 'sample.form.code-input', marksState: true, line: 4 },
-            { anchor: 'sample.form', marksState: false, line: 5 },
-          ]),
-          WITH_COLOURS,
-          vocabulary,
-          { ahead },
-        ).map(formatProblem),
-      ).toEqual([
-        'x.tsx:3: "sample.form.name-input" shows its state colour by the contract; drop marksState={false}',
-        'x.tsx:4: "sample.form.code-input": marksState={true} is the default; leave it out',
-        'x.tsx:5: "sample.form" is a form, not a field that holds input; only such a field shows a state colour',
+    }
+
+    for (const found of [colours.strict, colours.ahead]) {
+      expect(found).toEqual([
+        `x.tsx:3: "sample.form.name-input": marksState={props.mark}, but ${KIT}`,
+        `x.tsx:4: "sample.form.code-input": marksState={mark}, but ${KIT}`,
       ])
-    },
-  )
-  it.each(MODES)(
-    'lets a marksState={false} the contract calls for stand, in $name',
-    ({ ahead }) => {
-      expect(
-        compareWithContract(
-          withColours([{ anchor: 'sample.form.code-input', marksState: false, line: 4 }]),
-          WITH_COLOURS,
-          vocabulary,
-          { ahead },
-        ),
-      ).toEqual([])
-    },
-  )
-  it.each(MODES)(
-    'leaves the state colour of a field the contract drops to the kit: no marksState is wanted, in $name',
-    ({ ahead }) => {
-      expect(compareWithContract(withColours([]), WITH_COLOURS, vocabulary, { ahead })).toEqual([])
-    },
-  )
+    }
+  })
+  it('refuses the flags of a field written from a source as a name or a member, and lets a wrapper through', () => {
+    const rendered = (flags: string): Collected[] => [
+      ...agreeing(),
+      collectFromSource(
+        [
+          '<form data-testid="sample.form">',
+          `<Input data-testid="sample.form.name-input" ${flags} />`,
+          '<Input data-testid="sample.form.code-input" />',
+          '<Input data-testid={testId} holdsInput={holdsInput} marksState={props.marksState} />',
+          '</form>',
+        ].join('\n'),
+        'x.tsx',
+      ),
+    ]
+    const found = strictAndAhead(
+      rendered('holdsInput={localFlag} marksState={props.mark}'),
+      WITH_COLOURS,
+    )
+    const expected = [
+      `x.tsx:2: "sample.form.name-input": holdsInput={localFlag}, but ${KIT}`,
+      `x.tsx:2: "sample.form.name-input": marksState={props.mark}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(expected)
+    expect(found.ahead).toEqual(expected)
+    expect(strictAndAhead(rendered(''), WITH_COLOURS)).toEqual({ strict: [], ahead: [] })
+  })
+  it('wants no holdsInput on the element of a field that holds no input, rendered or not', () => {
+    const found = strictAndAhead(withInputs([]), WITH_FIELDS)
+
+    expect(found.strict).toEqual([])
+    expect(found.ahead).toEqual([])
+  })
+  it('refuses a marksState a view writes on a field that shows its state colour or drops it, in ahead mode too', () => {
+    // The contract says `name-input` shows its colour and `code-input` drops it: neither is written.
+    const found = strictAndAhead(
+      withColours([
+        { anchor: 'sample.form.name-input', marksState: false, line: 3 },
+        { anchor: 'sample.form.code-input', marksState: true, line: 4 },
+        { anchor: 'sample.form.code-input', marksState: false, line: 6 },
+        { anchor: 'sample.form', marksState: false, line: 5 },
+      ]),
+      WITH_COLOURS,
+    )
+    const expected = [
+      `x.tsx:3: "sample.form.name-input": marksState={false}, but ${KIT}`,
+      `x.tsx:4: "sample.form.code-input": marksState={true}, but ${KIT}`,
+      'x.tsx:5: "sample.form" is a form, not a field that holds input; only such a field shows a state colour',
+      `x.tsx:6: "sample.form.code-input": marksState={false}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(expected)
+    expect(found.ahead).toEqual(expected)
+  })
+  it('wants no marksState on the element of a field that drops its state colour, rendered or not', () => {
+    const found = strictAndAhead(withColours([]), WITH_COLOURS)
+
+    expect(found.strict).toEqual([])
+    expect(found.ahead).toEqual([])
+  })
   it('reports marksState on a field that holds no input, and on a kind the kit does not colour', () => {
     const screens = structuredClone(WITH_COLOURS)
 
@@ -290,13 +360,12 @@ describe('compareWithContract', () => {
     expect(
       compareWithContract(
         [
-          ...withColours([{ anchor: 'sample.form.code-input', marksState: false, line: 4 }]),
+          ...withColours([]),
           source('y.tsx', {
             literals: [
               rendered('sample.page.kind-select', 3),
               rendered('sample.form.agree-checkbox', 4),
             ],
-            inputs: [{ anchor: 'sample.page.kind-select', holdsInput: false, line: 3 }],
             colours: [
               { anchor: 'sample.page.kind-select', marksState: false, line: 3 },
               { anchor: 'sample.form.agree-checkbox', marksState: false, line: 4 },
@@ -311,50 +380,440 @@ describe('compareWithContract', () => {
       'y.tsx:4: "sample.form.agree-checkbox" is a checkbox, not a field that holds input; only such a field shows a state colour',
     ])
   })
-  it.each(MODES)(
-    'leaves a field that holds no input to the kit: no holdsInput is wanted once it is rendered, in $name',
-    ({ ahead }) => {
-      expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, { ahead })).toEqual([])
-    },
-  )
+  it('refuses the limit and the type of a text field written on its element, in ahead mode too', () => {
+    const screens: ScreensFile = {
+      ...SCREENS,
+      screens: SCREENS.screens.map((screen) => ({
+        ...screen,
+        anchors: {
+          ...screen.anchors,
+          'sample.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+        },
+      })),
+    }
+    const rendering = (element: string): Collected[] => [
+      ...agreeing(),
+      collectFromSource(`const title = ${element}`, 'x.tsx'),
+    ]
 
-  it("lets holdsInput={false} sit on a paged list's size select, which holds no input by its facet", () => {
+    // The element as the kit wants it: no limit and no type, whatever the contract's value says.
     expect(
-      pagedProblems(
-        withPagedList({
-          inputs: [
-            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
-          ],
-        }),
-      ),
-    ).toEqual([])
+      strictAndAhead(rendering('<Input data-testid="sample.title-input" />'), screens),
+    ).toEqual({
+      strict: [],
+      ahead: [],
+    })
+
+    const written = strictAndAhead(
+      rendering('<Input data-testid="sample.title-input" maxLength={80} type="email" />'),
+      screens,
+    )
+    const expected = [
+      `x.tsx:1: "sample.title-input": maxLength={80}, but ${KIT}`,
+      `x.tsx:1: "sample.title-input": type="email", but ${KIT}`,
+    ]
+
+    expect(written.strict).toEqual(expected)
+    expect(written.ahead).toEqual(expected)
   })
-  it.each(MODES)(
-    "reports holdsInput={true} on a paged list's size select as the default, in $name",
-    ({ ahead }) => {
-      expect(
-        compareWithContract(
-          withPagedList({
-            inputs: [
-              { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: true, line: 5 },
-            ],
-          }),
-          WITH_PAGED_LIST,
-          PAGED_VOCABULARY,
-          { ahead },
-        ).map(formatProblem),
-      ).toEqual([
-        'list.tsx:5: "sample.list.size-select": holdsInput={true} is the default; leave it out',
-      ])
-    },
-  )
+  /** The contract with a text field the view renders. */
+  const withTitleInput = (): ScreensFile => ({
+    ...SCREENS,
+    screens: SCREENS.screens.map((screen) => ({
+      ...screen,
+      anchors: {
+        ...screen.anchors,
+        'sample.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+      },
+    })),
+  })
+
+  it('holds an element whose anchor an async helper or a generator supplies to its field facts, and refuses the spread, in ahead mode too', () => {
+    const screens = withTitleInput()
+    const anchor = "{ 'data-testid': 'sample.title-input' }"
+    const refused = [
+      `x.tsx:2: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:2: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // The helper is the sole source of the anchor: a Promise and an iterator are no object, yet
+    // the anchor it writes is read, so the limit the view adds beside the spread is still refused.
+    for (const helper of [
+      `const searchProps = async () => (${anchor})`,
+      `async function searchProps() { return ${anchor} }`,
+      `function* searchProps() { return ${anchor} }`,
+    ]) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            `${helper}\nconst title = <Input {...searchProps()} maxLength={80} />`,
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
+  })
+  it('holds the element to its field facts when another branch of the spread is an async helper or a generator that gives no object', () => {
+    const screens = withTitleInput()
+    const refused = [
+      `x.tsx:3: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:3: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // What such a call gives is a Promise or an iterator, never nothing: the branch that writes
+    // the anchor still decides it, whatever the helper falls through to or returns instead.
+    for (const fallback of [
+      'async function fallbackProps() { await loadSuggestions() }',
+      'async function fallbackProps() { return }',
+      'async function fallbackProps() { if (ready) { return null } await loadSuggestions() }',
+      'const fallbackProps = async () => undefined',
+      'function* fallbackProps() { yield 1 }',
+    ]) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            [
+              "const searchProps = { 'data-testid': 'sample.title-input' }",
+              fallback,
+              'const title = <Input {...(showSearchAnchor ? searchProps : fallbackProps())} maxLength={80} />',
+            ].join('\n'),
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
+  })
+  it('holds the element to its field facts when a spread the file cannot follow comes after the member in a props map', () => {
+    const screens = withTitleInput()
+    const refused = [
+      `x.tsx:4: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:4: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // The later spread may supply `search` or not: the property before it stays one more
+    // alternative, so the anchor it writes is read and the limit beside the spread is refused.
+    for (const rest of ['fallbackProps()', 'props.extra']) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            [
+              'async function fallbackProps() { await loadSuggestions() }',
+              'function Search(props) {',
+              `  const fieldProps = { search: { 'data-testid': 'sample.title-input' }, ...${rest} }`,
+              '  return <Input {...fieldProps.search} maxLength={80} />',
+              '}',
+            ].join('\n'),
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
+  })
+  it('holds the element to its field facts when the member on the left of ?? or || may be absent, in ahead mode too', () => {
+    const screens = withTitleInput()
+    const refused = [
+      `x.tsx:10: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:10: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // An absent `search` selects the fallback at runtime, which writes the anchor: no branch
+    // supplies nothing, so the element carries the anchor and the limit beside the spread is refused.
+    for (const operator of ['??', '||']) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            [
+              "const searchProps = { 'data-testid': 'sample.title-input' }",
+              'async function loadFieldOverrides() {',
+              '  await loadSuggestions()',
+              '  return { search: searchProps }',
+              '}',
+              'const fieldProps: { label: string; search?: typeof searchProps } = {',
+              "  label: 'Search',",
+              '  ...loadFieldOverrides(),',
+              '}',
+              `const title = <Input {...(fieldProps.search ${operator} searchProps)} maxLength={80} />`,
+            ].join('\n'),
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
+  })
+  it('holds the element a for…of renders to the anchor each element of its array supplies, in ahead mode too', () => {
+    const found = strictAndAhead(
+      [
+        ...agreeing(),
+        collectFromSource(
+          [
+            "const TITLE_TEST_ID = 'sample.title-input'",
+            "const inputProps = { 'data-testid': TITLE_TEST_ID }",
+            'const fields = [inputProps]',
+            'const inputs = []',
+            'for (const inputProps of fields) {',
+            "  inputs.push(<Input key={inputProps['data-testid']} {...inputProps} maxLength={3} />)",
+            '}',
+          ].join('\n'),
+          'x.tsx',
+        ),
+      ],
+      withTitleInput(),
+    )
+    const refused = [`x.tsx:6: "sample.title-input": maxLength={3}, but ${KIT}`]
+
+    expect(found.strict).toEqual(refused)
+    expect(found.ahead).toEqual(refused)
+  })
+  it('holds an element to the anchor a value under a key the file does not state reads as, and refuses the spreads, in ahead mode too', () => {
+    const found = strictAndAhead(
+      [
+        ...agreeing(),
+        collectFromSource(
+          [
+            "const TITLE_TEST_ID = 'sample.title-input'",
+            "let prop: string = 'data-testid'",
+            'const anchorProps = { [prop]: TITLE_TEST_ID }',
+            "prop = 'aria-label'",
+            "const labelProps = { [prop]: t('sample.title') }",
+            'const title = <Input {...anchorProps} {...labelProps} maxLength={3} />',
+          ].join('\n'),
+          'x.tsx',
+        ),
+      ],
+      withTitleInput(),
+    )
+    const refused = [
+      `x.tsx:6: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:6: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:6: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(refused)
+    expect(found.ahead).toEqual(refused)
+  })
+  /** What both modes find in the file `lines` write, beside the agreeing sources, with the title input. */
+  const titleViewOf = (lines: readonly string[]): { strict: string[]; ahead: string[] } =>
+    strictAndAhead([...agreeing(), collectFromSource(lines.join('\n'), 'x.tsx')], withTitleInput())
+
+  it('refuses the spread of a let a for…of head binds, which the loop may reassign, in ahead mode too', () => {
+    const refused = [`x.tsx:7: ${UNFOLLOWED_SPREAD('sample.title-input')}`]
+
+    // The loop may give its `let` another object, here one with a limit: it is not followed.
+    expect(
+      titleViewOf([
+        "const TITLE_TEST_ID = 'sample.title-input'",
+        "const searchProps = { placeholder: 'Search' }",
+        'const fields = [searchProps]',
+        'const inputs = []',
+        'for (let field of fields) {',
+        '  if (compact) field = { ...field, maxLength: 3 }',
+        '  inputs.push(<Input data-testid={TITLE_TEST_ID} {...field} />)',
+        '}',
+      ]),
+    ).toEqual({ strict: refused, ahead: refused })
+  })
+  it('refuses the spread of a for…of over an array the file may change, in ahead mode too', () => {
+    /** The loop over `fields`, `use` written before it. */
+    const looping = (use: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      "const searchProps = { placeholder: 'Search' }",
+      'function Fields(props) {',
+      '  const fields = [searchProps]',
+      `  ${use}`,
+      '  const inputs = []',
+      '  for (const field of fields) {',
+      '    inputs.push(<Input data-testid={TITLE_TEST_ID} {...field} />)',
+      '  }',
+      '  return inputs',
+      '}',
+    ]
+    const refused = [`x.tsx:8: ${UNFOLLOWED_SPREAD('sample.title-input')}`]
+
+    // A method that changes it, an index or its length assigned, the array passed to a function or
+    // handed on to another name: it may hold another object by the loop, one with a limit.
+    for (const use of [
+      'fields.push(props.extra)',
+      'fields.unshift(props.extra)',
+      'fields.splice(0, 1, props.extra)',
+      "fields['push'](props.extra)",
+      'fields[1] = props.extra',
+      'fields.length = 0',
+      'addExtra(fields)',
+      'const same = fields',
+      // A call through a computed member may be any method, one that changes it included.
+      "const append = 'push'; fields[append](props.extra)",
+      "fields[props.method ?? 'push'](props.extra)",
+    ]) {
+      expect(titleViewOf(looping(use)), use).toEqual({ strict: refused, ahead: refused })
+    }
+
+    // Only read besides, its length, an index or a spread of it, it yields the elements it declares.
+    for (const use of [
+      'const count = fields.length',
+      'const copy = [...fields]',
+      'const first = fields[0]',
+      'const nth = fields[props.at]',
+    ]) {
+      expect(titleViewOf(looping(use)), use).toEqual({ strict: [], ahead: [] })
+    }
+  })
+  it('lets a wrapper a for…of renders pass where an element of its array cannot be followed, in ahead mode too', () => {
+    /** The tagged rows' loop, rendering `search` for the search row. */
+    const tagged = (search: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      "const searchProps = { 'data-testid': TITLE_TEST_ID }",
+      'function Fields(props) {',
+      "  const rows = [{ kind: 'search', props: searchProps }, { kind: 'wrapper', props: props.inputProps }]",
+      '  const out = []',
+      '  for (const row of rows) {',
+      `    out.push(row.kind === 'wrapper' ? <Wrapper {...row.props} /> : ${search})`,
+      '  }',
+      '  return out',
+      '}',
+    ]
+    const refused = [
+      `x.tsx:7: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:7: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
+    // The wrapper row's props are the component's own: the loop's variable is unknown as a whole,
+    // so neither element takes the search row's anchor, as for any spread of a parameter.
+    expect(titleViewOf(tagged('<Input {...row.props} />'))).toEqual({ strict: [], ahead: [] })
+    // An element that writes its anchor beside such a spread is still held to it.
+    expect(
+      titleViewOf(tagged('<Input data-testid={TITLE_TEST_ID} {...row.props} maxLength={3} />')),
+    ).toEqual({ strict: refused, ahead: refused })
+  })
+  it('lets a wrapper pass whose props a name destructures from a for…of variable or an alias of it, in ahead mode too', () => {
+    /** The tagged rows' loop, `derive` taking the row's props, spread as `props` in both arms. */
+    const derived = (derive: string, props: string, search: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      "const searchProps = { 'data-testid': TITLE_TEST_ID }",
+      'function Fields(props) {',
+      "  const rows = [{ kind: 'search', props: searchProps }, { kind: 'wrapper', props: props.inputProps }]",
+      '  const out = []',
+      '  for (const row of rows) {',
+      `    ${derive}`,
+      `    out.push(row.kind === 'wrapper' ? <Wrapper {...${props}} /> : ${search})`,
+      '  }',
+      '  return out',
+      '}',
+    ]
+    const refused = [
+      `x.tsx:8: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:8: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
+    // Each name it derives shares the loop variable's unknown as a whole: the wrapper passes, and
+    // an element that writes its anchor beside the spread is still held to it.
+    for (const [derive, props] of [
+      ['const { props: forwarded } = row', 'forwarded'],
+      ['const same = row', 'same.props'],
+      ['const same = row; const { props: forwarded } = same', 'forwarded'],
+      ['const { props: { ...forwarded } } = row', 'forwarded'],
+    ] as const) {
+      const anchored = `<Input data-testid={TITLE_TEST_ID} {...${props}} maxLength={3} />`
+
+      expect(titleViewOf(derived(derive, props, `<Input {...${props}} />`)), derive).toEqual({
+        strict: [],
+        ahead: [],
+      })
+      expect(titleViewOf(derived(derive, props, anchored)), derive).toEqual({
+        strict: refused,
+        ahead: refused,
+      })
+    }
+  })
+  it('refuses a spread the check stops following at its depth, whatever the element carries, and follows a shallower one', () => {
+    /** The title's props under `search`, spread through `layers` objects in a row. */
+    const layered = (layers: number): string[] => [
+      "const group0 = { search: { 'data-testid': 'sample.title-input' } }",
+      ...Array.from({ length: layers }, (_, at) => `const group${at + 1} = { ...group${at} }`),
+      `const title = <Input {...group${layers}.search} maxLength={3} />`,
+    ]
+    const deep = [`x.tsx:10: ${DEEP_SPREAD}`]
+    const shallow = [`x.tsx:5: "sample.title-input": maxLength={3}, but ${KIT}`]
+
+    // Past the depth the anchor itself is not reached: the spread is refused, never let by.
+    expect(titleViewOf(layered(8))).toEqual({ strict: deep, ahead: deep })
+    expect(titleViewOf(layered(3))).toEqual({ strict: shallow, ahead: shallow })
+  })
+  it('takes no anchor from a literal under a key the file does not state: it may be an ARIA id, in ahead mode too', () => {
+    const view = (value: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      'function Help(props: { labelProp: "aria-describedby" | "aria-labelledby"; testId: string }) {',
+      `  return <Wrapper data-testid={props.testId} {...{ [props.labelProp]: ${value} }} maxLength={3} />`,
+      '}',
+    ]
+    const held = [
+      `x.tsx:3: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:3: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
+    expect(titleViewOf(view("'sample.title-help'"))).toEqual({ strict: [], ahead: [] })
+    // A named anchor there may be the anchor's own: the element is held to it.
+    expect(titleViewOf(view('TITLE_TEST_ID'))).toEqual({ strict: held, ahead: held })
+  })
+  it('goes on past a numeric key to the member before it, in ahead mode too', () => {
+    // `0` is no `search`: the member is the search props, followed.
+    expect(
+      titleViewOf([
+        "const TITLE_TEST_ID = 'sample.title-input'",
+        "const searchProps = { placeholder: 'Search' }",
+        "const otherProps = { placeholder: 'Other' }",
+        'const fields = { search: searchProps, ...{ 0: otherProps } }',
+        'const title = <Input data-testid={TITLE_TEST_ID} {...fields.search} />',
+      ]),
+    ).toEqual({ strict: [], ahead: [] })
+  })
+
+  it("refuses a holdsInput a view writes on a paged list's size select, which the field facts carry, in ahead mode too", () => {
+    for (const holdsInput of [false, true]) {
+      const found = strictAndAhead(
+        withPagedList({
+          inputs: [{ anchor: 'sample.list.size-select', base: 'sample.list', holdsInput, line: 5 }],
+        }),
+        WITH_PAGED_LIST,
+        PAGED_VOCABULARY,
+      )
+      const expected = [
+        `list.tsx:5: "sample.list.size-select": holdsInput={${holdsInput}}, but ${KIT}`,
+      ]
+
+      expect(found.strict).toEqual(expected)
+      expect(found.ahead).toEqual(expected)
+    }
+  })
+  it("wants no holdsInput on a paged list's size select rendered without one, in strict mode too", () => {
+    const found = strictAndAhead(withPagedList({}), WITH_PAGED_LIST, PAGED_VOCABULARY)
+
+    expect(found.strict).toEqual([])
+    expect(found.ahead).toEqual([])
+  })
   it("reports marksState on a paged list's size select, a select that holds no input", () => {
     expect(
       pagedProblems(
         withPagedList({
-          inputs: [
-            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
-          ],
           colours: [
             { anchor: 'sample.list.size-select', base: 'sample.list', marksState: false, line: 5 },
           ],
@@ -429,6 +888,7 @@ describe('compareWithContract', () => {
         ),
       ),
     ).toEqual([
+      `list.tsx:5: "sample.list.size-select": holdsInput={false}, but ${KIT}`,
       'list.tsx:6: "sample.list.next-link" is derived from "sample.list", not a field; only a field holds input',
       'list.tsx:6: "sample.list.next-link" is derived from "sample.list", not a field that holds input; only such a field shows a state colour',
       'list.tsx:7: "sample.list.range" is derived from "sample.list", not a field; only a field holds input',
@@ -457,25 +917,6 @@ describe('compareWithContract', () => {
       'select.tsx:5: testIdFor("sample.mode-select", "size-select"): "sample.mode-select" does not list "size-select" in its derived',
       'select.tsx:5: "sample.mode-select.size-select" is derived from "sample.mode-select", not a field; only a field holds input',
     ])
-  })
-  it.each(MODES)(
-    "leaves a paged list's size select to the kit: no holdsInput is wanted at its testIdFor(), in $name",
-    ({ ahead }) => {
-      expect(
-        compareWithContract(withPagedList({}), WITH_PAGED_LIST, PAGED_VOCABULARY, { ahead }),
-      ).toEqual([])
-    },
-  )
-  it("passes a paged list's size select that carries holdsInput={false}", () => {
-    expect(
-      pagedProblems(
-        withPagedList({
-          inputs: [
-            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
-          ],
-        }),
-      ),
-    ).toEqual([])
   })
   it("wants no opt-out on a paged list's next link rendered without a flag", () => {
     expect(
@@ -574,7 +1015,7 @@ describe('compareWithContract', () => {
       derived: ['visibility-button'],
     })
 
-    const rendered = withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }])
+    const rendered = withInputs([])
     const compared = (collected: readonly Collected[]): string[] =>
       compareWithContract(collected, screens, vocabulary).map(formatProblem)
 

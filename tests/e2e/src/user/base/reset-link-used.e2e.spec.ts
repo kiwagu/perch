@@ -1,4 +1,7 @@
 // scenario: user/base/reset-link-used
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, signOut, signUp, test } from '../../support/fixtures'
 import { openMailLink } from '../../support/mail-contract'
@@ -56,7 +59,7 @@ test.describe('Open a password reset link a second time', { tag: '@full' }, () =
     await test.step('5. Click [user.reset-password.forgot-link]', async () => {
       await page.getByTestId('user.reset-password.forgot-link').click()
       // Expected: After step 5 the URL is [/forgot-password]
-      await expectPathname(page, '/forgot-password')
+      await expectPathname(page, CONTRACT_ROUTES['user.forgot-password'])
     })
   })
 })

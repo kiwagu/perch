@@ -1,3 +1,5 @@
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { DEVICES } from '../../platform/devices.port'
 import { defineModule } from '../../platform/module'
 import { SESSION } from '../../platform/session.port'
@@ -18,5 +20,12 @@ export const DeviceModule = defineModule({
     },
   ],
   declarations: { DevicesPage: DevicesContainer },
-  routes: [{ path: '/devices', page: 'DevicesPage', guard: 'authenticated', roles: ['identity'] }],
+  routes: [
+    {
+      path: CONTRACT_ROUTES.device,
+      page: 'DevicesPage',
+      guard: 'authenticated',
+      roles: [CONTRACT_ROLES.identity],
+    },
+  ],
 })

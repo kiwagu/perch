@@ -26,6 +26,7 @@ const flowStates: ReferenceRule = {
     'screen.flow.initial',
     'screen.flow.states',
     'screen.flow.states.<name>.type',
+    'manifest.screens.flow.id',
   ],
 }
 
@@ -104,7 +105,7 @@ const flowShorterForms: ReferenceRule = {
     [
       '- A transition written as its target alone, as XState itself allows: `onDone: idle` is `onDone: { target: idle }`.',
       '- An effect written by its name: `show: <anchor>`, the anchor shows one of the codes it carries, in its order (in the `onError` of an invoke, one of the codes the failure of its action shows, narrowed by a guard by failure code; see the rule `failure-show`); `show: { <anchor>: [codes] }`, one of these; `clear: <anchor>`; `read: <anchor>`; `navigate: <path>` or `navigate: { to, search }`.',
-      '- A region written by its pattern, a shape that two regions or more of the screens share, named by what the area does. A shape that one region has is written in full until a second one shares it. `draft`: a control that follows a stored value or holds what was typed. In `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, which goes back to `following` when what was typed is the stored value again, by typing it back or by the data event `stored`, both under `guard`.',
+      '- A region written by its pattern, a shape that two regions or more of the screens share, named by what the area does. A shape that one region has is written in full until a second one shares it. `draft`: a control that follows a stored value or holds what was typed. In `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the data event `stored`, both under `guard`, and goes back to `following`.',
       "- A region written by its button, `by: <button>`: the region of a button bound to one action (see the rule `button-region`) with what the screen decides of it, its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one; a transition without a target goes back to `idle`.",
     ].join('\n'),
     "The states of a pattern and of a button's region are the machine's, named by the loader (`idle`, `running`, `following`, `edited`), and a scenario or a test reads them as it reads any state. What the shorter forms leave out is mechanics a tester or a user cannot tell apart; a `description` belongs to a decision (where a success leads, what a failure shows, what restarts what), not to every state. The states of a region written by its pattern or by its button list nothing in `meta.renders`.",
@@ -112,6 +113,7 @@ const flowShorterForms: ReferenceRule = {
   keys: [
     'screen.flow.states.<name>.states.<name>.pattern',
     'screen.flow.states.<name>.states.<name>.by',
+    'screen.flow',
   ],
 }
 

@@ -61,7 +61,7 @@ function InvitationOfToken(props: { readonly token: string }) {
       }),
     [organisations, session, props.token],
   )
-  const { state, send, renders } = useScreenMachine('organisation.invitation', machine)
+  const { state, send, renders, can } = useScreenMachine('organisation.invitation', machine)
 
   return (
     <InvitationView
@@ -70,8 +70,7 @@ function InvitationOfToken(props: { readonly token: string }) {
       message={state.context.message}
       error={state.context.error}
       renders={renders}
-      canAccept={state.can(ACCEPT)}
-      canDecline={state.can(DECLINE)}
+      can={can}
       guest={guest}
       onAccept={() => send(ACCEPT)}
       onDecline={() => send(DECLINE)}

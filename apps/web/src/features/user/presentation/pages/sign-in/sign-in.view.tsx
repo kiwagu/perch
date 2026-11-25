@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 
-import { useT } from '@workspace/i18n'
-import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
+import { useLocale, useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -10,9 +10,14 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { SessionNotice } from '../../../../../platform/session.port'
+import type { SignInEvent } from '../../../application/sign-in-machine'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
+
+import { CodeDialog, DeviceLimitDialog } from './sign-in-dialogs.view'
+import { ERROR_FIELDS, errorOf, noticeText } from './sign-in-texts'
 
 /** The rules of a new password the list shows at sign-up, each with its item's anchor. */
 const RULES = [
@@ -35,9 +40,6 @@ export interface SignInValues {
   readonly name: string
 }
 
-/** The buttons the sign-in flow handles: each is enabled while the machine's state does. */
-export type SignInControl = 'user.sign-in.submit-button' | 'user.sign-in.resend-button'
-
 /** The anchors only some states of the flow render: each shows while the machine's state does. */
 export type SignInListed =
   | 'user.sign-in.forgot-link'
@@ -45,7 +47,9 @@ export type SignInListed =
   | 'user.sign-in.password-confirmation-input'
   | 'user.sign-in.name-input'
   | 'user.sign-in.resend-button'
+  | 'user.sign-in.passkey-button'
   | 'user.sign-in.device-limit-dialog'
+  | 'user.sign-in.code.dialog'
 
 /** A password field: the password, or the password typed again. */
 export type PasswordField = keyof Passwords
@@ -73,8 +77,8 @@ export interface SignInViewProps {
   readonly sentTo?: string | undefined
   /** Whether the flow's state renders an anchor: the anchor shows while it does. */
   readonly renders: (anchor: SignInListed) => boolean
-  /** Whether the flow's state handles a button's event: the button is enabled while it does. */
-  readonly can: (control: SignInControl) => boolean
+  /** Whether the flow takes the event now: a button is enabled exactly while it does. */
+  readonly can: (event: SignInEvent) => boolean
   /** Signs in or up with the values: resolves whether it did. */
   readonly onSubmit: (values: SignInValues) => Promise<boolean>
   /** Switches the mode, with both passwords as typed. */
@@ -86,73 +90,32 @@ export interface SignInViewProps {
   /** Moves to asking for a reset mail, carrying the email as typed. */
   readonly onForgot: (email: string) => void
   /**
-   * Signs in all the same past the account's limit of devices, with the values as typed: the
+   * Signs in all the same past the account's limit of devices, as the attempt that asked: the
    * account's device seen least recently is signed out.
    */
-  readonly onConfirmDeviceLimit: (values: SignInValues) => void
+  readonly onConfirmDeviceLimit: () => void
   /** Goes back to the form from the dialog past the limit of devices, signing nothing in. */
   readonly onCancelDeviceLimit: () => void
-}
-
-/** The contract code of a refusal, with its text. */
-function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
-  switch (code) {
-    case 'data:INVALID_CREDENTIALS':
-      return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
-    case 'data:EMAIL_NOT_VERIFIED':
-      return { code: 'email-not-verified', text: t('user.sign-in.error.email-not-verified') }
-    case 'data:ACCOUNT_BANNED':
-      return { code: 'account-banned', text: t('user.sign-in.error.account-banned') }
-    case 'data:SIGN_UP_REJECTED':
-      return { code: 'sign-up-rejected', text: t('user.sign-in.error.sign-up-rejected') }
-    case 'data:RATE_LIMITED':
-      return { code: 'rate-limited', text: t('user.sign-in.error.rate-limited') }
-    case 'data:OTHER_ACCOUNT':
-      return { code: 'other-account', text: t('user.sign-in.error.other-account') }
-    case 'profile:NAME_REQUIRED':
-      return { code: 'name-required', text: t('user.sign-in.error.name-required') }
-    case 'profile:NAME_TOO_LONG':
-      return { code: 'name-too-long', text: t('user.sign-in.error.name-too-long') }
-    case 'sign-in:PASSWORDS_DIFFER':
-      return { code: 'passwords-differ', text: t('user.sign-in.error.passwords-differ') }
-    default:
-      return { code: 'failed', text: t('user.sign-in.error.failed') }
-  }
-}
-
-/** The field a code of `user.sign-in.error` concerns, as the screen's `fields` say. */
-const ERROR_FIELDS: Readonly<Record<string, keyof SignInValues>> = {
-  'passwords-differ': 'confirmation',
-}
-
-/** The text of the notice the last session left. */
-function noticeText(
-  t: ReturnType<typeof useT>,
-  notice: NonNullable<SignInViewProps['notice']>,
-): string {
-  switch (notice) {
-    case 'account-banned':
-      return t('user.sign-in.notice.account-banned')
-    case 'resend-after-sign-in':
-      return t('user.sign-in.notice.resend-after-sign-in')
-    case 'signed-out-elsewhere':
-      return t('user.sign-in.notice.signed-out-elsewhere')
-    case 'password-changed-elsewhere':
-      return t('user.sign-in.notice.password-changed-elsewhere')
-    case 'device-limit-elsewhere':
-      return t('user.sign-in.notice.device-limit-elsewhere')
-    case 'password-reset-elsewhere':
-      return t('user.sign-in.notice.password-reset-elsewhere')
-    case 'delete-pending':
-      return t('user.sign-in.notice.delete-pending')
-  }
+  /** What is typed in the code of the dialog of the second factor. */
+  readonly code: string
+  /** The code of the last refusal of the code, which the dialog shows under its field. */
+  readonly codeError?: string | undefined
+  /** A keystroke in the code. */
+  readonly onTypeCode: (code: string) => void
+  /** Signs in with the code as typed. */
+  readonly onConfirmCode: () => void
+  /** Goes back to the form from the dialog of the code: the sign-in starts again from the password. */
+  readonly onCancelCode: () => void
+  /** Signs in with a passkey, which the browser asks for. */
+  readonly onPasskey: () => void
 }
 
 export function SignInView(props: SignInViewProps) {
   const t = useT()
+  const locale = useLocale()
   const ids = { email: useId(), password: useId(), confirmation: useId(), name: useId() }
-  // The error under the password typed again describes that field while it shows there.
-  const confirmationErrorId = useId()
+  // The error under a field describes that field while it shows there.
+  const errorIds = { name: useId(), confirmation: useId() }
   // The rules of a new password describe the password while an account is created.
   const rulesId = useId()
   const [values, setValues] = useState<SignInValues>({
@@ -183,7 +146,13 @@ export function SignInView(props: SignInViewProps) {
     },
   })
   const error = props.error ? errorOf(t, props.error) : undefined
-  const concerns = error ? ERROR_FIELDS[error.code] : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  const under = (key: 'name' | 'confirmation') =>
+    error && concerns === key ? (
+      <FieldError id={errorIds[key]} data-testid={SIGN_IN_ERROR_TEST_ID} data-code={error.code}>
+        {error.text}
+      </FieldError>
+    ) : null
 
   return (
     <Card className="mx-auto w-full max-w-sm">
@@ -212,7 +181,7 @@ export function SignInView(props: SignInViewProps) {
                 </AlertDescription>
               </Alert>
             ) : null}
-            {error && !concerns ? (
+            {error && concerns === undefined ? (
               <Alert variant="destructive">
                 <AlertDescription data-testid={SIGN_IN_ERROR_TEST_ID} data-code={error.code}>
                   {error.text}
@@ -223,10 +192,8 @@ export function SignInView(props: SignInViewProps) {
               <FieldLabel htmlFor={ids.email}>{t('user.sign-in.email')}</FieldLabel>
               <Input
                 {...field('email')}
-                type="email"
                 autoComplete="email"
                 required
-                marksState={false}
                 data-testid="user.sign-in.email-input"
               />
             </Field>
@@ -241,7 +208,6 @@ export function SignInView(props: SignInViewProps) {
                 }
                 showLabel={t('user.password.show')}
                 hideLabel={t('user.password.hide')}
-                marksState={false}
                 testId="user.sign-in.password-input"
               />
               {props.renders('user.sign-in.password-rule-list') ? (
@@ -255,7 +221,7 @@ export function SignInView(props: SignInViewProps) {
               {props.renders('user.sign-in.forgot-link') ? (
                 // The flow moves, carrying the email typed; the address is there for a new tab.
                 <a
-                  href="/forgot-password"
+                  href={CONTRACT_ROUTES['user.forgot-password']}
                   className="self-start text-sm underline"
                   onClick={(event) => {
                     event.preventDefault()
@@ -277,45 +243,67 @@ export function SignInView(props: SignInViewProps) {
                   autoComplete="new-password"
                   required
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
-                  aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
+                  aria-describedby={concerns === 'confirmation' ? errorIds.confirmation : undefined}
                   showLabel={t('user.password.show')}
                   hideLabel={t('user.password.hide')}
-                  marksState={false}
                   testId="user.sign-in.password-confirmation-input"
                 />
-                {error && concerns === 'confirmation' ? (
-                  <FieldError
-                    id={confirmationErrorId}
-                    data-testid={SIGN_IN_ERROR_TEST_ID}
-                    data-code={error.code}
-                  >
-                    {error.text}
-                  </FieldError>
-                ) : null}
+                {under('confirmation')}
               </Field>
             ) : null}
             {props.renders('user.sign-in.name-input') ? (
-              <Field>
+              <Field data-invalid={concerns === 'name' ? true : undefined}>
                 <FieldLabel htmlFor={ids.name}>{t('user.sign-in.name')}</FieldLabel>
                 <Input
                   {...field('name')}
                   autoComplete="name"
                   required
-                  marksState={false}
+                  aria-invalid={concerns === 'name' ? true : undefined}
+                  aria-describedby={concerns === 'name' ? errorIds.name : undefined}
                   data-testid="user.sign-in.name-input"
                 />
+                {under('name')}
               </Field>
             ) : null}
             <Button
               type="submit"
-              disabled={!props.can('user.sign-in.submit-button')}
+              disabled={
+                !props.can({
+                  type: 'user.sign-in.submit-button',
+                  form: {
+                    email: values.email,
+                    password: values.password,
+                    name: values.name,
+                    locale,
+                  },
+                  confirmation: values.confirmation,
+                })
+              }
               data-testid="user.sign-in.submit-button"
             >
               {signingUp ? t('user.sign-in.sign-up') : t('user.sign-in.sign-in')}
             </Button>
+            {props.renders('user.sign-in.passkey-button') ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!props.can({ type: 'user.sign-in.passkey-button' })}
+                onClick={() => props.onPasskey()}
+                data-testid="user.sign-in.passkey-button"
+              >
+                {t('user.sign-in.passkey')}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="link"
+              disabled={
+                !props.can({
+                  type: 'user.sign-in.toggle-button',
+                  password: values.password,
+                  confirmation: values.confirmation,
+                })
+              }
               onClick={() =>
                 props.onToggleMode({ password: values.password, confirmation: values.confirmation })
               }
@@ -328,7 +316,7 @@ export function SignInView(props: SignInViewProps) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={!props.can('user.sign-in.resend-button')}
+                disabled={!props.can({ type: 'user.sign-in.resend-button', email: values.email })}
                 onClick={() => void props.onResend(values.email)}
                 data-testid="user.sign-in.resend-button"
               >
@@ -337,17 +325,19 @@ export function SignInView(props: SignInViewProps) {
             ) : null}
           </FieldGroup>
         </Form>
-        <ConfirmDialog
+        <DeviceLimitDialog
           open={props.renders('user.sign-in.device-limit-dialog')}
-          title={t('user.sign-in.device-limit.title')}
-          description={t('user.sign-in.device-limit.body')}
-          confirmLabel={t('user.sign-in.device-limit.confirm')}
-          cancelLabel={t('user.sign-in.device-limit.cancel')}
-          destructive
-          onConfirm={() => props.onConfirmDeviceLimit(values)}
+          onConfirm={() => props.onConfirmDeviceLimit()}
           onCancel={() => props.onCancelDeviceLimit()}
-          testId="user.sign-in.device-limit-dialog"
-          code="device-limit"
+        />
+        <CodeDialog
+          open={props.renders('user.sign-in.code.dialog')}
+          code={props.code}
+          error={props.codeError}
+          can={props.can}
+          onType={props.onTypeCode}
+          onConfirm={props.onConfirmCode}
+          onCancel={props.onCancelCode}
         />
       </CardContent>
     </Card>

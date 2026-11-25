@@ -1,11 +1,30 @@
 import { fileURLToPath } from 'node:url'
 
-import base, { importBoundaries } from '@workspace/eslint-config'
+import base, { contractTerms, importBoundaries } from '@workspace/eslint-config'
 
 const path = (relative) => fileURLToPath(new URL(relative, import.meta.url))
 
 export default [
   ...base,
+  // The engine's and the lint rules' own fixtures hold, on purpose, what their checks refuse, and
+  // belong to no project of the type checker; every other block skips fixtures already.
+  {
+    ignores: [
+      'packages/ui-contract/src/__fixtures__/**',
+      'packages/eslint-config/src/__fixtures__/**',
+    ],
+  },
+  // The roles and the routes of the contract are named through the module the kernel emits from
+  // it, never written by hand where the code expects one; by value too where no other path is
+  // written (the e2e tests and the web app's screens, not its adapters to the gateway's API).
+  ...contractTerms({
+    module: path('./packages/kernel/src/contract-terms.gen.ts'),
+    files: ['**/*.{ts,tsx}'],
+    routeValues: {
+      files: ['tests/e2e/**/*.{ts,tsx}', 'apps/web/src/**/*.{ts,tsx}'],
+      ignores: ['apps/web/src/composition/**'],
+    },
+  }),
   importBoundaries({
     modules: [
       {
@@ -41,7 +60,7 @@ export default [
     // is the kit's, whose saved submit clears its fields' unsaved input. The shared config's raw
     // fields are listed again, since this block's list replaces its list for these files.
     files: ['apps/web/src/features/**/presentation/**/*.{ts,tsx}'],
-    ignores: ['**/*.spec.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}', '**/__fixtures__/**'],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',

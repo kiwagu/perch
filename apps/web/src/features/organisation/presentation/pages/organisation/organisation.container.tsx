@@ -2,7 +2,8 @@ import { errAsync, type ResultAsync } from 'neverthrow'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
 import type { BusError } from '@workspace/cqrs'
-import { ownerKeyOf } from '@workspace/kernel'
+import { SUPPORTED_LOCALES } from '@workspace/i18n'
+import { CONTRACT_ROLES, ownerKeyOf } from '@workspace/kernel'
 
 import { CLIPBOARD } from '../../../../../platform/clipboard.port'
 import { useFieldClears } from '../../../../../platform/field-clears'
@@ -14,11 +15,17 @@ import { useListed } from '../../../../../platform/use-listed'
 import { NOTES_SERVICE } from '../../../application/notes.service'
 import { ORGANISATION_SERVICE } from '../../../application/organisation.service'
 import { createOrganisationMachine } from '../../../application/organisation-machine'
+import { organisationSettingsShape } from '../../../application/organisation-settings/organisation-settings.model.gen'
+import { ORGANISATION_SETTINGS_SERVICE } from '../../../application/organisation-settings/organisation-settings.service'
+import { organisationSettingsIdOf } from '../../../application/organisation-settings/organisation-settings-id'
 
 import { organisationShape } from './organisation.model.gen'
-import { type OrganisationChoice, OrganisationView } from './organisation.view'
+import { type CreateDraft, type OrganisationChoice, OrganisationView } from './organisation.view'
 import { roleShown } from './role-shown'
 import { useInviteDraft } from './use-invite-draft'
+import { useOrganisationDraft } from './use-organisation-draft'
+
+const NO_CREATE: CreateDraft = { key: '', name: '' }
 
 const choice = (membership: {
   readonly tenant: { readonly key: string; readonly name: string }
@@ -45,6 +52,7 @@ export function OrganisationContainer() {
   const session = useService(SESSION)
   const organisations = useService(ORGANISATION_SERVICE)
   const notes = useService(NOTES_SERVICE)
+  const settings = useService(ORGANISATION_SETTINGS_SERVICE)
   const clipboard = useService(CLIPBOARD)
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
@@ -69,7 +77,18 @@ export function OrganisationContainer() {
     deletable: ability.can('delete', 'note', note),
   }))
   const key = current?.tenant.key
-  const admin = current?.role === 'admin' ? key : undefined
+  const admin = current?.role === CONTRACT_ROLES.admin ? key : undefined
+  // The current organisation's settings row, which its admin's tab creates once it caught up.
+  const { tree: settingsRows } = useShape(
+    organisationSettingsShape,
+    key === undefined ? null : { id: organisationSettingsIdOf(key) },
+  )
+  const settingsRow = settingsRows?.[0]
+  const defaultLanguage = SUPPORTED_LOCALES.find((locale) => locale === settingsRow?.locale)
+  // The flow takes a choice of the default language once the row is on this device.
+  const defaultsHeld = useRef(false)
+
+  defaultsHeld.current = settingsRow !== undefined
   // The link a copy puts on the clipboard is the one the list shows now.
   const sent = useRef<readonly InvitationView[] | undefined>(undefined)
   // Each write reads the organisation current, and the account signed in, when it runs.
@@ -106,10 +125,16 @@ export function OrganisationContainer() {
       },
       accept: (invitation) => organisations.accept(invitation),
       decline: (invitation) => organisations.decline(invitation),
+      // The organisation acted on is the one current when the change starts, whichever is later.
+      setDefaultLanguage: (locale) =>
+        inOrganisation((organisation) => settings.setLanguage(organisation, locale)),
+      clearDefaultLanguage: () =>
+        inOrganisation((organisation) => settings.clearLanguage(organisation)),
+      defaultsHeld: () => defaultsHeld.current,
       account: () => session.current()?.id,
       current: at,
     })
-  }, [organisations, notes, session, clipboard])
+  }, [organisations, notes, settings, session, clipboard])
   const { state, send, submit, renders, actor } = useScreenMachine('organisation', machine)
   // An administrator sees the members and the invitations sent, and the account the invitations
   // for it: each is read when it starts to show and again each time the flow reads it (`read`).
@@ -130,12 +155,18 @@ export function OrganisationContainer() {
   )
 
   sent.current = invitations.list
-  // The invitation form empties as the flow says once an invitation is sent.
+  // The forms' fields, typed in the organisation shown: the flow empties them once their action
+  // is done (an invitation sent, an organisation created, a note written).
   const invite = useInviteDraft(key)
+  const create = useOrganisationDraft(key, NO_CREATE)
+  const note = useOrganisationDraft(key, '')
 
   useFieldClears(actor, {
     'organisation.invite.email-input': invite.clearEmail,
     'organisation.invite.role-select': invite.clearRole,
+    'organisation.create.key-input': () => create.change((draft) => ({ ...draft, key: '' })),
+    'organisation.create.name-input': () => create.change((draft) => ({ ...draft, name: '' })),
+    'organisation.notes.new-textarea': () => note.change(() => ''),
   })
 
   const { errors, changingRole, rolesSet } = state.context
@@ -187,6 +218,10 @@ export function OrganisationContainer() {
       }
       editing={editing ? state.context.editing : undefined}
       onToggleCreate={() => send({ type: 'organisation.create.toggle-button' })}
+      create={create.draft}
+      onCreateChange={(draft) => create.change(() => draft)}
+      newNote={note.draft}
+      onNewNoteChange={(text) => note.change(() => text)}
       onCreate={(input) => submit({ type: 'organisation.create.submit-button', ...input })}
       // A switch of organisation leaves what was typed for this one: the hook asks the frame first.
       onSelect={(next) => send({ type: 'organisation.page.current-select', key: next })}
@@ -205,6 +240,11 @@ export function OrganisationContainer() {
       onRevoke={(invitation) => send({ type: 'organisation.sent.revoke-button', invitation })}
       onAccept={(invitation) => send({ type: 'organisation.received.accept-button', invitation })}
       onDecline={(invitation) => send({ type: 'organisation.received.decline-button', invitation })}
+      defaultLanguage={defaultLanguage}
+      onChooseDefaultLanguage={(locale) =>
+        send({ type: 'organisation.settings.locale-select', locale })
+      }
+      onClearDefaultLanguage={() => send({ type: 'organisation.settings.clear-button' })}
     />
   )
 }

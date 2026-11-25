@@ -12,7 +12,7 @@ import {
 } from '../../support/organisation'
 
 test.describe('Revoke an invitation', { tag: '@full' }, () => {
-  test('An administrator revokes a pending invitation once the frame has asked; its link then no longer works, and the invited account has no invitation', async ({
+  test('An admin revokes a pending invitation once the frame has asked; its link then no longer works, and the invited account has no invitation', async ({
     page,
     anotherAccount,
   }) => {

@@ -4,6 +4,7 @@
  * the stand's mailbox, which sets a new password and signs every device of the account out.
  */
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { firstLink, type Mailbox } from '@workspace/mailbox'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
@@ -26,7 +27,10 @@ function resetToken(mail: Parameters<typeof firstLink>[0]): string {
   const url = URL.parse(firstLink(mail))
   const token = url?.searchParams.get('token') ?? ''
 
-  check(url?.pathname === '/reset-password', 'the link does not open /reset-password')
+  check(
+    url?.pathname === CONTRACT_ROUTES['user.reset-password'],
+    `the link does not open ${CONTRACT_ROUTES['user.reset-password']}`,
+  )
   check(token !== '', 'the link carries no token')
 
   return token
@@ -96,8 +100,9 @@ export async function passwordResetSteps(
   )
 
   const password = freshPassword()
-  const token = await step('the reset mail links to /reset-password with a token', async () =>
-    resetToken(await mailbox.next(account.email, seen)),
+  const token = await step(
+    `the reset mail links to ${CONTRACT_ROUTES['user.reset-password']} with a token`,
+    async () => resetToken(await mailbox.next(account.email, seen)),
   )
 
   await step(

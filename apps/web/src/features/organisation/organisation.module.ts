@@ -1,5 +1,6 @@
 import { SHAPE_RUNNER } from '@workspace/data'
 import { replicaSchema } from '@workspace/database/replica-schema'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { COMMANDS } from '../../platform/commands.port'
@@ -7,9 +8,15 @@ import { INVITATIONS } from '../../platform/invitations.port'
 import { defineModule } from '../../platform/module'
 import { ORGANISATIONS } from '../../platform/organisations.port'
 import { SESSION } from '../../platform/session.port'
+import { TENANT_COMMANDS } from '../../platform/tenant-commands.port'
 
 import { NOTES_SERVICE, NotesService } from './application/notes.service'
 import { ORGANISATION_SERVICE, OrganisationService } from './application/organisation.service'
+import { organisationSettingsCommands } from './application/organisation-settings/organisation-settings.model.gen'
+import {
+  ORGANISATION_SETTINGS_SERVICE,
+  OrganisationSettingsService,
+} from './application/organisation-settings/organisation-settings.service'
 import { InvitationContainer } from './presentation/pages/invitation/invitation.container'
 import { OrganisationContainer } from './presentation/pages/organisation/organisation.container'
 import {
@@ -36,6 +43,23 @@ export const OrganisationModule = defineModule({
         ),
     },
     {
+      provide: ORGANISATION_SETTINGS_SERVICE,
+      useFactory: (container) =>
+        new OrganisationSettingsService(
+          container.get(TENANT_COMMANDS),
+          { commands: organisationSettingsCommands },
+          () => container.get(ORGANISATION_SERVICE).ability(),
+          (key) =>
+            container
+              .get(ORGANISATION_SERVICE)
+              .memberships()
+              .some(
+                (membership) =>
+                  membership.tenant.key === key && membership.role === CONTRACT_ROLES.admin,
+              ),
+        ),
+    },
+    {
       provide: ORGANISATION_SERVICE,
       useFactory: (container) =>
         new OrganisationService(
@@ -49,16 +73,16 @@ export const OrganisationModule = defineModule({
   declarations: { OrganisationPage: OrganisationContainer, InvitationPage: InvitationContainer },
   routes: [
     {
-      path: '/org',
+      path: CONTRACT_ROUTES.organisation,
       page: 'OrganisationPage',
       guard: 'authenticated',
-      roles: ['identity', 'member', 'admin'],
+      roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
     },
     // Open to anyone: the link says what it offers, and a guest is asked to sign in first.
     {
-      path: '/invitation',
+      path: CONTRACT_ROUTES['organisation.invitation'],
       page: 'InvitationPage',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
   ],

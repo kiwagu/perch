@@ -28,8 +28,13 @@ import {
 } from '../features/user/presentation/pages/profile/profile.model.gen'
 import type { CommandsPort } from '../platform/commands.port'
 
-import { fakeGatewayAuth, verifiedElsewhere } from './__fixtures__/gateway-auth'
-import { browserDatabases, openTestWorld, type TestWorld } from './__fixtures__/session'
+import { fakeGatewayAuth, signedDevice, verifiedElsewhere } from './__fixtures__/gateway-auth'
+import {
+  browserDatabases,
+  openTestWorld,
+  signedInUser,
+  type TestWorld,
+} from './__fixtures__/session'
 import { signedIn } from './__fixtures__/signed-in'
 import {
   ACCOUNT_START_LOCK,
@@ -255,9 +260,10 @@ describe('a start a sign-in learnt of', () => {
     const starting: GatewayAuth = {
       ...auth,
       signIn: (input, device) =>
-        auth
-          .signIn(input, device)
-          .map((signed) => ({ ...signed, start: { name: 'Ann', locale: 'es' as const } })),
+        auth.signIn(input, device).map((signed) => ({
+          kind: 'signed-in' as const,
+          device: { ...signedDevice(signed), start: { name: 'Ann', locale: 'es' as const } },
+        })),
     }
 
     return { auth: starting, signUp }
@@ -339,7 +345,7 @@ describe('a start a sign-in learnt of', () => {
   it('creates the settings and the profile once the device pulled what the account has: nothing', async () => {
     const { auth, signUp } = await annElsewhere()
     const { world, settings, profiles } = await browser(auth)
-    const user = (await world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await world.session.signIn(signUp))._unsafeUnwrap())
 
     await vi.waitFor(() => expect(keptAccountStart(world.storage).kept(user.id)).toBeUndefined())
     expect((await settings.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
@@ -353,7 +359,7 @@ describe('a start a sign-in learnt of', () => {
   it('creates nothing over what another device started and changed before this one pulled it', async () => {
     const { auth, signUp } = await annElsewhere()
     const first = await browser(auth)
-    const user = (await first.world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await first.world.session.signIn(signUp))._unsafeUnwrap())
 
     // The first device starts the account, then changes its language, and syncs it all.
     await vi.waitFor(() =>
@@ -409,9 +415,10 @@ describe('a start a sign-in learnt of', () => {
     const starting: GatewayAuth = {
       ...auth,
       signIn: (input, device) =>
-        auth
-          .signIn(input, device)
-          .map((signed) => ({ ...signed, start: { name: 'Ann', locale: 'es' as const } })),
+        auth.signIn(input, device).map((signed) => ({
+          kind: 'signed-in' as const,
+          device: { ...signedDevice(signed), start: { name: 'Ann', locale: 'es' as const } },
+        })),
     }
     const created: string[] = []
     // The verifying browser reaches the gateway only once the spec lets it.
@@ -422,7 +429,7 @@ describe('a start a sign-in learnt of', () => {
 
     // Meanwhile another browser signs in, starts the account, changes its language, syncs it all.
     const other = await browser(starting, verifying.world.gateway)
-    const user = (await other.world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await other.world.session.signIn(signUp))._unsafeUnwrap())
 
     await vi.waitFor(() =>
       expect(keptAccountStart(other.world.storage).kept(user.id)).toBeUndefined(),
@@ -473,7 +480,7 @@ describe('a start a sign-in learnt of', () => {
         },
       }),
     })
-    const user = (await world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await world.session.signIn(signUp))._unsafeUnwrap())
 
     await vi.waitFor(() => expect(logged).toEqual(['account-start: data:WRITE_FAILED']))
     expect(keptAccountStart(world.storage).kept(user.id)).toMatchObject({ identity: user.id })
@@ -491,7 +498,7 @@ describe('a start a sign-in learnt of', () => {
   it('creates nothing while the pull of the private region failed to import, and starts the account once it recovered', async () => {
     const { auth, signUp } = await annElsewhere()
     const first = await browser(auth)
-    const user = (await first.world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await first.world.session.signIn(signUp))._unsafeUnwrap())
 
     // The first device starts the account and changes its language; the gateway holds both.
     await vi.waitFor(() =>

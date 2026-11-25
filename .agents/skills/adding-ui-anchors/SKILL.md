@@ -60,7 +60,10 @@ code and the tests follow; the checks hold them to the contract.
    `notices` (`contract/REFERENCE.md#rule-check-platform`; `references/patterns.md`, "A notice
    mail"). Every action, of the platform or of the model, declares the reads it changes under
    `changes`, `[]` for none (`contract/REFERENCE.md#rule-read-after-an-action`,
-   `contract/REFERENCE.md#platform-actions-name-changes`).
+   `contract/REFERENCE.md#platform-actions-name-changes`). A platform action writes its
+   `result` as outcome lines and each code with the condition it answers on; a rule several
+   actions keep is an invariant of `platform.invariants`, named under its code by each of them
+   and never restated (`contract/REFERENCE.md#rule-action-outcomes`).
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`; `contract/REFERENCE.md#rule-anchor-grammar`). The name
@@ -108,12 +111,12 @@ code and the tests follow; the checks hold them to the contract.
    `contract/REFERENCE.md#rule-flow-shorter-forms` and `contract/REFERENCE.md#rule-renders`
    (`references/patterns.md`, "What a state renders" and "A guard by failure code"). A toast
    code the contract derives is written only in the frame's map (`contract/REFERENCE.md#rule-success-toast`).
-   Whether a field holds input is derived (`contract/REFERENCE.md#rule-field-holds-input`), and a
+   Whether a field holds input is derived (`contract/REFERENCE.md#rule-field-holds-input`), a
    field's state colour is turned off with `marksState: false`, never on a form
-   (`contract/REFERENCE.md#screen-anchors-name-marksstate`); the kit takes both from the
-   generated field facts, so a view may leave `holdsInput={false}` and `marksState={false}` out,
-   and one it writes is held to the contract (`contract/REFERENCE.md#rule-check-sources`,
-   `contract/REFERENCE.md#rule-emitted-modules`);
+   (`contract/REFERENCE.md#screen-anchors-name-marksstate`); these and the limit and the type
+   of a text field are the contract's, and a view writes none of them: the kit takes them from the
+   generated field facts, and the sources check refuses a view that does
+   (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-emitted-modules`);
    a field that holds a secret says `secret: true`, and the loader derives its `visibility-button`
    from version 4 (a file of version 3 or below may list `derived: [ visibility-button ]`;
    `contract/REFERENCE.md#rule-kind-parts`, `contract/REFERENCE.md#rule-visibility-button`;

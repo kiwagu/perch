@@ -1,12 +1,16 @@
 // scenario: organisation/flows/edit-own-admin-any
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, pageLoads, signUp, test } from '../../support/fixtures'
 import { acceptOnOrg, createOrganisation, inviteEmail, noteItem } from '../../support/organisation'
+import { atRoute } from '../../support/routes'
 
-test.describe('Edit only your own notes; an administrator edits any', {
+test.describe('Edit only your own notes; an admin edits any', {
   tag: '@full',
 }, () => {
-  test('A member changes only its own notes, an administrator any, and both see every change', async ({
+  test('A member changes only its own notes, an admin any, and both see every change', async ({
     page,
     anotherAccount,
   }, testInfo) => {
@@ -57,7 +61,7 @@ test.describe('Edit only your own notes; an administrator edits any', {
 
     await test.step("5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
       await acceptOnOrg(deviceB, data.name)
-      await expect(deviceB).toHaveURL(/\/org$/)
+      await expect(deviceB).toHaveURL(atRoute(CONTRACT_ROUTES.organisation))
       await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name, {
         timeout: 10_000,
       })

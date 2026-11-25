@@ -1,9 +1,7 @@
-import type { ErrorPart } from './events'
-
 /**
  * The effects of the screen's flow, as its transitions list them: a `show` of the codes an anchor
- * may carry, or of a toast, which `contract:flow organisation` prints and
- * `platform/machines.spec.ts` compares exactly.
+ * may carry, or of a toast, a `clear` of an error or of a field, a `read` of a list, which
+ * `contract:flow organisation` prints and `platform/machines.spec.ts` compares exactly.
  */
 
 export const CREATE_REFUSED = {
@@ -65,6 +63,11 @@ export const ACCEPT_REFUSED = {
     codes: ['invitation-gone', 'other-account', 'already-member', 'failed'],
   },
 } as const
+export const SETTINGS_REFUSED = {
+  type: 'show',
+  params: { anchor: 'organisation.settings.error', codes: ['forbidden', 'failed'] },
+} as const
+
 export const DECLINE_REFUSED = {
   type: 'show',
   params: {
@@ -72,15 +75,23 @@ export const DECLINE_REFUSED = {
     codes: ['invitation-gone', 'other-account', 'failed'],
   },
 } as const
+
+const cleared = <Anchor extends string>(anchor: Anchor) =>
+  ({ type: 'clear', params: { anchor } }) as const
+
+/** The page's errors that go once a change of their part is done. */
+export const CLEAR_NOTES_ERROR = cleared('organisation.notes.error')
+export const CLEAR_INVITE_ERROR = cleared('organisation.invite.error')
+export const CLEAR_RECEIVED_ERROR = cleared('organisation.received.error')
+export const CLEAR_SETTINGS_ERROR = cleared('organisation.settings.error')
 /** The fields the invitation's form empties once it is mailed. */
-export const CLEAR_EMAIL = {
-  type: 'clear',
-  params: { anchor: 'organisation.invite.email-input' },
-} as const
-export const CLEAR_ROLE = {
-  type: 'clear',
-  params: { anchor: 'organisation.invite.role-select' },
-} as const
+export const CLEAR_EMAIL = cleared('organisation.invite.email-input')
+export const CLEAR_ROLE = cleared('organisation.invite.role-select')
+/** The fields the create form empties once the organisation is created. */
+export const CLEAR_KEY = cleared('organisation.create.key-input')
+export const CLEAR_NAME = cleared('organisation.create.name-input')
+/** The field the new note is typed in, emptied once the note is written. */
+export const CLEAR_NEW_NOTE = cleared('organisation.notes.new-textarea')
 export const REMOVE_REFUSED = {
   type: 'show',
   params: { anchor: 'organisation.invite.error', codes: ['not-admin', 'failed'] },
@@ -99,6 +110,3 @@ export interface ListRead {
 export const READ_MEMBERS = { type: 'read', params: { anchor: MEMBERS_LIST } } as const
 export const READ_SENT = { type: 'read', params: { anchor: SENT_LIST } } as const
 export const READ_RECEIVED = { type: 'read', params: { anchor: RECEIVED_LIST } } as const
-
-/** Forgets the error of a part once a change of that part was done. */
-export const forget = (part: ErrorPart) => ({ type: 'forget', params: { part } }) as const

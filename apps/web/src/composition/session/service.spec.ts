@@ -10,6 +10,7 @@ import {
   profileIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { CLOSE, type Membership } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks, interceptRegionResets } from '@workspace/replica/testing'
@@ -21,6 +22,7 @@ import { createProfile, profileById } from '../__fixtures__/profile'
 import {
   browserDatabases,
   openTestWorld,
+  signedInUser,
   signUpVerified,
   TEST_DEVICE_LABEL,
   type TestWorld,
@@ -60,12 +62,12 @@ const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'A
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const globex: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /** Ann's token as a sign-out on device `device-1` left it to sign out. */
@@ -79,7 +81,7 @@ const signingIn = (device: SignedInDevice): GatewayAuth => ({
   // What else the gateway does is not in these tests.
   ...fakeGatewayAuth(),
   signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
-  signIn: () => okAsync(device),
+  signIn: () => okAsync({ kind: 'signed-in', device }),
   verifyEmail: () => errAsync(dataError('data:LINK_INVALID', 'not in this test')),
   resendVerification: () => errAsync(dataError('data:WRITE_REJECTED', 'not in this test')),
   signOut: () => okAsync(undefined),
@@ -1112,7 +1114,7 @@ describe('SessionService', () => {
     holding.release()
 
     // One account per browser: Bob is signed in once Ann's turn comes.
-    expect((await first)._unsafeUnwrap().email).toBe(bobSignUp.email)
+    expect(signedInUser((await first)._unsafeUnwrap()).email).toBe(bobSignUp.email)
     expect((await second)._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
     expect(session.current()?.email).toBe(bobSignUp.email)
     expect(session.space()?.identity.email).toBe(bobSignUp.email)
@@ -1299,7 +1301,7 @@ describe('SessionService memberships', () => {
     expect(tenantsDeleted()).toEqual([])
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
 
-    expect((await session.signIn(annSignUp))._unsafeUnwrap()).toEqual(ann.identity)
+    expect(signedInUser((await session.signIn(annSignUp))._unsafeUnwrap())).toEqual(ann.identity)
     await vi.waitFor(() => expect(tenantsDeleted()).toEqual(['acme']))
     expect(session.space()?.tenants()).toEqual([])
     expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
@@ -1330,7 +1332,10 @@ describe('SessionService memberships', () => {
       ...fakeGatewayAuth(),
       signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
       signIn: (input) =>
-        okAsync(answers.get(input.email) ?? expect.unreachable(`an account for ${input.email}`)),
+        okAsync({
+          kind: 'signed-in',
+          device: answers.get(input.email) ?? expect.unreachable(`an account for ${input.email}`),
+        }),
       verifyEmail: () => errAsync(dataError('data:LINK_INVALID', 'not in this test')),
       resendVerification: () => errAsync(dataError('data:WRITE_REJECTED', 'not in this test')),
       signOut: () => okAsync(undefined),
@@ -1358,7 +1363,7 @@ describe('SessionService memberships', () => {
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
 
     // Bob signs in on the same browser and opens Globex: Ann's Acme stays counted.
-    expect((await session.signIn(bobSignUp))._unsafeUnwrap()).toEqual(bob.identity)
+    expect(signedInUser((await session.signIn(bobSignUp))._unsafeUnwrap())).toEqual(bob.identity)
     await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['globex']))
     expect(savedTenantDatabases(storage, bob.identity.id)).toEqual(['globex'])
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
@@ -1375,7 +1380,7 @@ describe('SessionService memberships', () => {
 
     // Ann is removed from Acme while she is signed out: her next sign-in reads it no more.
     memberships.set(ann.token, [])
-    expect((await session.signIn(annSignUp))._unsafeUnwrap()).toEqual(ann.identity)
+    expect(signedInUser((await session.signIn(annSignUp))._unsafeUnwrap())).toEqual(ann.identity)
     await vi.waitFor(() => expect(tenantsDeletedOf(ann.identity.id)).toEqual(['acme']))
     expect(session.space()?.tenants()).toEqual([])
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual([])

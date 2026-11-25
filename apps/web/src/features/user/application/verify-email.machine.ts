@@ -1,6 +1,8 @@
 import type { ResultAsync } from 'neverthrow'
 import { assertEvent, assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { failureOf, settled } from '../../../platform/actor-outcome'
 import type { EmailVerified } from '../../../platform/session.port'
 
@@ -156,7 +158,7 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
                   type: 'show',
                   params: { anchor: 'app-shell.notice-message', codes: ['welcome'] },
                 },
-                { type: 'navigate', params: { to: '/me' } },
+                { type: 'navigate', params: { to: CONTRACT_ROUTES['user.profile'] } },
               ],
             },
             {

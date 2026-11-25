@@ -5,6 +5,7 @@ import { okAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
@@ -70,14 +71,25 @@ function open(at: string) {
     },
     routes: [
       {
-        path: '/forgot-password',
+        path: CONTRACT_ROUTES['user.forgot-password'],
         page: 'Forgot',
         guard: 'guest',
-        roles: ['guest'],
+        roles: [CONTRACT_ROLES.guest],
         search: EMAIL_SEARCH,
       },
-      { path: '/sign-in', page: 'SignIn', guard: 'guest', roles: ['guest'], search: EMAIL_SEARCH },
-      { path: '/me', page: 'Me', guard: 'authenticated', roles: ['identity'] },
+      {
+        path: CONTRACT_ROUTES['user.sign-in'],
+        page: 'SignIn',
+        guard: 'guest',
+        roles: [CONTRACT_ROLES.guest],
+        search: EMAIL_SEARCH,
+      },
+      {
+        path: CONTRACT_ROUTES['user.profile'],
+        page: 'Me',
+        guard: 'authenticated',
+        roles: [CONTRACT_ROLES.identity],
+      },
     ],
   })
   const router = createAppRouter({
@@ -114,7 +126,9 @@ async function send(): Promise<void> {
 
 describe('ForgotPasswordContainer', () => {
   it('fills the email from the address and asks for the mail with it', async () => {
-    const { requestPasswordReset } = open('/forgot-password?email=ann%40example.test')
+    const { requestPasswordReset } = open(
+      `${CONTRACT_ROUTES['user.forgot-password']}?email=ann%40example.test`,
+    )
 
     expect((await emailInput()).value).toBe('ann@example.test')
 
@@ -124,13 +138,13 @@ describe('ForgotPasswordContainer', () => {
   })
 
   it('starts empty without an email in the address', async () => {
-    open('/forgot-password')
+    open(CONTRACT_ROUTES['user.forgot-password'])
 
     expect((await emailInput()).value).toBe('')
   })
 
   it('follows a new password set in another tab once the mail was asked for: it leaves the sign-in page its word, then moves there with the email as typed', async () => {
-    const { happened, router, services } = open('/forgot-password')
+    const { happened, router, services } = open(CONTRACT_ROUTES['user.forgot-password'])
 
     fireEvent.change(await emailInput(), { target: { value: 'ann@example.test' } })
     await send()
@@ -139,13 +153,13 @@ describe('ForgotPasswordContainer', () => {
     act(() => services.platformEvent({ type: 'platform.password-reset' }))
 
     await screen.findByText('sign-in')
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(router.state.location.search).toEqual({ email: 'ann.b@example.test' })
     expect(happened).toEqual(['notice password-reset-elsewhere', 'sign-in'])
   })
 
   it('leaves for the profile once another tab signs the browser in, so a reset that comes before the sign-out it causes moves nothing and leaves no word; the sign-out then ends the tab on the sign-in page', async () => {
-    const { leaveNotice, router, services, tell } = open('/forgot-password')
+    const { leaveNotice, router, services, tell } = open(CONTRACT_ROUTES['user.forgot-password'])
 
     fireEvent.change(await emailInput(), { target: { value: 'ann@example.test' } })
     await send()
@@ -157,25 +171,27 @@ describe('ForgotPasswordContainer', () => {
     // The reset is done elsewhere while this tab's sign-out by it is still pending.
     act(() => services.platformEvent({ type: 'platform.password-reset' }))
 
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
     expect(leaveNotice).not.toHaveBeenCalled()
 
     // The sign-out the reset caused reaches this tab: the session's own word is the one left.
     act(() => tell(undefined))
 
     await screen.findByText('sign-in')
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(router.state.location.search).toEqual({})
     expect(leaveNotice).not.toHaveBeenCalled()
   })
 
   it('stays when a new password is set in another tab before it asked for the mail', async () => {
-    const { leaveNotice, router, services } = open('/forgot-password?email=ann%40example.test')
+    const { leaveNotice, router, services } = open(
+      `${CONTRACT_ROUTES['user.forgot-password']}?email=ann%40example.test`,
+    )
 
     await emailInput()
     act(() => services.platformEvent({ type: 'platform.password-reset' }))
 
-    expect(router.state.location.pathname).toBe('/forgot-password')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.forgot-password'])
     expect(leaveNotice).not.toHaveBeenCalled()
   })
 })

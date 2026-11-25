@@ -1,12 +1,12 @@
 /**
- * The attempts to sign this browser in: a sign-in or a verification link's exchange, one at a
- * time in the browser's sign-in lock, the device it signed in kept whole or let go of, and the
- * restore of the identity an earlier sign-in saved.
+ * The attempts to sign this browser in: a sign-in (a password, a code, a passkey) or a
+ * verification link's exchange, one at a time in the browser's sign-in lock, the device it signed
+ * in kept whole or let go of, and the restore of the identity an earlier sign-in saved.
  */
 
 import { err, errAsync, okAsync, type Result, ResultAsync } from 'neverthrow'
 
-import { type AuthUser, type DataError, dataError, type SignInInput } from '@workspace/data'
+import type { AuthUser, DataError } from '@workspace/data'
 
 import type { NamedDevice, SignedInDevice } from '../../gateway-auth'
 import {
@@ -19,7 +19,7 @@ import {
   savedSignIn,
 } from '../../storage'
 import type { SessionHost } from '../host'
-import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from '../one-account'
+import { otherAccountSignedIn, otherIdentitySaved } from '../one-account'
 import type { PendingRevoke } from '../pending-revoke'
 import type { SpaceDeletion } from '../space-deletion'
 
@@ -28,11 +28,13 @@ import { closedDuringSignIn } from './closed'
 import { brokenSignIn, oneSignInAtATime } from './lock'
 import { type OpenSpaceDeps, openSpaceOf } from './space'
 
-/** The user a sign-in signed in: its `ask` always answers a device, so none is a failure. */
-const signedInUser = (user: AuthUser | undefined): ResultAsync<AuthUser, DataError> =>
-  user === undefined
-    ? errAsync(dataError('data:AUTH_FAILED', 'the sign-in signed nothing in'))
-    : okAsync(user)
+/**
+ * What an attempt's gateway call came to: a device to keep, with how the user it signs in answers
+ * the attempt (`signedIn`), or an answer that signs nothing in (`stopped`).
+ */
+export type Asked<Answer> =
+  | { readonly device: SignedInDevice; readonly signedIn: (user: AuthUser) => Answer }
+  | { readonly stopped: Answer }
 
 export interface SessionSignInOptions extends OpenSpaceDeps {
   readonly pendingRevoke: PendingRevoke
@@ -55,14 +57,6 @@ export class SessionSignIn {
     }
     this.#pendingRevoke = options.pendingRevoke
     this.#deletion = options.deletion
-  }
-
-  signIn(input: SignInInput, generation: number): ResultAsync<AuthUser, DataError> {
-    return this.enter(
-      input.email,
-      (device) => this.#host.options.auth.signIn(input, device),
-      generation,
-    ).andThen(signedInUser)
   }
 
   /** Opens the space of the sign-in saved now, if any; see `SessionService.restore`. */
@@ -99,26 +93,27 @@ export class SessionSignIn {
   }
 
   /** This browser as a sign-in or a verification names it. */
-  #device(): NamedDevice {
+  device(): NamedDevice {
     return { id: deviceIdFrom(this.#host.options.storage), label: this.#host.options.deviceLabel }
   }
 
   /**
    * Signs this browser in through `ask`, which names the device to the gateway (a sign-in, a
-   * verification link's exchange). One account per browser: with the `email` of the
-   * account asked for, it is refused at once while another account is signed in on this browser,
-   * before the gateway is asked; without one (a link names no email), only once the answer came,
-   * as is any sign-in that finds another account saved by then. The tokens sign-outs left are
-   * signed out first: the sign-in replaces the device's session at the gateway, which a token left
-   * after it would no longer name. An `ask` answering `undefined` signed nothing in: nothing is
-   * kept, nothing opens, and it answers `undefined`.
+   * code step, a passkey, a verification link's exchange) and answers a device to keep or an answer
+   * that signs nothing in (`Asked`): nothing is kept, nothing opens, and the attempt answers that.
+   * One account per browser: `otherAccount` says, inside the lock and before the gateway is asked,
+   * whether another account than the one asked for is signed in on this browser (a sign-in knows
+   * the email it asks for; a passkey, any saved account); it is refused at once then. Without one
+   * (a link names no email), only once the answer came, as is any sign-in that finds another
+   * account saved by then. The tokens sign-outs left are signed out first: the sign-in replaces
+   * the device's session at the gateway, which a token left after it would no longer name.
    */
-  enter(
-    email: string | undefined,
-    ask: (device: NamedDevice) => ResultAsync<SignedInDevice | undefined, DataError>,
+  enter<Answer>(
+    otherAccount: (() => boolean) | undefined,
+    ask: (device: NamedDevice) => ResultAsync<Asked<Answer>, DataError>,
     generation: number,
-  ): ResultAsync<AuthUser | undefined, DataError> {
-    const named = this.#device()
+  ): ResultAsync<Answer, DataError> {
+    const named = this.device()
 
     // The browser's tabs sign in one at a time, from the request to the saved device; the space
     // opens once the lock is let go.
@@ -128,18 +123,24 @@ export class SessionSignIn {
         return errAsync(closedDuringSignIn())
       }
 
-      const ready: ResultAsync<void, DataError> =
-        email !== undefined && otherAccountSaved(this.#host.options.storage, email)
-          ? errAsync(otherAccountSignedIn())
-          : ResultAsync.fromSafePromise(this.#pendingRevoke.send())
+      const ready: ResultAsync<void, DataError> = otherAccount?.()
+        ? errAsync(otherAccountSignedIn())
+        : ResultAsync.fromSafePromise(this.#pendingRevoke.send())
 
       return ready
         .andThen(() => ask(named))
-        .andThen((device) =>
-          device === undefined ? okAsync(undefined) : this.#keep(device, named.id, generation),
+        .andThen((asked) =>
+          'stopped' in asked
+            ? okAsync(asked)
+            : this.#keep(asked.device, named.id, generation).map((saved) => ({
+                saved,
+                signedIn: asked.signedIn,
+              })),
         )
-    }).andThen((device) =>
-      device === undefined ? okAsync(undefined) : this.#open(device, generation),
+    }).andThen((entered) =>
+      'stopped' in entered
+        ? okAsync(entered.stopped)
+        : this.#open(entered.saved, generation).map(entered.signedIn),
     )
   }
 

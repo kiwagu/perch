@@ -15,7 +15,7 @@ meta:
     noUnsentChanges: this device holds no changes the server has not received
 states:
   sign-in:
-    description: The sign-in page, where a visitor signs in or creates an account.
+    description: The sign-in page, where a guest signs in or creates an account.
     meta: { screen: user.sign-in, address: { path: /sign-in } }
     on:
       user.sign-in.submit-button:

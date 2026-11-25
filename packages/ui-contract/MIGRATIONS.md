@@ -121,9 +121,16 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
   take it, and a `null` on one that would take none (no `defaults`, no string, or an `enum`). A
   route's search parameter never takes the default. Before version 6 a written `defaults` is
   read and takes no effect, and a `null` says what no limit says.
+  From version 6 a platform action also writes its `codes` as a map, each code with when it
+  answers (`<code>: <condition>`, or `{ invariant: <name> }` for a rule several actions keep),
+  and a `result` of one string keeps the budget of a description, 200 characters, as each line of
+  a list does: the check refuses a list of codes and a longer string. Before version 6 both load
+  as they did.
 - Why: the same limit (a name of 80 characters) was written on every value that has it, so a
   change of it had to be made in every place; a default with an override where a value needs
   another says it once.
+  A list of codes said no condition, so when each answered lived in one free `result` string
+  that grew without a budget; the map says it per code, and a rule several actions keep once.
 - What `contract:migrate --write` does: sets `version: 6` in `platform.yaml`, and where the
   platform declares `defaults`, keeps every value at the limit it had, but for the fields and
   parameters left by hand below: drops a `maxLength` equal to the default from each value of
@@ -141,3 +148,7 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
   it takes would be bounded from version 6: write its own `maxLength` where that is too short, or
   refer to a named value (`value: <name>`) that writes `maxLength: null`, which the parameter then
   takes (a parameter may only narrow its value).
+  The step also names each action that writes its codes as a list and each `result` of one
+  string past 200 characters, with its path: write when each code answers, and the result as
+  outcome lines within the budget, a refusal as its code's condition. Only the author knows the
+  conditions, so the step writes none.

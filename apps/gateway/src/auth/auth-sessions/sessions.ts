@@ -7,20 +7,23 @@ import type { Clock } from '@workspace/replica'
 import { KeyedTurns } from '../../keyed-turns'
 import type { AuthInstance } from '../auth-instance'
 import { DEVICE_LIMIT } from '../auth-instance'
-import { writing } from '../device-session-rows'
+import { reading, writing } from '../device-session-rows'
 import { identityByEmail } from '../identity-by-email'
 import sessionEndStatement from '../surql/device-session-end.surql'
 import sessionEndByTokenStatement from '../surql/device-session-end-by-token.surql'
 import sessionsAdmitStatement from '../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../surql/device-sessions-admit-verified.surql'
 import sessionsEndAllStatement from '../surql/device-sessions-end-all.surql'
+import sessionsLimitStatement from '../surql/device-sessions-limit.surql'
 
 import {
   type SessionRevoke,
   type SignInAdmission,
+  type SignInJudgment,
   type SignOutEnding,
   toSessionRevoke,
   toSignInAdmission,
+  toSignInJudgment,
   toSignOutEnding,
   toVerifiedAdmission,
   type VerifiedAdmission,
@@ -156,6 +159,30 @@ export class AuthSessions {
             .retry(),
           'a sign-in could not be admitted',
         ).andThen((results) => toSignInAdmission(results.at(-2))),
+      ),
+    )
+  }
+
+  /**
+   * Judges, now, how `admit` would take a sign-in of `identity` on `device` whose session is not
+   * written yet, as `admit` judges it and writing nothing: `banned` for an account banned, else
+   * `asked` when the device would bring the account past the limit of devices (`DEVICE_LIMIT`), its
+   * devices counted as `admit` counts them (a device signed in already takes no new place), else
+   * `admitted`. It reads in the account's turn of admissions, so an admission under way commits
+   * before it. Nothing holds the judgment: an admission that comes after it judges again.
+   */
+  judge(identity: IdentityId, device: string): ResultAsync<SignInJudgment, DataError> {
+    return new ResultAsync(
+      this.#admissions.run(identity, () =>
+        reading(
+          this.#directory.db.query<unknown[]>(sessionsLimitStatement, {
+            identity,
+            device,
+            limit: DEVICE_LIMIT,
+            now: this.#now(),
+          }),
+          'a sign-in could not be judged',
+        ).andThen((results) => toSignInJudgment(results.at(-1))),
       ),
     )
   }

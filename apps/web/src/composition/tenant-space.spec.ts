@@ -5,6 +5,7 @@ import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { type IdentityId, identityIdFactory, noteIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { createNote, organisationShape } from './__fixtures__/note'
@@ -14,7 +15,7 @@ const ann = identityIdFactory.create()
 
 const membership = (key: string): Membership => ({
   tenant: { id: tenantIdFactory.create(), key, name: key },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 })
 
 const acme = membership('acme')

@@ -29,7 +29,10 @@ export {
 } from './anchors'
 export {
   accessProblems,
+  actionFormsProblems,
   activitiesProblems,
+  BEHAVIOUR_EDITION,
+  behaviourTextsProblems,
   bindingsProblems,
   type Contract,
   changesProblems,
@@ -45,6 +48,7 @@ export {
   flowProblems,
   type IdTarget,
   idTargetOf,
+  invariantsProblems,
   keyProblems,
   loadContract,
   mailsProblems,
@@ -82,7 +86,7 @@ export {
   RUNTIME_TEST_ANCHOR,
   scanConsumers,
 } from './consumers'
-export { fieldFactsModuleOf, valuesModuleOf } from './emit'
+export { fieldFactsModuleOf, termsModuleOf, valuesModuleOf } from './emit'
 export {
   ACCOUNT,
   ACTIVITIES_DIR,
@@ -98,6 +102,9 @@ export {
   type BindingRef,
   CONTRACT_DIR,
   COVERAGE_FILE,
+  type CodeEntry,
+  codeEntriesOf,
+  codeNamesOf,
   createValidator,
   DOMAIN_DIR,
   type Effect,
@@ -111,6 +118,7 @@ export {
   type FlowTransition,
   fieldValueOf,
   formatProblem,
+  invariantActions,
   isBusinessFile,
   jsonSchemaProblems,
   loadActivities,
@@ -118,6 +126,7 @@ export {
   loadResolvedModel,
   loadScenarios,
   loadScreens,
+  loadTerms,
   MANIFEST_SCHEMA_FILE,
   MIGRATIONS,
   type Migration,
@@ -130,6 +139,7 @@ export {
   type ModelEntity,
   type ModelField,
   migrate,
+  outcomesOf,
   type ParamValue,
   PLATFORM_FILE,
   PLATFORM_SCHEMA_FILE,
@@ -145,6 +155,7 @@ export {
   type ResolvedValue,
   readDescriptions,
   resolveValue,
+  routeKeyOf,
   SCENARIOS_DIR,
   SCHEMA_OUTPUTS,
   SCREEN_SCHEMA_FILE,
@@ -154,6 +165,10 @@ export {
   scenarioFile,
   schemaDrift,
   sortProblems,
+  TERMS_FILE,
+  TERMS_SCHEMA_FILE,
+  type TermEntry,
+  type Terms,
   VOCABULARY_FILE,
   VOCABULARY_SECTIONS,
   type Vocabulary,
@@ -241,6 +256,8 @@ export {
   activitySchema,
   anchorBindingSchema,
   anchorDefSchema,
+  BEHAVIOUR_PURPOSES,
+  type BehaviourKind,
   bindingRefSchema,
   bindingSchema,
   DESCRIPTION_BUDGET,
@@ -261,6 +278,7 @@ export {
   screenFileSchema,
   screenSchema,
   sourceSchema,
+  termsFileSchema,
   transitionSchema,
 } from './schemas'
 export {

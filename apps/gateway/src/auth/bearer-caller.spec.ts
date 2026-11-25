@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { dataError } from '@workspace/data'
 import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import type { AuthSessions, SessionRead } from './auth-sessions'
 import { bearerCaller, bearerRefused, bearerToken, DEVICE_HEADER } from './bearer-caller'
@@ -19,7 +20,7 @@ const LAPTOP: SessionRead = {
     email: 'ann@example.test',
     device: 'laptop',
     session: SESSION,
-    roles: ['operator'],
+    roles: [CONTRACT_ROLES.operator],
   },
 }
 
@@ -129,7 +130,7 @@ describe('bearerCaller', () => {
       email: 'ann@example.test',
       device: 'laptop',
       session: SESSION,
-      roles: ['operator'],
+      roles: [CONTRACT_ROLES.operator],
       token: 'token-1',
     })
   })

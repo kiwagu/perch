@@ -1,7 +1,10 @@
 // scenario: device/base/my-devices
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, signIn, signInNotice, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 import { databases, identityDatabase } from '../../support/storage'
 
 /**
@@ -22,7 +25,7 @@ const seenWithinAMinute = (page: Page): Promise<string[]> =>
 
 /** The device is signed out: on "/sign-in", showing the sign-in form and no navigation. */
 async function expectSignedOut(device: Page): Promise<void> {
-  await expect(device).toHaveURL(/\/sign-in$/)
+  await expect(device).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']))
   await expect(device.getByTestId('user.sign-in.form')).toBeVisible()
   await expect(device.getByTestId('app-shell.nav')).toHaveCount(0)
 }
@@ -45,9 +48,9 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
 
     await test.step('1. On device A, sign up, open the link of [mail:sign-up] and open [/devices]', async () => {
       // The `signedIn` fixture has signed device A up through the sign-in page.
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await page.getByTestId('app-shell.nav.devices-link').click()
-      await expect(page).toHaveURL(/\/devices$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES.device))
       // Expected: After step 1 device A's [device.list] holds one [device.list.session-item], in
       //   [state:current] (this device)
       await expect(devices).toHaveCount(1)
@@ -97,7 +100,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       //   no local database of the account; on device A, device B's [device.list.session-item] is
       //   in [state:revoked]
       await Promise.all([
-        expect(deviceB).toHaveURL(/\/sign-in$/, { timeout: 5_000 }),
+        expect(deviceB).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 5_000 }),
         expect(signInNotice(deviceB, 'signed-out-elsewhere')).toBeVisible({ timeout: 5_000 }),
         expect
           .poll(() => databases(deviceB), {
@@ -128,7 +131,9 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       //   same notice; a reload of either stays on [/sign-in]
       await Promise.all(
         [page, deviceB].map(async (device) => {
-          await expect(device).toHaveURL(/\/sign-in$/, { timeout: 5_000 })
+          await expect(device).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), {
+            timeout: 5_000,
+          })
           await expect(signInNotice(device, 'signed-out-elsewhere')).toBeVisible({
             timeout: 5_000,
           })
@@ -146,7 +151,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       await signIn(page, signedIn)
       // Expected: After step 7 device A is on [/me] and its sync channel is up: the account signs
       //   in again after signing out everywhere
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
         timeout: 10_000,
       })

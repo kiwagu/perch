@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { dataError, SHAPE_RUNNER } from '@workspace/data'
 import { Container } from '@workspace/di'
 import { tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { type FakeGatewayAuth, fakeGatewayAuth } from '../../composition/__fixtures__/gateway-auth'
@@ -23,7 +24,7 @@ import { OrganisationModule } from './organisation.module'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const offline = () => errAsync(dataError('data:OFFLINE', 'the gateway is out of reach'))
@@ -109,16 +110,16 @@ describe('OrganisationModule', () => {
       })),
     ).toEqual([
       {
-        path: '/org',
+        path: CONTRACT_ROUTES.organisation,
         page: 'OrganisationPage',
         guard: 'authenticated',
-        roles: ['identity', 'member', 'admin'],
+        roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
       },
       {
-        path: '/invitation',
+        path: CONTRACT_ROUTES['organisation.invitation'],
         page: 'InvitationPage',
         guard: undefined,
-        roles: ['guest', 'identity'],
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       },
     ])
     expect(Object.keys(OrganisationModule.declarations)).toEqual([

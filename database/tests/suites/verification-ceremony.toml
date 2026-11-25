@@ -1,0 +1,82 @@
+name = "verification-ceremony"
+tags = ["structure", "verification"]
+
+# Each row of `verification` is marked with the kind of ceremony it belongs to, which the schema
+# derives from its identifier and value at each write: `passkey` for a passkey's options, `two-factor`
+# for a password step's challenge and the row counting its codes, none for every other row (a reset
+# link, a pending change of an email or deletion of an account), which nothing reclaims. No record
+# user reads or writes a row. Root writes them as Better Auth and the gateway would, claiming a kind
+# of its own, which the schema replaces.
+
+[[cases]]
+name = "root writes a row of every kind"
+kind = "sql_expect"
+actor = "root"
+sql = """
+INSERT INTO verification [
+  { id: 'registration', identifier: 'r', `value`: '{"type":"registration","expectedChallenge":"c"}', expires_at: time::now() },
+  { id: 'authentication', identifier: 'a', `value`: '{"type":"authentication","expectedChallenge":"c"}', expires_at: time::now() },
+  { id: 'challenge', identifier: '2fa-abc', `value`: 'identity-key', expires_at: time::now(), ceremony: 'passkey' },
+  { id: 'attempts', identifier: '2fa-attempts-2fa-abc', `value`: '0', expires_at: time::now() },
+  { id: 'reset', identifier: 'reset-password:token', `value`: 'identity-key', expires_at: time::now(), ceremony: 'two-factor' },
+  { id: 'change', identifier: 'change-email:identity-key', `value`: 'jti', expires_at: time::now() }
+] RETURN NONE;
+"""
+allow = true
+
+[[cases]]
+name = "each row is marked with its kind of ceremony, none for a row of another kind"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE [record::id(id), ceremony ?? 'none'] FROM verification ORDER BY id;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = ["attempts", "two-factor"]
+
+[[cases.assertions]]
+path = "1"
+equals = ["authentication", "passkey"]
+
+[[cases.assertions]]
+path = "2"
+equals = ["challenge", "two-factor"]
+
+[[cases.assertions]]
+path = "3"
+equals = ["change", "none"]
+
+[[cases.assertions]]
+path = "4"
+equals = ["registration", "passkey"]
+
+[[cases.assertions]]
+path = "5"
+equals = ["reset", "none"]
+
+[[cases.assertions]]
+path = "6"
+exists = false
+
+[[cases]]
+name = "a row whose identifier changes is marked again"
+kind = "sql_expect"
+actor = "root"
+sql = "UPDATE verification:change SET identifier = '2fa-def' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0.ceremony"
+equals = "two-factor"
+
+[[cases]]
+name = "alice sees no row of verification"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT * FROM verification;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
