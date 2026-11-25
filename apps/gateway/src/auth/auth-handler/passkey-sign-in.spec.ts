@@ -6,6 +6,7 @@ import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import type { KeyedTurns } from '../../keyed-turns'
+import { FAILED_SIGN_INS } from '../../limits/windows'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { ban, sessionStates } from '../__fixtures__/account-ban'
 import { DeviceSessions } from '../device-sessions'
@@ -17,7 +18,7 @@ import {
   withSecondFactor,
   wrongPasswords,
 } from './__fixtures__/code-step'
-import { seenInTurn } from './__fixtures__/devices'
+import { AT_THE_LIMIT, PAST_THE_LIMIT, seenInTurn } from './__fixtures__/devices'
 import {
   ANN,
   ARGON2_WAIT,
@@ -44,9 +45,6 @@ import { challengeValue } from './challenge-cookie'
 
 /** A second account, whose passkey is not Ann's. */
 const BOB = 'bob@example.test'
-
-/** Ten devices, the most one account keeps signed in at once; `a` signed in first. */
-const TEN = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const
 
 /** How long a test of many password checks may run: each is an argon2 run, slow on a busy host. */
 const ARGON2_RUNS_MS = 60_000
@@ -185,14 +183,14 @@ describe('authHandler, a passkey sign-in', () => {
       const held = authenticator()
 
       await passkeysOf(mounted).registered(ann.on('laptop'), held)
-      await wrongPasswords(mounted, 9, '198.18.1.2')
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, '198.18.1.2')
 
       const { status, body } = await passkeySignIn(mounted, 'desk', held)
 
       expect(status).toBe(200)
       expect((await mounted.sessions.read(tokenOf(body))).kind).toBe('session')
-      // The passkey forgot the nine: ten more wrong passwords are each judged, none refused.
-      await wrongPasswords(mounted, 10, '198.18.1.3')
+      // The passkey forgot those failures: as many wrong passwords as are allowed are each judged, none refused.
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit, '198.18.1.3')
     },
     ARGON2_RUNS_MS,
   )
@@ -203,7 +201,7 @@ describe('authHandler, a passkey sign-in', () => {
       const mounted = await mountedOnRealAuth()
       const { held } = await annWithPasskey(mounted)
 
-      await wrongPasswords(mounted, 10, '198.18.1.4')
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit, '198.18.1.4')
       expect(
         (await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), '198.18.1.5'))?.status,
       ).toBe(429)
@@ -319,7 +317,7 @@ describe('authHandler, a passkey sign-in', () => {
       const mounted = await mountedOnRealAuth()
       const { ann, held } = await annWithPasskey(mounted)
 
-      await wrongPasswords(mounted, 9, '198.18.1.7')
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, '198.18.1.7')
       await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
 
       expect(await passkeySignIn(mounted, 'desk', held)).toEqual(accountBanned)
@@ -518,25 +516,27 @@ describe("authHandler, a passkey sign-in at the account's limit of devices", () 
     "answers 409 device-limit naming the account it asks about, nothing signed in and the email's failed sign-ins forgotten, and signs in once confirmed for that account, the device seen least recently signed out",
     async () => {
       const mounted = await mountedOnRealAuth()
-      const { ann, held } = await annWithPasskey(mounted, TEN)
+      const { ann, held } = await annWithPasskey(mounted, AT_THE_LIMIT)
 
       // Every device but c is seen after the sign-ins, c the least recently: c is the one to go.
       await seenInTurn(
         mounted,
         ann,
-        TEN.filter((device) => device !== 'c'),
+        AT_THE_LIMIT.filter((device) => device !== 'c'),
       )
-      await wrongPasswords(mounted, 9, '198.18.3.1')
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, '198.18.3.1')
 
-      expect(await passkeySignIn(mounted, 'k', held)).toEqual({
+      expect(await passkeySignIn(mounted, PAST_THE_LIMIT, held)).toEqual({
         status: 409,
         body: { code: 'device-limit', consentFor: ann.identity },
       })
       expect(await endedOf(mounted, ann.identity)).toEqual([])
-      // The passkey was the sign-in's last step: ten wrong passwords are each judged again.
-      await wrongPasswords(mounted, 10, '198.18.3.2')
+      // The passkey was the sign-in's last step: as many wrong passwords as are allowed are each judged again.
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit, '198.18.3.2')
 
-      const confirmed = await passkeySignIn(mounted, 'k', held, { signOutOldestFor: ann.identity })
+      const confirmed = await passkeySignIn(mounted, PAST_THE_LIMIT, held, {
+        signOutOldestFor: ann.identity,
+      })
 
       expect(confirmed.status).toBe(200)
       expect((await mounted.sessions.read(tokenOf(confirmed.body))).kind).toBe('session')
@@ -555,9 +555,11 @@ describe("authHandler, a passkey sign-in at the account's limit of devices", () 
     async () => {
       const mounted = await mountedOnRealAuth()
       const ann = await signedInOn(mounted, ANN, ['laptop'])
-      const { ann: bob, held } = await annWithPasskey(mounted, TEN, BOB)
+      const { ann: bob, held } = await annWithPasskey(mounted, AT_THE_LIMIT, BOB)
 
-      expect(await passkeySignIn(mounted, 'k', held, { signOutOldestFor: ann.identity })).toEqual({
+      expect(
+        await passkeySignIn(mounted, PAST_THE_LIMIT, held, { signOutOldestFor: ann.identity }),
+      ).toEqual({
         status: 409,
         body: { code: 'device-limit', consentFor: bob.identity },
       })

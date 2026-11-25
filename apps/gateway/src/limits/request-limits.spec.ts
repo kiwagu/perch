@@ -4,8 +4,24 @@ import { idSchemas } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
 import { RequestLimits, type SignInAttempt, type SignInOutcome } from './request-limits'
+import {
+  ADDRESS_INVITES,
+  ADDRESS_LINK_ATTEMPTS,
+  ADDRESS_MAILS,
+  CREDENTIAL_CHECKS,
+  EMAIL_VERIFICATION_MAILS,
+  FAILED_SIGN_INS,
+  IDENTITY_EMAIL_CHANGES,
+  IDENTITY_INVITES,
+} from './windows'
 
 const minute = 60_000
+
+/** The credential checks of an address, the failed sign-ins of an email, the invitations of an identity and the mails of an address, as the contract allows them. */
+const CHECKS = CREDENTIAL_CHECKS.limit
+const FAILURES = FAILED_SIGN_INS.limit
+const INVITES = IDENTITY_INVITES.limit
+const MAILS = ADDRESS_MAILS.limit
 
 const ann = idSchemas.identity.schema.parse('idn_ann')
 const bob = idSchemas.identity.schema.parse('idn_bob')
@@ -37,24 +53,25 @@ function limitsOn() {
 }
 
 describe('RequestLimits', () => {
-  it('takes 20 credential checks of one address within 10 s and refuses the 21st with the rest of the window', async () => {
+  it("takes an address's credential checks within their window and refuses the next with the rest of the window", async () => {
     const { clock, limits } = limitsOn()
+    const rest = CREDENTIAL_CHECKS.windowMs - 4_000
 
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < CHECKS; attempt += 1) {
       expect(limits.credentials('203.0.113.7')).toEqual({ allowed: true })
     }
 
     await clock.advance(4_000)
-    expect(limits.credentials('203.0.113.7')).toEqual({ allowed: false, retryAfterMs: 6_000 })
+    expect(limits.credentials('203.0.113.7')).toEqual({ allowed: false, retryAfterMs: rest })
     expect(limits.credentials('203.0.113.8')).toEqual({ allowed: true })
-    await clock.advance(6_000)
+    await clock.advance(rest)
     expect(limits.credentials('203.0.113.7')).toEqual({ allowed: true })
   })
 
   it('counts the credential checks of an IPv6 address by its /64', () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < CHECKS; attempt += 1) {
       limits.credentials(`2001:db8:1:2::${attempt.toString(16)}`)
     }
 
@@ -62,27 +79,28 @@ describe('RequestLimits', () => {
     expect(limits.credentials('2001:db8:1:3::1').allowed).toBe(true)
   })
 
-  it('lets 10 sign-ins of an email fail within 15 minutes and refuses the 11th', async () => {
+  it("lets an email's sign-ins fail as often as allowed within their window and refuses the next", async () => {
     const { clock, limits } = limitsOn()
+    const rest = FAILED_SIGN_INS.windowMs - 5 * minute
 
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < FAILURES; attempt += 1) {
       settle(limits.signInAttempt('ann@example.test'), 'failed')
     }
 
     await clock.advance(5 * minute)
     expect(limits.signInAttempt('ann@example.test')).toEqual({
       allowed: false,
-      retryAfterMs: 10 * minute,
+      retryAfterMs: rest,
     })
     expect(limits.signInAttempt('bob@example.test').allowed).toBe(true)
-    await clock.advance(10 * minute)
+    await clock.advance(rest)
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
   })
 
   it('holds a place for each sign-in of an email still under way', () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < FAILURES; attempt += 1) {
       expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
     }
 
@@ -93,7 +111,7 @@ describe('RequestLimits', () => {
     const { limits } = limitsOn()
     const unjudged = limits.signInAttempt('ann@example.test')
 
-    for (let attempt = 0; attempt < 9; attempt += 1) {
+    for (let attempt = 1; attempt < FAILURES; attempt += 1) {
       settle(limits.signInAttempt('ann@example.test'), 'failed')
     }
 
@@ -106,7 +124,7 @@ describe('RequestLimits', () => {
   it('settles a sign-in once: a second settle of the same sign-in changes nothing', () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 9; attempt += 1) {
+    for (let attempt = 1; attempt < FAILURES; attempt += 1) {
       settle(limits.signInAttempt('ann@example.test'), 'failed')
     }
 
@@ -122,7 +140,7 @@ describe('RequestLimits', () => {
   it("counts a failure judged after another sign-in of the email succeeded meanwhile, in the email's new window", () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 2; attempt < FAILURES; attempt += 1) {
       settle(limits.signInAttempt('ann@example.test'), 'failed')
     }
 
@@ -131,8 +149,8 @@ describe('RequestLimits', () => {
     settle(limits.signInAttempt('ann@example.test'), 'succeeded')
     settle(waiting, 'failed')
 
-    // The failure is the first of the new window: nine more fill it.
-    for (let attempt = 0; attempt < 9; attempt += 1) {
+    // The failure is the first of the new window: the rest of the limit fills it.
+    for (let attempt = 1; attempt < FAILURES; attempt += 1) {
       expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
     }
 
@@ -145,9 +163,9 @@ describe('RequestLimits', () => {
 
     settle(limits.signInAttempt('ann@example.test'), 'succeeded')
 
-    const newer = answers(10, () => limits.signInAttempt('ann@example.test'))
+    const newer = answers(FAILURES, () => limits.signInAttempt('ann@example.test'))
 
-    expect(newer.map((attempt) => attempt.allowed)).toEqual(answers(10, () => true))
+    expect(newer.map((attempt) => attempt.allowed)).toEqual(answers(FAILURES, () => true))
 
     settle(waiting, 'failed')
 
@@ -155,21 +173,21 @@ describe('RequestLimits', () => {
 
     settle(first ?? expect.unreachable('a newer sign-in'), 'unjudged')
 
-    // Nine newer sign-ins under way and the failure fill the window.
+    // The newer sign-ins under way but that one, and the failure, fill the window.
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
   })
 
   it("clears an email's failures and sign-ins under way once it signs in", () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 2; attempt < FAILURES; attempt += 1) {
       settle(limits.signInAttempt('ann@example.test'), 'failed')
     }
 
     limits.signInAttempt('ann@example.test')
     settle(limits.signInAttempt('ann@example.test'), 'succeeded')
 
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < FAILURES; attempt += 1) {
       expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
     }
   })
@@ -177,11 +195,11 @@ describe('RequestLimits', () => {
   it("forgets an email's failures and sign-ins under way as a sign-in that succeeded does, holding no place", () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 9; attempt += 1) {
+    for (let attempt = 1; attempt < FAILURES; attempt += 1) {
       settle(limits.signInAttempt('ann@example.test'), 'failed')
     }
 
-    // One sign-in still under way holds the tenth place.
+    // One sign-in still under way holds the last place.
     limits.signInAttempt('ann@example.test')
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
 
@@ -191,7 +209,7 @@ describe('RequestLimits', () => {
     limits.forgetFailedSignIns('bob@example.test')
 
     for (const email of ['ann@example.test', 'bob@example.test']) {
-      for (let attempt = 0; attempt < 10; attempt += 1) {
+      for (let attempt = 0; attempt < FAILURES; attempt += 1) {
         expect(limits.signInAttempt(email).allowed).toBe(true)
       }
 
@@ -199,28 +217,34 @@ describe('RequestLimits', () => {
     }
   })
 
-  it('takes 30 invitations of one identity within 10 minutes, from any addresses, and refuses the 31st with the rest of the window', async () => {
+  it("takes an identity's invitations within their window, from any addresses, and refuses the next with the rest of the window", async () => {
     const { clock, limits } = limitsOn()
+    const rest = IDENTITY_INVITES.windowMs - 4 * minute
 
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < INVITES; attempt += 1) {
       expect(limits.inviteMail(ann, `203.0.113.${attempt}`)).toEqual({ allowed: true })
     }
 
     await clock.advance(4 * minute)
-    expect(limits.inviteMail(ann, '203.0.113.99')).toEqual({
+    expect(limits.inviteMail(ann, '203.0.113.250')).toEqual({
       allowed: false,
-      retryAfterMs: 6 * minute,
+      retryAfterMs: rest,
     })
-    expect(limits.inviteMail(bob, '203.0.113.99')).toEqual({ allowed: true })
-    await clock.advance(6 * minute)
-    expect(limits.inviteMail(ann, '203.0.113.99')).toEqual({ allowed: true })
+    expect(limits.inviteMail(bob, '203.0.113.250')).toEqual({ allowed: true })
+    await clock.advance(rest)
+    expect(limits.inviteMail(ann, '203.0.113.250')).toEqual({ allowed: true })
   })
 
-  it('takes 60 invitations of one address across identities within 10 minutes and refuses the 61st', async () => {
+  it("takes an address's invitations across identities within their window and refuses the next", async () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      expect(limits.inviteMail(attempt < 30 ? ann : bob, '203.0.113.7')).toEqual({ allowed: true })
+    // Two identities fill the address's invitations: ann all of hers, bob the rest.
+    expect(ADDRESS_INVITES.limit).toBeLessThanOrEqual(2 * INVITES)
+
+    for (let attempt = 0; attempt < ADDRESS_INVITES.limit; attempt += 1) {
+      expect(limits.inviteMail(attempt < INVITES ? ann : bob, '203.0.113.7')).toEqual({
+        allowed: true,
+      })
     }
 
     expect(
@@ -234,30 +258,33 @@ describe('RequestLimits', () => {
   it("leaves the address's invitations uncharged by an invitation its identity's limit refuses", () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < INVITES; attempt += 1) {
       limits.inviteMail(ann, '203.0.113.7')
     }
 
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < INVITES; attempt += 1) {
       expect(limits.inviteMail(ann, '203.0.113.7').allowed).toBe(false)
     }
 
-    // The 30 refusals took nothing of the address's 60: 30 more fit.
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    // Those refusals took nothing of the address's invitations: the rest of them fit.
+    for (let attempt = INVITES; attempt < ADDRESS_INVITES.limit; attempt += 1) {
       expect(limits.inviteMail(bob, '203.0.113.7')).toEqual({ allowed: true })
     }
   })
 
-  it("takes one of the address's mails for each invitation, sign-ups and invitations together, and refuses the 201st mail of either kind", async () => {
+  it("takes one of the address's mails for each invitation, sign-ups and invitations together, and refuses the mail past them of either kind", async () => {
     const { clock, limits } = limitsOn()
+    const rest = ADDRESS_MAILS.windowMs - 5 * minute
 
-    answers(170, () => limits.verificationMail(FROM))
+    answers(MAILS - INVITES, () => limits.verificationMail(FROM))
 
-    expect(answers(30, () => limits.inviteMail(ann, FROM).allowed)).toEqual(answers(30, () => true))
+    expect(answers(INVITES, () => limits.inviteMail(ann, FROM).allowed)).toEqual(
+      answers(INVITES, () => true),
+    )
     await clock.advance(5 * minute)
-    // The 201st mail: the address's mails refuse an invitation of an identity with room left.
-    expect(limits.inviteMail(bob, FROM)).toEqual({ allowed: false, retryAfterMs: 10 * minute })
-    expect(limits.verificationMail(FROM)).toEqual({ allowed: false, retryAfterMs: 10 * minute })
+    // The mail past them: the address's mails refuse an invitation of an identity with room left.
+    expect(limits.inviteMail(bob, FROM)).toEqual({ allowed: false, retryAfterMs: rest })
+    expect(limits.verificationMail(FROM)).toEqual({ allowed: false, retryAfterMs: rest })
     // Another address keeps its own mails.
     expect(limits.inviteMail(bob, ELSEWHERE)).toEqual({ allowed: true })
   })
@@ -265,7 +292,7 @@ describe('RequestLimits', () => {
   it('gives the address its mail back when an invitation window refuses the invitation', () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < INVITES; attempt += 1) {
       limits.inviteMail(ann, FROM)
     }
 
@@ -273,9 +300,9 @@ describe('RequestLimits', () => {
     expect(answers(20, () => limits.inviteMail(ann, FROM).allowed)).toEqual(
       answers(20, () => false),
     )
-    // 30 of the address's 200 mails are taken: 170 more fit, and the 171st is refused.
-    expect(answers(170, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(170, () => true),
+    // The invitations took as many of the address's mails: the rest fit, and the next is refused.
+    expect(answers(MAILS - INVITES, () => limits.verificationMail(FROM).allowed)).toEqual(
+      answers(MAILS - INVITES, () => true),
     )
     expect(limits.verificationMail(FROM).allowed).toBe(false)
   })
@@ -283,8 +310,8 @@ describe('RequestLimits', () => {
   it("gives the address its mail back when the address's invitations refuse the invitation", () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      limits.inviteMail(attempt < 30 ? ann : bob, FROM)
+    for (let attempt = 0; attempt < ADDRESS_INVITES.limit; attempt += 1) {
+      limits.inviteMail(attempt < INVITES ? ann : bob, FROM)
     }
 
     expect(
@@ -293,27 +320,33 @@ describe('RequestLimits', () => {
         () => limits.inviteMail(idSchemas.identity.schema.parse('idn_cat'), FROM).allowed,
       ),
     ).toEqual(answers(20, () => false))
-    // 60 of the 200 mails are taken: 140 more fit.
-    expect(answers(140, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(140, () => true),
-    )
+    // The invitations took as many of the address's mails: the rest fit.
+    expect(
+      answers(MAILS - ADDRESS_INVITES.limit, () => limits.verificationMail(FROM).allowed),
+    ).toEqual(answers(MAILS - ADDRESS_INVITES.limit, () => true))
     expect(limits.verificationMail(FROM).allowed).toBe(false)
   })
 
   it("moves no invitation window for an invitation the address's mails refuse", async () => {
     const { clock, limits } = limitsOn()
 
-    answers(200, () => limits.verificationMail(FROM))
-    await clock.advance(14 * minute)
+    answers(MAILS, () => limits.verificationMail(FROM))
+    await clock.advance(ADDRESS_MAILS.windowMs - minute)
 
-    // 40 refusals by the mails: neither ann's 30 nor the address's 60 invitations are touched.
-    expect(answers(40, () => limits.inviteMail(ann, FROM).allowed)).toEqual(
-      answers(40, () => false),
+    // More refusals by the mails than ann's invitations: neither hers nor the address's are touched.
+    expect(answers(INVITES + 10, () => limits.inviteMail(ann, FROM).allowed)).toEqual(
+      answers(INVITES + 10, () => false),
     )
     await clock.advance(minute)
     // The mails window opened again; the invitation windows are fresh.
-    expect(answers(30, () => limits.inviteMail(ann, FROM).allowed)).toEqual(answers(30, () => true))
-    expect(answers(30, () => limits.inviteMail(bob, FROM).allowed)).toEqual(answers(30, () => true))
+    const fromBob = ADDRESS_INVITES.limit - INVITES
+
+    expect(answers(INVITES, () => limits.inviteMail(ann, FROM).allowed)).toEqual(
+      answers(INVITES, () => true),
+    )
+    expect(answers(fromBob, () => limits.inviteMail(bob, FROM).allowed)).toEqual(
+      answers(fromBob, () => true),
+    )
     expect(limits.inviteMail(idSchemas.identity.schema.parse('idn_cat'), FROM).allowed).toBe(false)
   })
 
@@ -365,27 +398,28 @@ describe('RequestLimits', () => {
       allowed: false,
       retryAfterMs: 10 * minute,
     })
-    // The address took three of its 200: 197 more fit, the refused resend's place given back.
-    expect(answers(197, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(197, () => true),
+    // The address took three of its mails: the rest fit, the refused resend's place given back.
+    expect(answers(MAILS - 3, () => limits.verificationMail(FROM).allowed)).toEqual(
+      answers(MAILS - 3, () => true),
     )
     expect(limits.verificationMail(FROM).allowed).toBe(false)
   })
 
-  it('takes 200 verification mails of one address within 15 minutes, sign-ups and resends together, and refuses the 201st of either kind', async () => {
+  it("takes an address's verification mails within their window, sign-ups and resends together, and refuses the next of either kind", async () => {
     const { clock, limits } = limitsOn()
-    const mixed = answers(200, (n) =>
+    const rest = ADDRESS_MAILS.windowMs - 5 * minute
+    const mixed = answers(MAILS, (n) =>
       n % 2 === 0
         ? limits.verificationMail(FROM)
         : limits.verificationMail(FROM, `user-${n}@example.test`),
     )
 
-    expect(mixed).toEqual(answers(200, () => ({ allowed: true })))
+    expect(mixed).toEqual(answers(MAILS, () => ({ allowed: true })))
     await clock.advance(5 * minute)
-    expect(limits.verificationMail(FROM)).toEqual({ allowed: false, retryAfterMs: 10 * minute })
+    expect(limits.verificationMail(FROM)).toEqual({ allowed: false, retryAfterMs: rest })
     expect(limits.verificationMail(FROM, 'fresh@example.test')).toEqual({
       allowed: false,
-      retryAfterMs: 10 * minute,
+      retryAfterMs: rest,
     })
     // Another address keeps its own budget.
     expect(limits.verificationMail(ELSEWHERE)).toEqual({ allowed: true })
@@ -395,7 +429,7 @@ describe('RequestLimits', () => {
   it("leaves an email's resends untouched by the resends its address's budget refuses", () => {
     const { limits } = limitsOn()
 
-    answers(200, () => limits.verificationMail(FROM))
+    answers(MAILS, () => limits.verificationMail(FROM))
 
     expect(answers(3, () => limits.verificationMail(FROM, 'victim@example.test').allowed)).toEqual([
       false,
@@ -408,16 +442,16 @@ describe('RequestLimits', () => {
     ).toEqual([true, true, true, false])
   })
 
-  it("opens the address's and the email's windows again once 15 minutes have passed", async () => {
+  it("opens the address's and the email's windows again once both have passed", async () => {
     const { clock, limits } = limitsOn()
 
     answers(3, () => limits.verificationMail(FROM, 'ghost@example.test'))
-    answers(197, () => limits.verificationMail(FROM))
+    answers(MAILS - 3, () => limits.verificationMail(FROM))
 
     expect(limits.verificationMail(FROM).allowed).toBe(false)
     expect(limits.verificationMail(ELSEWHERE, 'ghost@example.test').allowed).toBe(false)
 
-    await clock.advance(15 * minute)
+    await clock.advance(Math.max(ADDRESS_MAILS.windowMs, EMAIL_VERIFICATION_MAILS.windowMs))
 
     expect(limits.verificationMail(FROM, 'ghost@example.test')).toEqual({ allowed: true })
     expect(limits.verificationMail(FROM)).toEqual({ allowed: true })
@@ -463,9 +497,9 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
     })
     // An email's resends of its verification mail are another limit.
     expect(limits.verificationMail(FROM, 'ann@example.test')).toEqual({ allowed: true })
-    // The address took four of its 200: 196 more fit, the refused reset's place given back.
-    expect(answers(196, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(196, () => true),
+    // The address took four of its mails: the rest fit, the refused reset's place given back.
+    expect(answers(MAILS - 4, () => limits.verificationMail(FROM).allowed)).toEqual(
+      answers(MAILS - 4, () => true),
     )
     expect(limits.verificationMail(FROM).allowed).toBe(false)
     await clock.advance(10 * minute)
@@ -475,10 +509,13 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
   it("shares the address's budget of mails among sign-ups, resends, resets and email changes", () => {
     const { limits } = limitsOn()
 
-    answers(50, () => limits.verificationMail(FROM))
-    answers(50, (n) => limits.verificationMail(FROM, `resend-${n}@example.test`))
-    answers(50, (n) => limits.resetMail(FROM, `reset-${n}@example.test`))
-    answers(50, (n) =>
+    // The address's mails in four shares, the sign-ups taking what the others leave.
+    const share = Math.floor(MAILS / 4)
+
+    answers(MAILS - 3 * share, () => limits.verificationMail(FROM))
+    answers(share, (n) => limits.verificationMail(FROM, `resend-${n}@example.test`))
+    answers(share, (n) => limits.resetMail(FROM, `reset-${n}@example.test`))
+    answers(share, (n) =>
       limits.emailChangeMail(FROM, idSchemas.identity.schema.parse(`idn_change_${n}`)),
     )
 
@@ -498,17 +535,21 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
     ])
   })
 
-  it('takes three email changes of an identity within 15 minutes and refuses the fourth', async () => {
+  it("takes an identity's email changes within their window and refuses the next", async () => {
     const { clock, limits } = limitsOn()
+    const { limit } = IDENTITY_EMAIL_CHANGES
+    const rest = IDENTITY_EMAIL_CHANGES.windowMs - minute
 
-    expect(answers(3, () => limits.emailChangeMail(FROM, ann).allowed)).toEqual([true, true, true])
+    expect(answers(limit, () => limits.emailChangeMail(FROM, ann).allowed)).toEqual(
+      answers(limit, () => true),
+    )
     await clock.advance(minute)
     expect(limits.emailChangeMail(ELSEWHERE, ann)).toEqual({
       allowed: false,
-      retryAfterMs: 14 * minute,
+      retryAfterMs: rest,
     })
     expect(limits.emailChangeMail(FROM, bob)).toEqual({ allowed: true })
-    await clock.advance(14 * minute)
+    await clock.advance(rest)
     expect(limits.emailChangeMail(FROM, ann)).toEqual({ allowed: true })
   })
 
@@ -524,9 +565,9 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
     expect(limits.deletionMail(FROM, bob)).toEqual({ allowed: true })
     // An identity's changes of its email are another limit.
     expect(limits.emailChangeMail(FROM, ann)).toEqual({ allowed: true })
-    // The refused request took none of ELSEWHERE's 200 mails.
-    expect(answers(200, () => limits.verificationMail(ELSEWHERE).allowed)).toEqual(
-      answers(200, () => true),
+    // The refused request took none of ELSEWHERE's mails.
+    expect(answers(MAILS, () => limits.verificationMail(ELSEWHERE).allowed)).toEqual(
+      answers(MAILS, () => true),
     )
     await clock.advance(14 * minute)
     expect(limits.deletionMail(FROM, ann)).toEqual({ allowed: true })
@@ -535,7 +576,7 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
   it("counts the deletion mails toward the address's budget of mails", () => {
     const { limits } = limitsOn()
 
-    answers(150, () => limits.verificationMail(FROM))
+    answers(MAILS - 50, () => limits.verificationMail(FROM))
     answers(50, (n) =>
       limits.deletionMail(FROM, idSchemas.identity.schema.parse(`idn_deletion_${n}`)),
     )
@@ -556,20 +597,22 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
     ['accountDeletion', ['passwordReset', 'emailConfirmation', 'invitationLink']],
     ['invitationLink', ['passwordReset', 'emailConfirmation', 'accountDeletion']],
   ] as const)(
-    'takes 20 attempts of %s per address within 10 minutes, refused or not, apart from %j',
+    'takes the attempts of %s per address the contract allows within their window, refused or not, apart from %j',
     async (kind, others) => {
       const { clock, limits } = limitsOn()
+      const { limit } = ADDRESS_LINK_ATTEMPTS
+      const rest = ADDRESS_LINK_ATTEMPTS.windowMs - 4 * minute
 
-      expect(answers(20, () => limits[kind](FROM).allowed)).toEqual(answers(20, () => true))
+      expect(answers(limit, () => limits[kind](FROM).allowed)).toEqual(answers(limit, () => true))
       await clock.advance(4 * minute)
-      expect(limits[kind](FROM)).toEqual({ allowed: false, retryAfterMs: 6 * minute })
+      expect(limits[kind](FROM)).toEqual({ allowed: false, retryAfterMs: rest })
       expect(limits[kind](ELSEWHERE)).toEqual({ allowed: true })
 
       for (const other of others) {
         expect(limits[other](FROM)).toEqual({ allowed: true })
       }
 
-      await clock.advance(6 * minute)
+      await clock.advance(rest)
       expect(limits[kind](FROM)).toEqual({ allowed: true })
     },
   )
@@ -579,8 +622,8 @@ describe('RequestLimits, the mails and links of a password and an email', () => 
 
     answers(50, () => limits.invitationLink(FROM))
 
-    expect(answers(200, () => limits.verificationMail(FROM).allowed)).toEqual(
-      answers(200, () => true),
+    expect(answers(MAILS, () => limits.verificationMail(FROM).allowed)).toEqual(
+      answers(MAILS, () => true),
     )
   })
 })

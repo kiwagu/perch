@@ -10,6 +10,7 @@ import { z } from '@workspace/zod'
 
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { RequestLimits } from '../../limits/request-limits'
+import { ADDRESS_LINK_ATTEMPTS } from '../../limits/windows'
 import { specInvitations } from '../__fixtures__/invitations'
 import {
   ADDRESS,
@@ -157,13 +158,15 @@ describe('invitationRoutes', () => {
       }
     })
 
-    it('takes 20 reads of an address within 10 minutes, whatever the token, and answers the 21st 429 before the body is parsed', async () => {
+    it("takes an address's reads the contract allows within its window, whatever the token, and answers the next 429 before the body is parsed", async () => {
       const { root, ask, bob, invite } = await invitedHarness()
       const { token } = await invite('bob@example.test')
       const reading = vi.spyOn(root.organisations.invitations, 'read')
+      // Every other body names a token, which the service is asked to read.
+      const READ_BODIES = Math.ceil(ADDRESS_LINK_ATTEMPTS.limit / 2)
 
       // Bodies of any kind count: the limit is taken before the body is read.
-      for (let n = 0; n < 20; n += 1) {
+      for (let n = 0; n < ADDRESS_LINK_ATTEMPTS.limit; n += 1) {
         const body = n % 2 === 0 ? { token: `unknown-${n}` } : '{"token":'
 
         expect((await ask('POST', '/invitations/read', { body })).status).toBeGreaterThanOrEqual(
@@ -171,7 +174,7 @@ describe('invitationRoutes', () => {
         )
       }
 
-      expect(reading).toHaveBeenCalledTimes(10)
+      expect(reading).toHaveBeenCalledTimes(READ_BODIES)
 
       for (const sent of [
         { body: { token } },
@@ -189,14 +192,14 @@ describe('invitationRoutes', () => {
         expect(response).toEqual(refusal(429, 'rate-limited'))
       }
 
-      expect(reading).toHaveBeenCalledTimes(10)
+      expect(reading).toHaveBeenCalledTimes(READ_BODIES)
     })
 
     it('answers 429 with Retry-After in whole seconds, and lets another address read', async () => {
       const { invitations, ask, invite, limits } = await invitedHarness()
       const { token } = await invite('bob@example.test')
 
-      for (let n = 0; n < 20; n += 1) {
+      for (let n = 0; n < ADDRESS_LINK_ATTEMPTS.limit; n += 1) {
         await invitations(request('POST', '/invitations/read', { body: { token } }), ADDRESS)
       }
 
@@ -206,7 +209,9 @@ describe('invitationRoutes', () => {
       )
 
       expect(refused?.status).toBe(429)
-      expect(refused?.headers.get('Retry-After')).toBe('600')
+      expect(refused?.headers.get('Retry-After')).toBe(
+        String(ADDRESS_LINK_ATTEMPTS.windowMs / 1000),
+      )
       expect(
         await ask('POST', '/invitations/read', { from: '203.0.113.2', body: { token } }),
       ).toEqual(read('Acme', CONTRACT_ROLES.member, false))
@@ -216,15 +221,15 @@ describe('invitationRoutes', () => {
       expect(limits.emailConfirmation(ADDRESS)).toEqual({ allowed: true })
     })
 
-    it('lets the address read again 10 minutes after the window started', async () => {
+    it('lets the address read again once the window it started has passed', async () => {
       const { ask, clock, invite } = await invitedHarness()
       const { token } = await invite('bob@example.test')
 
-      for (let n = 0; n < 21; n += 1) {
+      for (let n = 0; n <= ADDRESS_LINK_ATTEMPTS.limit; n += 1) {
         await ask('POST', '/invitations/read', { body: { token } })
       }
 
-      await clock.advance(10 * 60_000)
+      await clock.advance(ADDRESS_LINK_ATTEMPTS.windowMs)
 
       expect(await ask('POST', '/invitations/read', { body: { token } })).toEqual(
         read('Acme', CONTRACT_ROLES.member, false),

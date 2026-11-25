@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban } from '../__fixtures__/account-ban'
 import { codeOf, keyOf } from '../__fixtures__/second-factor'
@@ -198,7 +199,7 @@ describe("authHandler, a sign-in's code step and a ban", () => {
       const mounted = await mountedOnRealAuth()
       const ann = await withSecondFactor(mounted)
 
-      await wrongPasswords(mounted, 9, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
 
       const challenge = await passwordStep(mounted, 'desk', FROM)
       const asked = turnsAsked(mounted.turns)
@@ -230,7 +231,7 @@ describe("authHandler, a sign-in's code step and a ban", () => {
       const mounted = await mountedOnRealAuth({ directory: queries.directory })
       const ann = await withSecondFactor(mounted)
 
-      await wrongPasswords(mounted, 9, FROM)
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
 
       const challenge = await passwordStep(mounted, 'desk', FROM)
       const admission = queries.hold(isAdmission)
@@ -377,8 +378,8 @@ describe("authHandler, a sign-in's backup code spent beside another use of the c
 
       expect((await answered(await spending)).status).toBe(200)
       expect(await answered(await again)).toEqual(invalidCode)
-      // That wrong code is the first failure of the new count: nine more spend it.
-      await wrongPasswords(mounted, 9, FROM)
+      // That wrong code is the first failure of the new count: the rest of the limit spends it.
+      await wrongPasswords(mounted, FAILED_SIGN_INS.limit - 1, FROM)
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
     },
     ARGON2_RUNS_MS,

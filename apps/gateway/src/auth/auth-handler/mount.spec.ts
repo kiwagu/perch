@@ -6,7 +6,7 @@ import { z } from '@workspace/zod'
 
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
-import { CREDENTIAL_CHECKS } from '../../limits/windows'
+import { CREDENTIAL_CHECKS, FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
@@ -44,8 +44,6 @@ const ELSEWHERE = '203.0.113.8'
 
 /** The `n`th address of a client that spreads its sign-ins over many addresses. */
 const spread = (n: number): string => `198.51.100.${n}`
-
-const MINUTE_MS = 60_000
 
 /** Better Auth's endpoints the mount does not hand over, each asked by GET and by POST. */
 const UNSERVED = [
@@ -96,6 +94,15 @@ const status = (code: number) => () => new Response(null, { status: code })
 
 /** `count` times `code`: the statuses of as many sign-ins answered alike. */
 const times = (count: number, code: number): number[] => Array.from({ length: count }, () => code)
+
+/** The failed sign-ins an email is allowed (`FAILED_SIGN_INS`). */
+const FAILURES = FAILED_SIGN_INS.limit
+
+/** The credential checks an address is allowed (`CREDENTIAL_CHECKS`). */
+const CHECKS = CREDENTIAL_CHECKS.limit
+
+/** What one more wrong sign-in than an email is allowed answers, from none: each judged, then refused. */
+const SPENT = [...times(FAILURES, 401), 429]
 
 /** A sign-in of `email` with a wrong password, as Better Auth's client sends it. */
 function signIn(email: string): Request {
@@ -342,7 +349,7 @@ describe('authHandler', () => {
     expect(received).toHaveLength(0)
   })
 
-  it('answers the 21st sign-up from one address within 10 s 429 with Retry-After, without asking Better Auth', async () => {
+  it("answers a sign-up past its address's credential checks within their window 429 with Retry-After, without asking Better Auth", async () => {
     const { route, received, clock } = mountedOnFakeAuth(status(200))
     /** The statuses of `count` sign-ups from `from`, started together, once the floor passed. */
     const signUps = async (from: string, count: number) => {
@@ -355,21 +362,23 @@ describe('authHandler', () => {
       return (await Promise.all(pending)).map((answer) => answer?.status ?? 0)
     }
 
-    expect(await signUps(FROM, 20)).toEqual(times(20, 202))
+    expect(await signUps(FROM, CHECKS)).toEqual(times(CHECKS, 202))
     await clock.advance(4_000 - SIGN_UP_FLOOR_MS)
 
     const refused = await route(signUpRequest(ANN), FROM)
 
     expect(refused?.status).toBe(429)
     expect(await refused?.json()).toEqual({ code: 'rate-limited' })
-    expect(refused?.headers.get('Retry-After')).toBe('6')
-    expect(received).toHaveLength(20)
+    expect(refused?.headers.get('Retry-After')).toBe(
+      String((CREDENTIAL_CHECKS.windowMs - 4_000) / 1000),
+    )
+    expect(received).toHaveLength(CHECKS)
     // Another address keeps its own limit.
     expect(await signUps(ELSEWHERE, 1)).toEqual([202])
     // Once the window has passed, the address signs up again.
-    await clock.advance(6_000 - SIGN_UP_FLOOR_MS)
+    await clock.advance(CREDENTIAL_CHECKS.windowMs - 4_000 - SIGN_UP_FLOOR_MS)
     expect(await signUps(FROM, 1)).toEqual([202])
-    expect(received).toHaveLength(22)
+    expect(received).toHaveLength(CHECKS + 2)
   })
 
   it("counts an address's sign-ups and sign-ins against one limit; a sign-in it refuses takes no place of its email", async () => {
@@ -378,15 +387,21 @@ describe('authHandler', () => {
         ? new Response(null, { status: 200 })
         : new Response(null, { status: 401 }),
     )
-    // Ten sign-ups started together, answered once the floor passed.
-    const signUps = Array.from({ length: 10 }, (_, n) =>
+
+    // The address's checks beyond an email's failures, as sign-ups started together, answered once
+    // the floor passed.
+    expect(CHECKS).toBeGreaterThan(FAILURES)
+
+    const signUps = Array.from({ length: CHECKS - FAILURES }, (_, n) =>
       route(signUpRequest(`user-${n}@example.test`), FROM),
     )
 
     await clock.advance(SIGN_UP_FLOOR_MS)
-    expect((await Promise.all(signUps)).map((answer) => answer?.status)).toEqual(times(10, 202))
+    expect((await Promise.all(signUps)).map((answer) => answer?.status)).toEqual(
+      times(CHECKS - FAILURES, 202),
+    )
 
-    for (let n = 0; n < 10; n += 1) {
+    for (let n = 0; n < FAILURES; n += 1) {
       expect((await route(signIn('ann@example.test'), FROM))?.status).toBe(401)
     }
 
@@ -398,22 +413,22 @@ describe('authHandler', () => {
     expect(refused?.headers.get('Retry-After')).toBe(
       String(Math.ceil((CREDENTIAL_CHECKS.windowMs - SIGN_UP_FLOOR_MS) / 1000)),
     )
-    expect(received).toHaveLength(20)
-    // Bob's refused sign-in took none of his email's ten places.
-    expect(await signIns(route, 'bob@example.test', 11)).toEqual([...times(10, 401), 429])
+    expect(received).toHaveLength(CHECKS)
+    // Bob's refused sign-in took none of his email's places.
+    expect(await signIns(route, 'bob@example.test', FAILURES + 1)).toEqual(SPENT)
   })
 
-  it("answers an email's eleventh sign-in after ten failed ones 429 with Retry-After, without asking Better Auth", async () => {
+  it("answers an email's sign-in once its failed sign-ins are spent 429 with Retry-After, without asking Better Auth", async () => {
     const { route, received } = mountedOnFakeAuth(status(401))
 
-    expect(await signIns(route, 'ann@example.test', 10)).toEqual(times(10, 401))
+    expect(await signIns(route, 'ann@example.test', FAILURES)).toEqual(times(FAILURES, 401))
 
     const refused = await route(signIn('ann@example.test'), FROM)
 
     expect(refused?.status).toBe(429)
     expect(await refused?.json()).toEqual({ code: 'rate-limited' })
-    expect(refused?.headers.get('Retry-After')).toBe(String((15 * MINUTE_MS) / 1000))
-    expect(received).toHaveLength(10)
+    expect(refused?.headers.get('Retry-After')).toBe(String(FAILED_SIGN_INS.windowMs / 1000))
+    expect(received).toHaveLength(FAILURES)
     // Another email keeps its own limit.
     expect(await signIns(route, 'bob@example.test', 1)).toEqual([401])
   })
@@ -421,11 +436,11 @@ describe('authHandler', () => {
   it('counts an email in any case against one limit', async () => {
     const { route, received } = mountedOnFakeAuth(status(401))
 
-    await signIns(route, 'ann@example.test', 5)
-    await signIns(route, 'Ann@Example.TEST', 5)
+    await signIns(route, 'ann@example.test', 1)
+    await signIns(route, 'Ann@Example.TEST', FAILURES - 1)
 
     expect(await signIns(route, 'ANN@example.test', 1)).toEqual([429])
-    expect(received).toHaveLength(10)
+    expect(received).toHaveLength(FAILURES)
   })
 
   it("clears an email's failed sign-ins once one succeeds", async () => {
@@ -434,14 +449,14 @@ describe('authHandler', () => {
       answer === 200 ? signedInAnswer() : new Response(null, { status: answer }),
     )
 
-    await signIns(route, 'ann@example.test', 9)
+    await signIns(route, 'ann@example.test', FAILURES - 1)
     answer = 200
     expect(await signIns(route, 'ann@example.test', 1)).toEqual([200])
     answer = 401
 
-    // The success forgot the nine failures: ten more reach Better Auth before the limit.
-    expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
-    expect(received).toHaveLength(20)
+    // The success forgot those failures: as many again as are allowed reach Better Auth.
+    expect(await signIns(route, 'ann@example.test', FAILURES + 1)).toEqual(SPENT)
+    expect(received).toHaveLength(2 * FAILURES)
   })
 
   it("clears an email's failed sign-ins once Better Auth answers 403 EMAIL_NOT_VERIFIED: the password was right, the email is not verified", async () => {
@@ -452,14 +467,14 @@ describe('authHandler', () => {
         : new Response(null, { status: answer }),
     )
 
-    await signIns(route, 'ann@example.test', 9)
+    await signIns(route, 'ann@example.test', FAILURES - 1)
     answer = 403
     expect(await signIns(route, 'ann@example.test', 1)).toEqual([403])
     answer = 401
 
-    // The 403 forgot the nine failures: ten more reach Better Auth before the limit.
-    expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
-    expect(received).toHaveLength(20)
+    // The 403 forgot those failures: as many again as are allowed reach Better Auth.
+    expect(await signIns(route, 'ann@example.test', FAILURES + 1)).toEqual(SPENT)
+    expect(received).toHaveLength(2 * FAILURES)
   })
 
   it('gives the place of a sign-in Better Auth did not judge back', async () => {
@@ -467,12 +482,12 @@ describe('authHandler', () => {
     const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
 
     // Answers that are neither a success nor wrong credentials count nothing.
-    expect(await signIns(route, 'ann@example.test', 12)).toEqual(times(12, 500))
+    expect(await signIns(route, 'ann@example.test', FAILURES + 2)).toEqual(times(FAILURES + 2, 500))
     answer = 429
-    expect(await signIns(route, 'ann@example.test', 12)).toEqual(times(12, 429))
+    expect(await signIns(route, 'ann@example.test', FAILURES + 2)).toEqual(times(FAILURES + 2, 429))
     answer = 401
-    expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
-    expect(received).toHaveLength(34)
+    expect(await signIns(route, 'ann@example.test', FAILURES + 1)).toEqual(SPENT)
+    expect(received).toHaveLength(2 * (FAILURES + 2) + FAILURES)
   })
 
   it.each([
@@ -487,15 +502,19 @@ describe('authHandler', () => {
       let answer = status(401)
       const { route, received } = mountedOnFakeAuth(() => answer())
 
-      expect(await signIns(route, 'ann@example.test', 9)).toEqual(times(9, 401))
+      expect(await signIns(route, 'ann@example.test', FAILURES - 1)).toEqual(
+        times(FAILURES - 1, 401),
+      )
       answer = refusal
-      // The refusals count nothing and keep no place: twelve in a row reach Better Auth.
-      expect(await signIns(route, 'ann@example.test', 12)).toEqual(times(12, 403))
+      // The refusals count nothing and keep no place: more in a row than are allowed reach Better Auth.
+      expect(await signIns(route, 'ann@example.test', FAILURES + 2)).toEqual(
+        times(FAILURES + 2, 403),
+      )
       answer = status(401)
 
-      // The nine failures stand: the tenth spends them.
+      // Those failures stand: the next spends them.
       expect(await signIns(route, 'ann@example.test', 2)).toEqual([401, 429])
-      expect(received).toHaveLength(22)
+      expect(received).toHaveLength(2 * FAILURES + 2)
     },
   )
 
@@ -509,20 +528,20 @@ describe('authHandler', () => {
       return new Response(null, { status: 401 })
     })
 
-    for (let n = 0; n < 12; n += 1) {
+    for (let n = 0; n < FAILURES + 2; n += 1) {
       await expect(route(signIn('ann@example.test'), FROM)).rejects.toThrow('the handler failed')
     }
 
     fail = false
-    expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
+    expect(await signIns(route, 'ann@example.test', FAILURES + 1)).toEqual(SPENT)
   })
 
   it('lets the email sign in again once its window has passed', async () => {
     const { route, clock } = mountedOnFakeAuth(status(401))
 
-    await signIns(route, 'ann@example.test', 10)
+    await signIns(route, 'ann@example.test', FAILURES)
     expect(await signIns(route, 'ann@example.test', 1)).toEqual([429])
-    await clock.advance(15 * MINUTE_MS)
+    await clock.advance(FAILED_SIGN_INS.windowMs)
     expect(await signIns(route, 'ann@example.test', 1)).toEqual([401])
   })
 
@@ -551,7 +570,7 @@ describe('authHandler', () => {
 
     expect(received).toHaveLength(0)
     // None of them took a place.
-    expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
+    expect(await signIns(route, 'ann@example.test', FAILURES + 1)).toEqual(SPENT)
   })
 
   it('hands Better Auth the sign-in body the limit counted, as JSON, whatever its content type', async () => {
@@ -575,8 +594,11 @@ describe('authHandler', () => {
     expect(handed?.headers.get('x-perch-device')).toBe('laptop')
     // Better Auth reads the email the limit counted, not the one a form reading would find.
     expect(JSON.parse((await handed?.text()) ?? '')).toEqual(JSON.parse(body))
-    // The decoy was counted: nine more failures and its eleventh sign-in is refused.
-    expect(await signIns(route, 'decoy@example.test', 10)).toEqual([...times(9, 401), 429])
+    // The decoy was counted: the rest of its failures, then a refusal.
+    expect(await signIns(route, 'decoy@example.test', FAILURES)).toEqual([
+      ...times(FAILURES - 1, 401),
+      429,
+    ])
   })
 
   it("strips every Set-Cookie and every other header of Better Auth's answer from a sign-in's, its body by the allowlist", async () => {
@@ -665,7 +687,7 @@ describe('authHandler', () => {
 
     await signUpOn(auth, ANN, deviceHeaders('laptop'))
 
-    for (let n = 0; n < 10; n += 1) {
+    for (let n = 0; n < FAILURES; n += 1) {
       expect((await signIn({ ...credentials, password: 'wrong-pass-word' })).status).toBe(401)
     }
 
@@ -675,7 +697,7 @@ describe('authHandler', () => {
     // the limit counted, which names the decoy, so Ann is never signed in and the decoy is limited.
     const statuses: number[] = []
 
-    for (let n = 0; n < 11; n += 1) {
+    for (let n = 0; n <= FAILURES; n += 1) {
       statuses.push(
         (
           await signIn(
@@ -687,7 +709,7 @@ describe('authHandler', () => {
       )
     }
 
-    expect(statuses).toEqual([...times(10, 401), 429])
+    expect(statuses).toEqual(SPENT)
     expect((await signIn(credentials)).status).toBe(429)
   })
 

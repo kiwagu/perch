@@ -6,6 +6,7 @@
 
 import type { IdentityId } from '@workspace/ids'
 
+import { DEVICE_LIMIT } from '../../auth-instance'
 import { DeviceSessions } from '../../device-sessions'
 
 import type { mountedOnRealAuth, SignedInAccount } from './mount'
@@ -13,6 +14,26 @@ import type { mountedOnRealAuth, SignedInAccount } from './mount'
 type Mounted = Awaited<ReturnType<typeof mountedOnRealAuth>>
 
 const MINUTE_MS = 60_000
+
+/** The name of the device signed in `at`-th, counting from 0: one letter each, from `a`. */
+const nameAt = (at: number) => String.fromCharCode('a'.charCodeAt(0) + at)
+
+/** The first `count` devices of an account, in the order they sign in. */
+function devicesNamed(count: number): readonly [string, ...string[]] {
+  return [nameAt(0), ...Array.from({ length: count - 1 }, (_, at) => nameAt(at + 1))]
+}
+
+/** As many devices as one account keeps signed in at once (`DEVICE_LIMIT`), `a` signed in first. */
+export const AT_THE_LIMIT = devicesNamed(DEVICE_LIMIT)
+
+/** One device short of the limit: the next sign-in takes the last place. */
+export const ONE_SHORT = devicesNamed(DEVICE_LIMIT - 1)
+
+/** The device that takes the last place after `ONE_SHORT`, the last of `AT_THE_LIMIT`. */
+export const LAST_PLACE = nameAt(DEVICE_LIMIT - 1)
+
+/** A device past the limit, after `AT_THE_LIMIT`. */
+export const PAST_THE_LIMIT = nameAt(DEVICE_LIMIT)
 
 /**
  * Marks every device of `account` seen a minute after the other, in the order given, all after

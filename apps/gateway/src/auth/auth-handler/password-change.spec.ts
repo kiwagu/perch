@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import { FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import cancelAllowStatement from '../__fixtures__/email-change-cancel-allow.surql'
 import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.surql'
@@ -24,7 +25,7 @@ import {
   signInRequest,
   turnsAsked,
 } from './__fixtures__/mount'
-import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
+import { failAllButLastSignIn, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from, unless a test names another. */
@@ -103,14 +104,14 @@ describe('authHandler, the change of a password', () => {
       const mounted = await mountedOnRealAuth()
       const ann = await signedInOn(mounted, ANN, ['laptop', 'phone'])
 
-      for (let n = 0; n < 10; n += 1) {
+      for (let n = 0; n < FAILED_SIGN_INS.limit; n += 1) {
         const wrong = await mounted.route(change(ann.on('laptop'), 'Wrong-pass-1'), FROM)
 
         expect(wrong?.status).toBe(400)
         expect(await wrong?.json()).toEqual({ code: 'invalid-credentials' })
       }
 
-      // The account's ten failed sign-ins are spent: the right password and a sign-in wait too.
+      // The account's failed sign-ins are spent: the right password and a sign-in wait too.
       const limited = await mounted.route(change(ann.on('laptop'), PASSWORD), FROM)
 
       expect(limited?.status).toBe(429)
@@ -118,7 +119,7 @@ describe('authHandler, the change of a password', () => {
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
       expect((await mounted.sessions.read(ann.tokens.get('phone') ?? '')).kind).toBe('session')
       expect(ann.sockets.get('phone')?.ended).toEqual([])
-      await mounted.clock.advance(15 * 60 * 1000)
+      await mounted.clock.advance(FAILED_SIGN_INS.windowMs)
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
     },
     ARGON2_RUNS_MS,
@@ -130,9 +131,9 @@ describe('authHandler, the change of a password', () => {
       const mounted = await mountedOnRealAuth()
       const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+      await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
       expect((await mounted.route(change(ann.on('laptop'), PASSWORD), FROM))?.status).toBe(204)
-      // The change forgot nothing: the next failure is the tenth, and the new password waits.
+      // The change forgot nothing: the next failure is the last allowed, and the new password waits.
       expect(
         (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
       ).toBe(401)
@@ -149,15 +150,15 @@ describe('authHandler, the change of a password', () => {
       const mounted = await mountedOnRealAuth()
       const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+      await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
 
       const refused = await mounted.route(change(ann.on('laptop'), current), FROM)
 
       expect(refused?.status).toBe(400)
       expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
-      // The tenth failure spent the account's failed sign-ins; the password stays what it was.
+      // That last failure spent the account's failed sign-ins; the password stays what it was.
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
-      await mounted.clock.advance(15 * 60 * 1000)
+      await mounted.clock.advance(FAILED_SIGN_INS.windowMs)
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
     },
     ARGON2_RUNS_MS,

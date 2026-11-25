@@ -35,7 +35,8 @@ const confirmBody = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.toke
  * credential checks (429); a body it cannot read, or one with no password, answers 400
  * `bad-request`, a new email that is not an email (empty, longer than the `email` value's length,
  * or of any other shape) 400 `email-invalid`. Then one of the address's mails and one of the
- * account's three changes in a quarter of an hour are taken (`RequestLimits.emailChangeMail`, 429).
+ * account's changes within their window (`IDENTITY_EMAIL_CHANGES`) are taken
+ * (`RequestLimits.emailChangeMail`, 429).
  * Everything after runs in the account's turn, so no reset or change of its password runs in
  * between: the caller's session is read again (401 `unauthorized` when it ended meanwhile) with the
  * account's email as it is now, the password must find a place among that email's failed sign-ins

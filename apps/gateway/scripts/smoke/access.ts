@@ -9,6 +9,8 @@
 import type { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
+import { CREDENTIAL_CHECKS, FAILED_SIGN_INS } from '../../src/limits/windows'
+
 import { freshPassword } from './fresh-password'
 import { type Answer, type Credentials, call, signUp } from './http'
 import { reported } from './reported-answer'
@@ -109,8 +111,9 @@ function acceptedEmpty(answer: Answer): boolean {
 }
 
 /**
- * The credential steps: 20 sign-ins per client address within 10 s (sign-ins of unknown emails,
- * so no email's own limit counts), 10 failed sign-ins per email, each limit answering
+ * The credential steps: the sign-ins a client address is allowed within their window (sign-ins of
+ * unknown emails, so no email's own limit counts), the failed sign-ins an email is allowed, each
+ * limit (the contract's, `CREDENTIAL_CHECKS` and `FAILED_SIGN_INS`) answering
  * `rate-limited` with `Retry-After`; a sign-up of an email that has an account, answered as a new
  * one and mailed nothing; an unverified account's sign-in refused 403; the resend answered alike
  * for any email and limited per email; and the verification of a link, made up, opened again, or
@@ -118,30 +121,33 @@ function acceptedEmpty(answer: Answer): boolean {
  */
 export async function accessSteps(base: string, mailbox: Mailbox): Promise<void> {
   await step(
-    '21 sign-ins of unknown emails from one address within 10 s: the 21st answers 429 with Retry-After',
+    `${CREDENTIAL_CHECKS.limit + 1} sign-ins of unknown emails from one address within their window: the last answers 429 with Retry-After`,
     async () => {
       const device = { id: 'smoke-device-unknown-emails', label: 'Smoke' }
 
-      checkLimited(await signIns(base, device, 21, freshAccount), 401)
+      checkLimited(await signIns(base, device, CREDENTIAL_CHECKS.limit + 1, freshAccount), 401)
     },
   )
 
-  await step('11 wrong passwords for one email: the 11th answers 429', async () => {
-    const device = { id: 'smoke-device-wrong-passwords', label: 'Smoke' }
-    const { identity } = await signUp(base, mailbox, { ...freshAccount(), device })
-    const last = checkLimited(
-      await signIns(base, device, 11, () => ({
-        email: identity.email,
-        password: crypto.randomUUID(),
-      })),
-      401,
-    )
+  await step(
+    `${FAILED_SIGN_INS.limit + 1} wrong passwords for one email: the last answers 429`,
+    async () => {
+      const device = { id: 'smoke-device-wrong-passwords', label: 'Smoke' }
+      const { identity } = await signUp(base, mailbox, { ...freshAccount(), device })
+      const last = checkLimited(
+        await signIns(base, device, FAILED_SIGN_INS.limit + 1, () => ({
+          email: identity.email,
+          password: crypto.randomUUID(),
+        })),
+        401,
+      )
 
-    check(
-      rateLimited.safeParse(last?.body).success,
-      `the last answered ${last === undefined ? 'nothing' : reported(last)}`,
-    )
-  })
+      check(
+        rateLimited.safeParse(last?.body).success,
+        `the last answered ${last === undefined ? 'nothing' : reported(last)}`,
+      )
+    },
+  )
 
   await step(
     'a sign-up of a taken email answers 202 with no body, as a new one does, and sends it no mail',

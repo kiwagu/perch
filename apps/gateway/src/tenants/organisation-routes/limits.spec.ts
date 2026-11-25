@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CONTRACT_ROLES } from '@workspace/kernel'
 
+import { ADDRESS_INVITES, ADDRESS_MAILS, IDENTITY_INVITES } from '../../limits/windows'
 import { ADDRESS, closeHarness, harness, request } from '../__fixtures__/organisation-routes'
 
 afterEach(closeHarness)
@@ -9,6 +10,8 @@ afterEach(closeHarness)
 describe('organisationRoutes', () => {
   describe('limits', () => {
     const minute = 60_000
+    /** The invitations an admin makes within the window (`IDENTITY_INVITES`). */
+    const INVITES = IDENTITY_INVITES.limit
 
     /** The path an admin invites on. */
     const invitationsOf = (key: string) => `/organisations/${key}/invitations`
@@ -19,24 +22,24 @@ describe('organisationRoutes', () => {
       role: CONTRACT_ROLES.member,
     })
 
-    it("lets an admin's 30 invites within 10 minutes reach the service, unknown emails included, and answers the 31st 429 without calling it", async () => {
+    it("lets an admin's invites the contract allows within its window reach the service, unknown emails included, and answers the next 429 without calling it", async () => {
       const { root, ann, ask, founded } = await harness()
       const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
       await founded()
 
-      for (let n = 0; n < 30; n += 1) {
+      for (let n = 0; n < INVITES; n += 1) {
         expect(
           (await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })).status,
         ).toBe(201)
       }
 
-      expect(invite).toHaveBeenCalledTimes(30)
+      expect(invite).toHaveBeenCalledTimes(INVITES)
 
-      const refused = await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(30) })
+      const refused = await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(INVITES) })
 
       expect(refused).toEqual({ status: 429, body: { code: 'rate-limited' } })
-      expect(invite).toHaveBeenCalledTimes(30)
+      expect(invite).toHaveBeenCalledTimes(INVITES)
     })
 
     it('answers 429 with Retry-After in whole seconds', async () => {
@@ -44,7 +47,7 @@ describe('organisationRoutes', () => {
 
       await founded()
 
-      for (let n = 0; n < 30; n += 1) {
+      for (let n = 0; n < INVITES; n += 1) {
         const answered = routes(
           request('POST', invitationsOf('acme'), { as: ann, body: stranger(n) }),
           ADDRESS,
@@ -56,12 +59,12 @@ describe('organisationRoutes', () => {
       }
 
       const response = await routes(
-        request('POST', invitationsOf('acme'), { as: ann, body: stranger(30) }),
+        request('POST', invitationsOf('acme'), { as: ann, body: stranger(INVITES) }),
         ADDRESS,
       )
 
       expect(response?.status).toBe(429)
-      expect(response?.headers.get('Retry-After')).toBe('600')
+      expect(response?.headers.get('Retry-After')).toBe(String(IDENTITY_INVITES.windowMs / 1000))
     })
 
     it('still lets another admin invite from another address when one is refused', async () => {
@@ -72,7 +75,7 @@ describe('organisationRoutes', () => {
         await root.organisations.create({ identity: bob.identity.id, key: 'bobco', name: 'Bob Co' })
       )._unsafeUnwrap()
 
-      for (let n = 0; n <= 30; n += 1) {
+      for (let n = 0; n <= INVITES; n += 1) {
         await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
@@ -87,7 +90,7 @@ describe('organisationRoutes', () => {
       ).toBe(201)
     })
 
-    it('takes 60 invites from one address across three admins and answers the 61st 429', async () => {
+    it("takes an address's invites the contract allows across three admins and answers the next 429", async () => {
       const { root, ann, bob, cat, ask, founded } = await harness()
       const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
@@ -99,17 +102,26 @@ describe('organisationRoutes', () => {
         await root.organisations.create({ identity: cat.identity.id, key: 'catco', name: 'Cat Co' })
       )._unsafeUnwrap()
 
-      for (let n = 0; n < 30; n += 1) {
+      // Two admins fill the address's invitations: ann all of hers, bob the rest.
+      const fromBob = ADDRESS_INVITES.limit - INVITES
+
+      expect(fromBob).toBeGreaterThan(0)
+      expect(fromBob).toBeLessThanOrEqual(INVITES)
+
+      for (let n = 0; n < INVITES; n += 1) {
         await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
+      }
+
+      for (let n = 0; n < fromBob; n += 1) {
         await ask('POST', invitationsOf('bobco'), { as: bob, body: stranger(n) })
       }
 
-      expect(invite).toHaveBeenCalledTimes(60)
+      expect(invite).toHaveBeenCalledTimes(ADDRESS_INVITES.limit)
       expect(await ask('POST', invitationsOf('catco'), { as: cat, body: stranger(0) })).toEqual({
         status: 429,
         body: { code: 'rate-limited' },
       })
-      expect(invite).toHaveBeenCalledTimes(60)
+      expect(invite).toHaveBeenCalledTimes(ADDRESS_INVITES.limit)
       // The same admin from another address is let in: cat's own bucket was charged only once.
       expect(
         (
@@ -128,7 +140,7 @@ describe('organisationRoutes', () => {
 
       await founded()
 
-      for (let n = 0; n < 40; n += 1) {
+      for (let n = 0; n < INVITES + 10; n += 1) {
         expect(
           await ask('POST', invitationsOf('acme'), {
             as: ann,
@@ -137,11 +149,11 @@ describe('organisationRoutes', () => {
         ).toEqual({ status: 400, body: { code: 'bad-request' } })
       }
 
-      for (let n = 0; n < 30; n += 1) {
+      for (let n = 0; n < INVITES; n += 1) {
         await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
-      expect(invite).toHaveBeenCalledTimes(30)
+      expect(invite).toHaveBeenCalledTimes(INVITES)
     })
 
     it('counts an invitation whose email is not one, though the service is not asked', async () => {
@@ -150,7 +162,7 @@ describe('organisationRoutes', () => {
 
       await founded()
 
-      for (let n = 0; n < 30; n += 1) {
+      for (let n = 0; n < INVITES; n += 1) {
         expect(
           await ask('POST', invitationsOf('acme'), {
             as: ann,
@@ -166,13 +178,13 @@ describe('organisationRoutes', () => {
       expect(invite).not.toHaveBeenCalled()
     })
 
-    it('answers the 201st mail of an address 429, sign-ups and invites together, its invite windows untouched', async () => {
+    it("answers an address's mail past its limit 429, sign-ups and invites together, its invite windows untouched", async () => {
       const { limits, ann, ask, founded } = await harness()
 
       await founded()
 
-      // 195 of the address's mails went out as sign-ups.
-      for (let n = 0; n < 195; n += 1) {
+      // All but five of the address's mails went out as sign-ups.
+      for (let n = 0; n < ADDRESS_MAILS.limit - 5; n += 1) {
         expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
       }
 
@@ -182,7 +194,7 @@ describe('organisationRoutes', () => {
         ).toBe(201)
       }
 
-      // Refused by the address's mails: nothing of ann's 30 nor of the address's 60 is spent.
+      // Refused by the address's mails: nothing of ann's invitations nor of the address's is spent.
       for (let n = 5; n < 15; n += 1) {
         expect(await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })).toEqual({
           status: 429,
@@ -190,8 +202,8 @@ describe('organisationRoutes', () => {
         })
       }
 
-      // Another address: 25 more of ann's 30 are left.
-      for (let n = 15; n < 40; n += 1) {
+      // Another address: the rest of ann's invitations are left.
+      for (let n = 15; n < INVITES + 10; n += 1) {
         expect(
           (
             await ask('POST', invitationsOf('acme'), {
@@ -208,7 +220,7 @@ describe('organisationRoutes', () => {
           await ask('POST', invitationsOf('acme'), {
             as: ann,
             from: '203.0.113.9',
-            body: stranger(40),
+            body: stranger(INVITES + 10),
           })
         ).status,
       ).toBe(429)
@@ -219,30 +231,30 @@ describe('organisationRoutes', () => {
 
       await founded()
 
-      for (let n = 0; n < 31; n += 1) {
+      for (let n = 0; n <= INVITES; n += 1) {
         await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
-      // 30 of the address's 200 mails went out: the refused 31st invite took none.
-      for (let n = 0; n < 170; n += 1) {
+      // The admin's invitations took as many of the address's mails: the refused one took none.
+      for (let n = 0; n < ADDRESS_MAILS.limit - INVITES; n += 1) {
         expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
       }
 
       expect(limits.verificationMail(ADDRESS).allowed).toBe(false)
     })
 
-    it('lets the admin invite again 10 minutes after the window started', async () => {
+    it('lets the admin invite again once the window it started has passed', async () => {
       const { clock, ann, ask, founded } = await harness()
 
       await founded()
 
-      for (let n = 0; n <= 30; n += 1) {
+      for (let n = 0; n <= INVITES; n += 1) {
         await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
-      await clock.advance(10 * minute)
+      await clock.advance(IDENTITY_INVITES.windowMs)
       expect(
-        (await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(31) })).status,
+        (await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(INVITES + 1) })).status,
       ).toBe(201)
     })
 

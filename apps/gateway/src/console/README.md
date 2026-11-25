@@ -66,7 +66,7 @@ never wait on each other in a circle.
   answers 409 `failed` (the card offers no rename then, so only a race meets it).
 - A change of the email (`edit-handlers.ts`) is the account's own change of its email without its
   password (`auth/README.md`): one of the operator's address's mails and one of the account's
-  three changes in a quarter of an hour; in the account's turn, an email another account holds,
+  changes within their window (`IDENTITY_EMAIL_CHANGES`); in the account's turn, an email another account holds,
   or the account's own, answers 409 `email-taken`, nothing changed and nothing sent; any other
   ends the account's pending change, its own or an operator's, keeps the new one and mails its
   link to the new email. The link's confirmation, in the auth mount, moves the email, marks it

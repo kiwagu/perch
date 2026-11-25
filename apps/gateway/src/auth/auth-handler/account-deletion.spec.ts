@@ -6,6 +6,7 @@ import { CONTRACT_ROLES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import { ADDRESS_LINK_ATTEMPTS, FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { admitted } from '../../tenants/__fixtures__/invitations'
 import departingMembershipsStatement from '../../tenants/surql/departing-memberships.surql'
@@ -30,7 +31,7 @@ import {
   turnsAsked,
   welcomed,
 } from './__fixtures__/mount'
-import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
+import { failAllButLastSignIn, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { SIGN_UP_FLOOR_MS } from './sign-up'
 
 /** The client address a request comes from, unless a test names another. */
@@ -125,8 +126,8 @@ describe('authHandler, the request to delete the account', () => {
 
     expect(mounted.outbox.to(ANN)).toHaveLength(1)
 
-    // Eight more failures, by sign-ins, spend the account's ten.
-    for (let n = 0; n < 8; n += 1) {
+    // The rest of the email's failed sign-ins, spent by sign-ins.
+    for (let n = 2; n < FAILED_SIGN_INS.limit; n += 1) {
       expect(
         (await mounted.route(signInRequest(ANN, 'Wrong-pass-1', 'desk'), ELSEWHERE))?.status,
       ).toBe(401)
@@ -151,9 +152,9 @@ describe('authHandler, the request to delete the account', () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-    await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+    await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
     expect((await mounted.route(askToDelete(ann.on('laptop')), FROM))?.status).toBe(202)
-    // The right password forgot nothing: the next failure is the tenth, and the sign-in waits.
+    // The right password forgot nothing: the next failure is the last allowed, and the sign-in waits.
     expect(
       (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
     ).toBe(401)
@@ -166,7 +167,7 @@ describe('authHandler, the request to delete the account', () => {
       const mounted = await mountedOnRealAuth()
       const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+      await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
 
       const refused = await mounted.route(askToDelete(ann.on('laptop'), password), FROM)
 
@@ -174,7 +175,7 @@ describe('authHandler, the request to delete the account', () => {
       expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
       // The sign-up's mail alone: no mail to delete the account.
       expect(mounted.outbox.to(ANN)).toHaveLength(1)
-      // The tenth failure spent the account's failed sign-ins.
+      // That last failure spent the account's failed sign-ins.
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
     },
     60_000,
@@ -677,10 +678,10 @@ describe('authHandler, the deletion of an account by its link', () => {
     }
   })
 
-  it('takes twenty attempts of an address within ten minutes, and answers the next rate-limited', async () => {
+  it("takes an address's attempts the contract allows within its window, and answers the next rate-limited", async () => {
     const mounted = await mountedOnRealAuth()
 
-    for (let n = 0; n < 20; n += 1) {
+    for (let n = 0; n < ADDRESS_LINK_ATTEMPTS.limit; n += 1) {
       expect((await mounted.route(press(`not-a-token-${n}`), FROM))?.status).toBe(401)
     }
 
@@ -693,7 +694,7 @@ describe('authHandler, the deletion of an account by its link', () => {
       401,
     )
     expect((await mounted.route(press('not-a-token'), ELSEWHERE))?.status).toBe(401)
-    await mounted.clock.advance(10 * MINUTE_MS)
+    await mounted.clock.advance(ADDRESS_LINK_ATTEMPTS.windowMs)
     expect((await mounted.route(press('not-a-token'), FROM))?.status).toBe(401)
   })
 

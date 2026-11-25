@@ -4,6 +4,7 @@ import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, profileIdFactory } from '@workspace/ids'
 import { CONTRACT_ROLES } from '@workspace/kernel'
 
+import { CREDENTIAL_CHECKS, FAILED_SIGN_INS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban, sessionStates } from '../__fixtures__/account-ban'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
@@ -35,7 +36,7 @@ import {
   signInRequest,
   turnsAsked,
 } from './__fixtures__/mount'
-import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
+import { failAllButLastSignIn, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from. */
@@ -259,10 +260,10 @@ describe('authHandler, a sign-in and what runs beside it', () => {
       const mounted = await mountedOnRealAuth()
 
       await signedInOn(mounted, ANN, ['laptop'])
-      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+      await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
 
       expect((await mounted.route(signInRequest(ANN, password, 'desk'), FROM))?.status).toBe(401)
-      // The tenth failure spent them: the right password waits too.
+      // That last failure spent them: the right password waits too.
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
     },
     60_000,
@@ -459,13 +460,13 @@ describe('authHandler, the sign-in of a banned account', () => {
 
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'phone'), FROM)
 
-    for (let failed = 0; failed < 9; failed++) {
+    for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
     }
 
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM))?.status).toBe(403)
     expect((await wrong())?.status).toBe(401)
-    // Ten failures, had the refusal of the banned account not forgotten the nine before it.
+    // The last failure allowed, had the refusal of the banned account not forgotten those before it.
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM))?.status).toBe(403)
   }, 60_000)
 
@@ -600,16 +601,16 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
       const mounted = await mountedOnRealAuth()
 
       await signedInOn(mounted, ANN, ['laptop'])
-      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+      await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
 
       const refused = await mounted.route(forged(), FROM)
 
       expect([refused?.status, await refused?.json()]).toEqual([403, { code }])
-      // It was no failure: the next wrong password is the tenth, not the eleventh.
+      // It was no failure: the next wrong password is the last allowed, not one past it.
       expect(
         (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
       ).toBe(401)
-      // It was no success either: the nine failures stand, so the right password waits.
+      // It was no success either: those failures stand, so the right password waits.
       expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
     },
     60_000,
@@ -623,14 +624,14 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
     await signedInOn(mounted, ANN, ['laptop'])
     expect((await mounted.route(forged(), FROM))?.status).toBe(403)
 
-    // A second before a quarter hour after the refusal, the first wrong passwords come.
-    await mounted.clock.advance(15 * 60_000 - 1_000)
+    // A second before the window from the refusal would end, the first wrong passwords come.
+    await mounted.clock.advance(FAILED_SIGN_INS.windowMs - 1_000)
 
-    for (let failed = 0; failed < 10; failed += 1) {
+    for (let failed = 0; failed < FAILED_SIGN_INS.limit; failed += 1) {
       expect((await wrong())?.status).toBe(401)
     }
 
-    // Past the quarter hour of the refusal, still within that of the first wrong password.
+    // Past the window from the refusal, still within that from the first wrong password.
     await mounted.clock.advance(2_000)
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
   }, 60_000)
@@ -639,14 +640,17 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
     const mounted = await mountedOnRealAuth()
 
     await annsLink(mounted.outbox)
-    await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+    await failAllButLastSignIn((request, from) => mounted.route(request, from), ANN, FROM)
 
     const refused = await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
 
     expect([refused?.status, await refused?.json()]).toEqual([403, { code: 'EMAIL_NOT_VERIFIED' }])
 
-    // The right password was checked: ten more wrong ones reach Better Auth before the limit.
-    for (let failed = 0; failed < 10; failed += 1) {
+    // The right password was checked: as many wrong ones as are allowed reach Better Auth before the
+    // limit, once the address's credential checks open again; the email's failures would not.
+    await mounted.clock.advance(CREDENTIAL_CHECKS.windowMs)
+
+    for (let failed = 0; failed < FAILED_SIGN_INS.limit; failed += 1) {
       expect(
         (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
       ).toBe(401)
@@ -697,14 +701,14 @@ describe('authHandler, the password step of an account whose second factor is on
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
     const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
 
-    for (let failed = 0; failed < 9; failed++) {
+    for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
     }
 
     expect((await right())?.status).toBe(200)
-    // The tenth failure: the right password counted none.
+    // The last failure allowed: the right password counted none.
     expect((await wrong())?.status).toBe(401)
-    // And it forgot none: the ten keep the right password out.
+    // And it forgot none: they keep the right password out.
     expect((await right())?.status).toBe(429)
   }, 60_000)
 
@@ -783,7 +787,7 @@ describe('authHandler, the password step of an account whose second factor is on
     const ann = await annWithSecondFactor(mounted)
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
 
-    for (let failed = 0; failed < 9; failed++) {
+    for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
     }
 
@@ -798,7 +802,7 @@ describe('authHandler, the password step of an account whose second factor is on
 
     expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'account-banned' }])
     expect(await challengeRows(mounted)).toEqual([])
-    // The refusal judged nothing: the next wrong password is the tenth, which spends them.
+    // The refusal judged nothing: the next wrong password is the last allowed, which spends them.
     expect((await wrong())?.status).toBe(401)
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
   }, 60_000)
@@ -813,7 +817,7 @@ describe('authHandler, the judgement of a password step that met the second fact
     const link = (await mounted.accountDeletions.ask(ann.identity))._unsafeUnwrap()
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
 
-    for (let failed = 0; failed < 9; failed++) {
+    for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
     }
 
@@ -839,7 +843,7 @@ describe('authHandler, the judgement of a password step that met the second fact
 
     expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'account-banned' }])
     // The refusal judged nothing, though the email has no account any more: the next wrong
-    // password is the tenth, which spends them.
+    // password is the last allowed, which spends them.
     expect((await wrong())?.status).toBe(401)
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
   }, 60_000)
@@ -856,7 +860,7 @@ describe('authHandler, the password step of a banned account whose second factor
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
     const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
 
-    for (let failed = 0; failed < 9; failed++) {
+    for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
     }
 
@@ -865,7 +869,7 @@ describe('authHandler, the password step of a banned account whose second factor
     expect([refused?.status, await refused?.json()]).toEqual([403, { code: 'account-banned' }])
     expect(await challengeRows(mounted)).toEqual([])
     expect((await wrong())?.status).toBe(401)
-    // Ten failures stand: the refusal of the banned account forgot none of them.
+    // The failures allowed stand: the refusal of the banned account forgot none of them.
     expect((await right())?.status).toBe(429)
   }, 60_000)
 
@@ -882,7 +886,7 @@ describe('authHandler, the password step of a banned account whose second factor
 
     const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
 
-    for (let failed = 0; failed < 9; failed++) {
+    for (let failed = 1; failed < FAILED_SIGN_INS.limit; failed++) {
       expect((await wrong())?.status).toBe(401)
     }
 
