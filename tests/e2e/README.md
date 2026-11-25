@@ -289,8 +289,10 @@ the organisation of that name among those received, and waits for the toast
 `invitation-accepted` and the heading), `expectMembers` (the members list holds exactly these
 emails: an item shows its email beside its role select), `expectInvitationMail` and
 `openInvitationMail` (the mail of `organisations.invite` after the mails of the address counted
-before the invitation, held to its declaration, the second one also opening its link), and the
-locators `memberItems`, `sentItems`, `receivedItem` and `noteItem`.
+before the invitation, held to its declaration with the values `invitationValues` gives,
+`src/support/invitation-values.ts`: the invited email, the inviter, and the invited account's
+and the organisation's languages where the test knows them; the second one also opening its
+link), and the locators `memberItems`, `sentItems`, `receivedItem` and `noteItem`.
 `src/support/password-reset.ts`: the reset of a password the tests share: `askForReset` (opens
 `/forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
 its send button and waits for the gateway's answer), `resetRequested` (its message),
