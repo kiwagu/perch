@@ -102,6 +102,35 @@ tester.run('contract-terms', contractTerms, {
     typed(
       'declare function make(opts?: { identity: string }): void\ndeclare const identity: string\nmake({ identity })',
     ),
+    typed(
+      "type Target = { kind: 'member'; key: string } | { kind: 'members'; key: string }\ndeclare const request: { target: Target | undefined }\nif (request.target?.kind === 'member') {\n  switch (request.target?.kind) {\n    case 'member':\n      break\n  }\n}",
+    ),
+    typed(
+      "type Target = { kind: 'member'; key: string } | { kind: 'members'; key: string }\ndeclare const request: { targets: Target[]; pair: [Target, Target] }\nif (request.targets[0]?.kind === 'member' && request.pair[1].kind === 'member') {\n  switch (request.targets[0]?.kind) {\n    case 'member':\n      break\n  }\n  console.log(request.pair[1].kind === 'member')\n}",
+    ),
+    typed(
+      "declare const brand: unique symbol\ntype Brand = { readonly [brand]: true }\ndeclare const byKey: { [k: `id_${string}`]: 'member' | 'label'; [k: `${string}_alice`]: 'member' | (string & Brand) }\nexport const a = byKey.id_alice === 'member'",
+    ),
+    typed(
+      "declare const entries: { [key: number]: 'member' | 'label'; [key: `${number}`]: 'member' }\nexport const a = entries[0] === 'member'",
+    ),
+    typed(
+      "type Target = { kind: 'member' } | { kind: 'label' }\nexport class Holder {\n  declare target: Target\n  isMember(): this is this & { target: { kind: 'member' } } {\n    return this.target.kind === 'member'\n  }\n  run(): void {\n    if (this.isMember()) {\n      switch (this.target.kind) {\n        case 'member':\n          break\n      }\n    }\n  }\n}",
+    ),
+    typed(
+      "export class Seats {\n  declare static role: Role\n  static check = function (this: { role: string }): boolean {\n    return this.role === 'admin'\n  }\n}",
+    ),
+    byValue("void page.waitForURL('**/assets/**')"),
+    typed(
+      "export const TABLES = ['identity'] as const\nexport const MIXED = ['identity', 'tenant'] as const",
+    ),
+    typed("declare const kind: unknown\nexport const isTenant = kind === 'tenant'"),
+    typed(
+      "declare const row: Record<string, unknown>\nexport const shown = typeof row['displayName'] === 'string' && row['displayName'] === 'admin'\nswitch (row['displayName']) {\n  case 'admin':\n    break\n}",
+    ),
+    typed(
+      "export const gatewayRoutes = ['/devices', '/organisations', '/me'] as const\nexport const documentRoles = ['author', '/me'] as const",
+    ),
     byValue("void page.goto('/settings/x')"),
     byValue("void page.goto('/settingsx')"),
     byValue("void page.goto('/')"),
@@ -170,6 +199,68 @@ tester.run('contract-terms', contractTerms, {
         "declare function makeNote(can?: Partial<Record<Role, boolean>>): void\ndeclare const member: boolean\nmakeNote({ member, admin: true, 'guest': false })",
       ),
       errors: [role('member'), role('admin'), role('guest')],
+    },
+    {
+      ...typed(
+        "declare const held: { current: { role: Role } | undefined }\nif (held.current?.role === 'admin') {\n  console.log(held.current.role === 'admin')\n}",
+      ),
+      errors: [role('admin'), role('admin')],
+    },
+    {
+      ...typed(
+        "declare const byIdentity: { [key: string]: string; [id: `idn_${string}`]: Role }\nexport const a = byIdentity.idn_alice === 'admin'",
+      ),
+      errors: [role('admin')],
+    },
+    {
+      ...typed(
+        "declare const byKey: { [k: `id_${string}`]: 'admin' | number; [k: `${string}_alice`]: 'admin' | boolean }\nexport const a = byKey.id_alice === 'admin'\ndeclare const held: { [k: `id_${string}`]: { role: 'admin' | 'label-a' }; [k: `${string}_alice`]: { role: 'admin' | 'label-b' } }\nexport const b = held.id_alice.role === 'admin'",
+      ),
+      errors: [role('admin'), role('admin')],
+    },
+    {
+      ...typed(
+        "declare const byKey: { [k: `id_${string}`]: 'admin' | 1; [k: `${string}_alice`]: 'admin' | 2 }\nexport const a = byKey.id_alice === 'admin'\nexport function f<T extends { role: Role } | { label: string }>(value: T): boolean {\n  return 'role' in value && value.role === 'guest'\n}",
+      ),
+      errors: [role('admin'), role('guest')],
+    },
+    {
+      ...typed(
+        "export const TENANT_ROLES = ['member', 'admin'] as const\ndeclare const role: unknown\nexport const known = role === 'operator' || 'guest' === role",
+      ),
+      errors: [role('member'), role('admin'), role('operator'), role('guest')],
+    },
+    {
+      ...typed(
+        "export const PLATFORM_ROLES = ['operator'] as const\ndeclare const CONTRACT_ROLES: { readonly admin: 'admin' }\nexport const list = ['member', CONTRACT_ROLES.admin] as const",
+      ),
+      errors: [role('operator'), role('member')],
+    },
+    {
+      ...typed(
+        "declare const output: Record<string, unknown>\nexport const isAdmin = typeof output['role'] === 'string' && output['role'] === 'admin'\ndeclare const heldRole: unknown\nswitch (heldRole) {\n  case 'operator':\n    break\n}",
+      ),
+      errors: [role('admin'), role('operator')],
+    },
+    {
+      ...byValue('declare const query: string\nvoid page.waitForURL(`**/settings?${query}`)'),
+      errors: [route('/settings', 'user.settings')],
+    },
+    {
+      ...byValue("void page.waitForURL('**/me')\nvoid page.waitForURL('**/settings?*')"),
+      errors: [route('/me', 'user.profile'), route('/settings', 'user.settings')],
+    },
+    {
+      ...typed(
+        "export class Seats {\n  static role: Role = 'guest'\n  role: string = ''\n  static isAdmin(): boolean {\n    return this.role === 'admin'\n  }\n}",
+      ),
+      errors: [role('guest'), role('admin')],
+    },
+    {
+      ...typed(
+        "declare function makeNote(can?: Partial<Record<Role, boolean>> | Partial<Record<Role, 'own' | 'any'>>): void\nmakeNote({ member: true })",
+      ),
+      errors: [role('member')],
     },
     {
       ...typed(

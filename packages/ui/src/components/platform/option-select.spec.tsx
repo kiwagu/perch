@@ -65,6 +65,38 @@ describe('OptionSelect', () => {
     expect(screen.getByTestId('x.y.locale-select').getAttribute('data-value')).toBe('es')
   })
 
+  it('shows its placeholder and carries no value while no option is chosen, until one is', async () => {
+    const onChange = vi.fn()
+
+    render(
+      <OptionSelect
+        label="Language"
+        value={undefined}
+        placeholder="No language"
+        options={options}
+        onChange={onChange}
+        testId="x.y.locale-select"
+      />,
+    )
+
+    const trigger = screen.getByTestId('x.y.locale-select')
+
+    expect(trigger.hasAttribute('data-value')).toBe(false)
+    expect(trigger.textContent).toContain('No language')
+
+    await userEvent.click(trigger)
+
+    const spanish = (await screen.findAllByTestId('x.y.locale-select.option')).find(
+      (item) => item.getAttribute('data-value') === 'es',
+    ) as HTMLElement
+
+    // The list takes no pointer until it has finished opening.
+    await vi.waitFor(() => expect(getComputedStyle(spanish).pointerEvents).not.toBe('none'))
+    await userEvent.click(spanish)
+
+    expect(onChange).toHaveBeenCalledWith('es')
+  })
+
   it('reports the chosen option', async () => {
     const onChange = vi.fn()
 

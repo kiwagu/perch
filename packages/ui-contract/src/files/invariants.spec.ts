@@ -34,12 +34,20 @@ const PLATFORM: Platform = {
 }
 
 describe('invariantActions', () => {
-  it('gives each invariant the actions that name it, in the order the platform writes them', () => {
+  it('gives each invariant the actions that name it, by name', () => {
     expect(invariantActions(PLATFORM)).toEqual({
-      'failed-sign-ins': ['sign-in', 'confirm-sign-in'],
-      'device-limit': ['sign-in', 'confirm-sign-in'],
+      'failed-sign-ins': ['confirm-sign-in', 'sign-in'],
+      'device-limit': ['confirm-sign-in', 'sign-in'],
       unused: [],
     })
+  })
+  it('gives the same lists whatever order the platform writes its actions in', () => {
+    const reordered: Platform = {
+      ...PLATFORM,
+      actions: Object.fromEntries(Object.entries(PLATFORM.actions).reverse()),
+    }
+
+    expect(invariantActions(reordered)).toEqual(invariantActions(PLATFORM))
   })
   it('gives nothing to a platform with no invariants', () => {
     const { invariants: _invariants, ...without } = PLATFORM

@@ -229,6 +229,24 @@ anchors:
       params:
         invitation: organisation.sent.item
     roles: [ admin ]
+  organisation.settings.locale-select:
+    kind: select
+    description: "The organisation's default language, which an account its invitation creates starts in; none until an admin chooses one, and a member's own language always wins."
+    binding:
+      - model: organisation_settings.locale
+      - action: organisation_settings.updateLocale
+        params:
+          locale: organisation.settings.locale-select
+    roles: [ admin ]
+  organisation.settings.clear-button:
+    kind: button
+    description: Removes the organisation's default language; shown while it has one.
+    binding: { action: organisation_settings.clearLocale }
+    roles: [ admin ]
+  organisation.settings.error:
+    kind: error
+    description: Why the last change or removal of the default language failed, under its select.
+    roles: [ admin ]
   organisation.received.list:
     kind: list
     description: The invitations to the account's email, the newest first.
@@ -264,7 +282,7 @@ anchors:
     description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list.
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
-  ready: The heading, the role badge, the select with two memberships or more, the notes, the members and the invitations sent for an admin, the invitations for the account, and the create toggle.
+  ready: The heading, the role badge, the select with two memberships or more, the notes, for an admin the members, the invitations sent and the default language, the account's invitations, the create toggle.
   empty: "organisation.page.status in empty: no membership; the invitations for the account, if any, and the create form below it."
   error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the invitations for the account, if any, and the create form."
 flow:
@@ -274,6 +292,7 @@ flow:
   meta:
     guards:
       ownDemotion: the account changed its own role to member
+      defaultsHeld: the organisation's settings are on this device
   states:
     viewing:
       type: parallel
@@ -447,6 +466,44 @@ flow:
             actions:
               - show: organisation.received.error
               - read: organisation.received.list
+        default-language:
+          description: The organisation's default language, for an admin.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.settings.locale-select:
+                  target: storing
+                  guard: defaultsHeld
+                organisation.settings.clear-button: clearing
+            storing:
+              invoke:
+                src: organisation_settings.updateLocale
+                input: { locale: organisation.settings.locale-select }
+                toast: false
+                onDone:
+                  target: idle
+                  description: This device holds the chosen language; once the server has it, it is the organisation's default that sign-up reads for an account its invitation creates.
+                  actions:
+                    - clear: organisation.settings.error
+                onError:
+                  target: idle
+                  description: This device could not store it; a refusal by the server comes later, as the frame's notice that a change was undone.
+                  actions:
+                    - show: organisation.settings.error
+            clearing:
+              invoke:
+                src: organisation_settings.clearLocale
+                toast: false
+                onDone:
+                  target: idle
+                  description: The organisation has no default language on this device; once the server has it, sign-up reads none for an account the organisation's invitation creates.
+                  actions:
+                    - clear: organisation.settings.error
+                onError:
+                  target: idle
+                  actions:
+                    - show: organisation.settings.error
         notes-add:
           by: organisation.notes.add-button
           onDone:
@@ -488,4 +545,5 @@ wireframe: |-
       - text: Member
       - button "Copy link"
       - button "Revoke"
+  - combobox "Default language"
   - button "New organisation"

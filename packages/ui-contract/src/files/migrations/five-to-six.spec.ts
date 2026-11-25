@@ -171,7 +171,7 @@ describe('the migration from version 5 to 6', () => {
           line.startsWith(`${PLATFORM_FILE}: actions`),
         ),
       ).toEqual([
-        `${PLATFORM_FILE}: actions["sign-in"].codes: a list of codes, and from version 6 an action's codes are a map: write when each answers, \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep`,
+        `${PLATFORM_FILE}: actions["sign-in"].codes: a list of codes, and from version 6 an action's codes are a map: write when each answers, \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep; an empty list is \`codes: {}\``,
         `${PLATFORM_FILE}: actions["sign-in"].result: one string of 201 characters, and from version 6 it keeps the budget of 200: write it as outcome lines within the budget, a refusal as its code's condition`,
       ])
     }

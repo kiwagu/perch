@@ -79,6 +79,11 @@ export class TenantSpaces {
     return this.#current
   }
 
+  /** The open database of the organisation `key`, whether or not it is current. */
+  space(key: string): TenantSpace | undefined {
+    return this.#open.get(key)
+  }
+
   currentSpace(): TenantSpace | undefined {
     return this.#current === undefined ? undefined : this.#open.get(this.#current)
   }

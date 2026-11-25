@@ -97,6 +97,7 @@ test.describe('Delete the account', { tag: '@smoke' }, () => {
       // The email's fourth mail: a new sign-up's, after the notice.
       expectDeclaredMail(await mailbox.next(data.email, 3), 'sign-up', {
         params: { email: data.email, locale: 'en' },
+        account: { email: data.email, language: 'en' },
       })
     })
   })

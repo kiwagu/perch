@@ -4,8 +4,8 @@
  * the derived suffixes, the attributes, the app, container, row and field states, the codes, the
  * choice values, the screen names in use, the roles, the reserved anchors and the composites
  * the platform declares. The sections are fixed; a missing section (but the composites and the field
- * states, which a vocabulary written before them lacks, and the roles, which a terms file may
- * hold), an unknown or repeated one, a row with the wrong number of cells or with an empty cell
+ * states, which a vocabulary written before them lacks, and the roles, which the terms file
+ * holds), an unknown or repeated one, a row with the wrong number of cells or with an empty cell
  * (only the Playwright cell of a kind may stay empty) and a key listed twice are problems. The `Contract version: N` line is read when there is one: a contract
  * at version 1 repeats its version there, and the check asks for the line by that version alone.
  */

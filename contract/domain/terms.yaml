@@ -15,6 +15,9 @@ terms:
     storage: tenant
   membership:
     meaning: "An account's belonging to an organisation, with its role there: member or admin."
+  organisation-settings:
+    meaning: "What an organisation's admins set for its members: today its default language, which an account its invitation creates starts in; a member's own settings always win."
+    storage: organisation_settings
   invitation:
     meaning: "An organisation's offer to an email to join it with a role, sent as a mail's link; it ends when accepted, declined, revoked, expired, replaced by its newer one to that email, or with the organisation."
   device:

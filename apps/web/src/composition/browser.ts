@@ -182,6 +182,7 @@ export function bootBrowser(
       locks,
       hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
       clock: systemClock,
+      steady: () => performance.now(),
       storage: browserStorage(store.value, window),
       visibility,
       servedBuild: servedBuild({

@@ -5,13 +5,15 @@
  * gateway reads is moved past every floor an answer waits on.
  */
 
-import { expect } from 'vitest'
+import { expect, vi } from 'vitest'
 
+import type { Locale } from '@workspace/i18n'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { CONTRACT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { deviceHeaders } from '../auth/__fixtures__/auth-instance'
+import identityLocaleStatement from '../auth/__fixtures__/identity-locale.surql'
 import identityRoleSetStatement from '../auth/__fixtures__/identity-role-set.surql'
 import { profiledOn } from '../console/__fixtures__/profiles'
 import { startServer } from '../server'
@@ -22,6 +24,7 @@ import {
   harness,
   PASSWORD,
 } from '../tenants/__fixtures__/organisation-routes'
+import organisationSettingsWrite from '../tenants/__fixtures__/organisation-settings-write.surql'
 
 /** An account signed in on its own device. */
 export interface Account {
@@ -225,6 +228,55 @@ export async function openStand() {
     return devices.find((listed) => !listed.current)?.id ?? expect.unreachable('another device')
   }
 
+  /** Moves the gateway's clock past every floor until `answer` settles. */
+  const pastFloors = async (answer: Promise<Response>): Promise<Response> => {
+    let settled = false
+
+    void answer.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
+    )
+
+    while (!settled) {
+      if (base.time.pending() > 0) {
+        await base.time.advance(1_000)
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+    }
+
+    return answer
+  }
+
+  /**
+   * A guest's sign-up of a new `email` from the front in `locale`, answered by its status. The
+   * clock moves past the floor only once the account exists, so the lookup of its starting
+   * language, which comes before it, never runs out of its budget on the stand's clock.
+   */
+  const signUp = async (email: string, locale: Locale): Promise<number> => {
+    issued++
+
+    const answer = fetch(`${origin}/auth/sign-up/email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: base.root.publicUrl,
+        'X-Forwarded-For': address(),
+      },
+      body: JSON.stringify({ name: 'Newcomer', email, password: PASSWORD, locale }),
+    })
+
+    await vi.waitFor(async () =>
+      expect((await base.root.sessions.identityOf(email))._unsafeUnwrap()).toBeDefined(),
+    )
+
+    return (await pastFloors(answer)).status
+  }
+
   /** The id of an invitation of the organisation `key`, which `admin` administers. */
   const invitation = async (admin: Account, key: string): Promise<string> => {
     issued++
@@ -258,6 +310,39 @@ export async function openStand() {
     },
     otherDevice,
     invitation,
+    /** `admin` invites `email` into the organisation `key`. */
+    invite: async (admin: Account, key: string, email: string): Promise<void> => {
+      ;(
+        await base.root.organisations.invitations.invite({
+          actor: admin.identity,
+          key,
+          email,
+          role: CONTRACT_ROLES.member,
+        })
+      )._unsafeUnwrap()
+    },
+    /** The organisation `key`'s settings row names `locale` as its default language. */
+    defaultLanguage: async (key: string, locale: Locale): Promise<void> => {
+      const handle = (await base.root.databases.acquire(key))._unsafeUnwrap()
+
+      try {
+        await handle.local.db.query(organisationSettingsWrite, {
+          id: `ost_${key}`,
+          content: { locale },
+        })
+      } finally {
+        handle.release()
+      }
+    },
+    signUp,
+    /** The language stored on the identity of `email`. */
+    localeOf: async (email: string): Promise<unknown> => {
+      const [locale] = await base.root.local.db.query<[unknown]>(identityLocaleStatement, {
+        email,
+      })
+
+      return locale
+    },
     ask,
     /** The front's public origin the gateway was opened for, which its passkeys are bound to. */
     publicUrl: base.root.publicUrl,
