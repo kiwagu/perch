@@ -1,17 +1,23 @@
 /**
  * Rule 15: the mail a platform action declares goes to a parameter of the action or the account
- * it acts on, speaks the language a parameter of the action holds, that account's or its
- * recipient's, and links to a screen with a route, every route of which declares the search
- * parameter that carries the token. `account` is reserved: in a mail or a notice (rule 16,
+ * it acts on, speaks the language of a source or of the first of a list of sources that has one,
+ * and links to a screen with a route, every route of which declares the search parameter that
+ * carries the token. A source is a parameter of the action that holds a language, `account`,
+ * `organisation` or `recipient`. `account` is reserved: in a mail or a notice (rule 16,
  * `notices.ts`) it names the account the action acts on, the signed-in account for an action on
  * its own account, else, whoever is signed in, the one its parameters name (an email, a link's
- * token), so an action that sends either has no parameter of that name. `recipient`, a mail's language alone, is reserved on an action that sends a mail: the
- * account whose email the mail goes to, else the signed-in account, so the mail goes to a
- * parameter and only signed-in roles run the action.
+ * token), so an action that sends either has no parameter of that name. `organisation` and
+ * `recipient`, a mail's language alone, are reserved on an action that sends a mail.
+ * `organisation`, the organisation the action runs in, always has a language, so the action lists
+ * its roles, neither guest nor identity among them. `recipient`, the account whose email the mail
+ * goes to, has one only when an account has that email, so the mail goes to a parameter; so has an
+ * optional parameter left out. In a list the next source speaks when one has none, so only these may
+ * be followed, and a list ends with a source that always has one. The recipient written alone, the
+ * older form, falls back on the signed-in account, so only signed-in roles run the action.
  */
 
-import { GUEST } from '../anchors'
-import { ACCOUNT, type PlatformMail, type Problem, RECIPIENT } from '../files'
+import { GUEST, IDENTITY } from '../anchors'
+import { ACCOUNT, ORGANISATION, type PlatformMail, type Problem, RECIPIENT } from '../files'
 
 import { type Contract, locate } from './contract'
 import { searchOf } from './lookups'
@@ -32,23 +38,91 @@ function toMessages(name: string, action: PlatformAction, mail: PlatformMail): s
     : [`"${mail.to}" is neither a parameter of "${name}" nor account`]
 }
 
-/** Why the mail of `name` names its language wrongly, as messages; none when it does not. */
-function languageMessages(name: string, action: PlatformAction, mail: PlatformMail): string[] {
-  if (mail.language !== RECIPIENT) {
-    return mail.language === ACCOUNT || Object.hasOwn(action.params, mail.language)
+/** The source of a language at a place of a mail: its name, and where the check reports it. */
+interface LanguageSource {
+  readonly source: string
+  readonly at: readonly (string | number)[]
+}
+
+/** Why `source` is no source of the language of the mail of `name`, as messages; none when it is. */
+function sourceMessages(name: string, action: PlatformAction, mail: PlatformMail, source: string) {
+  if (source === RECIPIENT) {
+    return mail.to === ACCOUNT
+      ? [`"${RECIPIENT}" of a mail to account is the account itself: write account`]
+      : []
+  }
+
+  if (source === ORGANISATION) {
+    const { roles } = action
+
+    return roles !== undefined && !roles.includes(GUEST) && !roles.includes(IDENTITY)
       ? []
-      : [`"${mail.language}" is neither a parameter of "${name}", account nor recipient`]
+      : [
+          `"${ORGANISATION}" speaks the language of the organisation the action runs in, so "${name}" lists its roles, neither guest nor identity among them`,
+        ]
   }
 
-  if (mail.to === ACCOUNT) {
-    return [`"${RECIPIENT}" of a mail to account is the account itself: write account`]
-  }
-
-  return action.roles !== undefined && !action.roles.includes(GUEST)
+  return source === ACCOUNT || Object.hasOwn(action.params, source)
     ? []
-    : [
-        `"${RECIPIENT}" falls back on the signed-in account's language, so "${name}" lists its roles, guest not among them`,
-      ]
+    : [`"${source}" is neither a parameter of "${name}", account, ${ORGANISATION} nor ${RECIPIENT}`]
+}
+
+/**
+ * Why the mail of `name` names its language wrongly, each message with the place of the source it
+ * concerns; none when it does not. A list's source after one that always has a language is never
+ * reached; the recipient written alone falls back on the signed-in account.
+ */
+function languageMessages(
+  name: string,
+  action: PlatformAction,
+  mail: PlatformMail,
+): { readonly at: readonly (string | number)[]; readonly message: string }[] {
+  const sources: LanguageSource[] =
+    typeof mail.language === 'string'
+      ? [{ source: mail.language, at: [] }]
+      : mail.language.map((source, index) => ({ source, at: [index] }))
+  const alone =
+    typeof mail.language === 'string' && mail.language === RECIPIENT && mail.to !== ACCOUNT
+      ? action.roles !== undefined && !action.roles.includes(GUEST)
+        ? []
+        : [
+            `"${RECIPIENT}" falls back on the signed-in account's language, so "${name}" lists its roles, guest not among them`,
+          ]
+      : []
+
+  const mayHaveNone = (source: string): boolean =>
+    source === RECIPIENT ||
+    (Object.hasOwn(action.params, source) && action.params[source]?.optional === true)
+  const last = sources.at(-1)
+  const single = typeof mail.language === 'string'
+  const unended =
+    last !== undefined &&
+    mayHaveNone(last.source) &&
+    (single ? last.source !== RECIPIENT : mayHaveNone(sources.at(-2)?.source ?? ''))
+      ? [
+          {
+            at: last.at,
+            message: `"${last.source}" may have no language: a mail's language ends with a source that always has one`,
+          },
+        ]
+      : []
+
+  return [
+    ...sources.flatMap(({ source, at }, index) => {
+      const before = sources[index - 1]?.source
+
+      return before !== undefined && !mayHaveNone(before)
+        ? [
+            {
+              at,
+              message: `"${source}" is never reached: "${before}" always has a language, so it ends the list`,
+            },
+          ]
+        : sourceMessages(name, action, mail, source).map((message) => ({ at, message }))
+    }),
+    ...unended,
+    ...alone.map((message) => ({ at: [], message })),
+  ]
 }
 
 export function mailsProblems(contract: Contract): Problem[] {
@@ -86,9 +160,17 @@ export function mailsProblems(contract: Contract): Problem[] {
             ),
           ]
         : []),
+      ...(Object.hasOwn(action.params, ORGANISATION)
+        ? [
+            inScreens(
+              ['platform', 'actions', name, 'params', ORGANISATION],
+              `"${ORGANISATION}" names the language of the organisation the action runs in, so an action that sends a mail gives no parameter that name`,
+            ),
+          ]
+        : []),
       ...toMessages(name, action, mail).map((message) => inScreens([...at, 'to'], message)),
-      ...languageMessages(name, action, mail).map((message) =>
-        inScreens([...at, 'language'], message),
+      ...languageMessages(name, action, mail).map(({ at: source, message }) =>
+        inScreens([...at, 'language', ...source], message),
       ),
       ...(screen === undefined
         ? [inScreens([...at, 'link', 'screen'], `"${mail.link.screen}" is no screen with a route`)]

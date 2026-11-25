@@ -50,6 +50,20 @@ describe('platformSchema mail', () => {
       ).toBe(true)
     }
   })
+  it('takes a list of two sources or more for the language, each named once', () => {
+    const link = { screen: 'organisation.invitation', search: 'token' }
+    const parses = (language: unknown): boolean =>
+      platformSchema.safeParse({
+        ...PLATFORM,
+        actions: { send: { ...ACTION, mail: { to: 'email', language, link } } },
+      }).success
+
+    expect(parses(['recipient', 'organisation'])).toBe(true)
+    expect(parses(['recipient', 'locale'])).toBe(true)
+    for (const language of [[], ['recipient'], ['recipient', 'recipient'], ['Recipient', 'x']]) {
+      expect(parses(language), JSON.stringify(language)).toBe(false)
+    }
+  })
   it('refuses a mail without a link, or with a key of its own', () => {
     for (const mail of [
       { to: 'email', language: 'account' },
@@ -249,6 +263,34 @@ describe('platformSchema codes, result and invariants', () => {
   })
   it('accepts invariants by name, each with its rule and the code it refuses with', () => {
     expect(parses({}, INVARIANTS)).toBe(true)
+  })
+  it('accepts the values an invariant states: a count, a duration in one unit', () => {
+    const stating = (values: unknown) => ({
+      invariants: { 'device-limit': { rule: '{limit} at most.', refuses: 'device-limit', values } },
+    })
+
+    for (const values of [
+      { limit: 10 },
+      { limit: 10, window: { minutes: 15 } },
+      { accountLimit: 30, window: { seconds: 10 } },
+      { window: { hours: 1 } },
+    ]) {
+      expect(parses({}, stating(values)), JSON.stringify(values)).toBe(true)
+    }
+    for (const values of [
+      {},
+      { limit: 0 },
+      { limit: -1 },
+      { limit: 1.5 },
+      { limit: '10' },
+      { window: { minutes: 15, seconds: 1 } },
+      { window: { days: 1 } },
+      { window: { minutes: 0 } },
+      { Limit: 10 },
+      { 'account-limit': 30 },
+    ]) {
+      expect(parses({}, stating(values)), JSON.stringify(values)).toBe(false)
+    }
   })
   it('refuses an invariant without its rule or its code, with a key of its own, or misnamed', () => {
     for (const invariants of [

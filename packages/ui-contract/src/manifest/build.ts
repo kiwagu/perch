@@ -35,6 +35,7 @@ import {
   invariantActions,
   type Model,
   type ResolvedValue,
+  renderedRule,
   type Screen,
   type ScreensFile,
   type Terms,
@@ -185,7 +186,10 @@ const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =
     ]),
   )
 
-/** The platform as the manifest carries it: each invariant with the actions that name it. */
+/**
+ * The platform as the manifest carries it: each invariant with its rule's values written in and
+ * the actions that name it.
+ */
 function platformOf(platform: ScreensFile['platform']): Manifest['platform'] {
   const { invariants, ...rest } = platform
 
@@ -200,7 +204,7 @@ function platformOf(platform: ScreensFile['platform']): Manifest['platform'] {
     invariants: Object.fromEntries(
       Object.entries(invariants).map(([name, invariant]) => [
         name,
-        { ...invariant, actions: [...(actions[name] ?? [])] },
+        { ...invariant, rule: renderedRule(invariant), actions: [...(actions[name] ?? [])] },
       ]),
     ),
   }

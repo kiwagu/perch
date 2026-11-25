@@ -51,6 +51,7 @@ export {
   transitionsOf,
 } from './flow-nodes'
 export { hintBudgetProblems } from './hint-budget'
+export { emittedName, PLACEHOLDER, renderedRule, renderedValue } from './invariant-values'
 export { invariantActions } from './invariants'
 export {
   MIGRATIONS,
@@ -118,9 +119,11 @@ export {
   type FlowRegionState,
   type FlowState,
   type FlowTransition,
+  languageSources,
   loadResolvedModel,
   loadScreens,
   loadScreensWith,
+  ORGANISATION,
   type ParamValue,
   type Platform,
   type PlatformComposite,
