@@ -2,6 +2,7 @@
  * The invitations of an organisation: the row that keeps an invitation, the token its link
  * carries, and the link itself.
  */
+export { answered } from './answer'
 export { INVITATION_PATH, invitationLink } from './link'
 export type { InvitationMailer } from './mailer'
 export { InvitationMails, type InvitationMailsOptions } from './mails'

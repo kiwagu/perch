@@ -13,6 +13,7 @@ import type { ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { tenantRole } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -150,7 +151,7 @@ export function accountsApi(baseUrl: string, deps: AccountsDeps): AccountsPort {
       const failure = failureOf(codes, error)
 
       if (failure.code === 'not-operator' && asker !== undefined) {
-        deps.dropRole(asker, 'operator')
+        deps.dropRole(asker, CONTRACT_ROLES.operator)
       }
 
       return failure

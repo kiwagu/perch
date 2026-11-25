@@ -5,6 +5,8 @@
  * method.
  */
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import type { Account, Asked, Stand } from './stand'
 
 /** Where a platform action is served: its method and path, `:name` for a segment of the path. */
@@ -67,7 +69,9 @@ export async function worldFor(
   wire: Wire,
   roles: readonly string[] | undefined,
 ): Promise<World> {
-  const sender = roles?.includes('operator') ? await stand.operator() : await stand.account()
+  const sender = roles?.includes(CONTRACT_ROLES.operator)
+    ? await stand.operator()
+    : await stand.account()
 
   return {
     sender,

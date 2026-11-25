@@ -232,6 +232,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     locks: soleDevice,
     hints: () => syncHints(undefined),
     clock: systemClock,
+    steady: () => performance.now(),
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     // A seed client shows no frame to offer a newer build in.

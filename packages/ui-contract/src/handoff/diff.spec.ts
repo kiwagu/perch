@@ -188,6 +188,7 @@ describe('diffContracts', () => {
       values: { added: [], removed: [], changed: [] },
       actions: { added: [], removed: [] },
       actionLines: { 'sign-out': { added: [], removed: [] } },
+      invariantLines: {},
       modelActionLines: {
         'thing.createThing': { added: [], removed: [] },
         'thing.updateThing': { added: [], removed: [] },
@@ -1315,6 +1316,130 @@ describe('diffContracts and the platform values', () => {
     expect(diffContracts(withKind([1]), withKind(['1'])).actionLines['sign-out']).toEqual({
       added: ['param kind: string, enum ["1"]'],
       removed: ['param kind: string, enum [1]'],
+    })
+  })
+})
+
+describe('diffContracts and the invariants', () => {
+  /** The fixture contract with the platform's `invariants` set as given. */
+  function withInvariants(invariants: Contract['screens']['platform']['invariants']): Contract {
+    const contract = fixtureContract()
+
+    contract.screens.platform.invariants = invariants
+
+    return contract
+  }
+
+  const LIMIT = { rule: 'Ten devices at most at once.', refuses: 'device-limit' }
+
+  it('lists the rule and the code of an invariant added, edited or removed, by its name', () => {
+    expect(
+      diffContracts(
+        withInvariants({ limit: LIMIT, gone: { rule: 'Old rule.', refuses: 'failed' } }),
+        withInvariants({
+          limit: { ...LIMIT, rule: 'Five devices at most at once.' },
+          fresh: { rule: 'A new rule.', refuses: 'rate-limited' },
+        }),
+      ).invariantLines,
+    ).toEqual({
+      fresh: { added: ['refuses rate-limited', 'rule: A new rule.'], removed: [] },
+      gone: { added: [], removed: ['refuses failed', 'rule: Old rule.'] },
+      limit: {
+        added: ['rule: Five devices at most at once.'],
+        removed: ['rule: Ten devices at most at once.'],
+      },
+    })
+  })
+  it('lists the rule with its values written in and each value, so a changed value shows', () => {
+    const stated = (limit: number) => ({
+      rule: '{limit} devices at most, each kept {window}.',
+      refuses: 'device-limit',
+      values: { limit, window: { hours: 1 } },
+    })
+
+    expect(
+      diffContracts(withInvariants({ limit: stated(10) }), withInvariants({ limit: stated(12) }))
+        .invariantLines,
+    ).toEqual({
+      limit: {
+        added: ['rule: 12 devices at most, each kept 1 hour.', 'value limit: 12'],
+        removed: ['rule: 10 devices at most, each kept 1 hour.', 'value limit: 10'],
+      },
+    })
+    expect(
+      diffContracts(withInvariants({ limit: LIMIT }), withInvariants({ limit: stated(10) }))
+        .invariantLines,
+    ).toEqual({
+      limit: {
+        added: [
+          'rule: 10 devices at most, each kept 1 hour.',
+          'value limit: 10',
+          'value window: 1 hour',
+        ],
+        removed: ['rule: Ten devices at most at once.'],
+      },
+    })
+  })
+  it('lists nothing for invariants that stay as they were, or a platform with none', () => {
+    expect(
+      diffContracts(withInvariants({ limit: LIMIT }), withInvariants({ limit: LIMIT }))
+        .invariantLines,
+    ).toEqual({
+      limit: { added: [], removed: [] },
+    })
+    expect(diffContracts(fixtureContract(), fixtureContract()).invariantLines).toEqual({})
+  })
+  it('prints the lines changed in each invariant', () => {
+    expect(
+      formatChanges(
+        diffContracts(
+          withInvariants({ limit: LIMIT }),
+          withInvariants({ limit: { ...LIMIT, rule: 'Five devices at most at once.' } }),
+        ),
+      ).split('\n'),
+    ).toEqual([
+      'contract changes: 1 invariant line added in limit, 1 invariant line removed in limit',
+      'invariant lines added in limit: rule: Five devices at most at once.',
+      'invariant lines removed in limit: rule: Ten devices at most at once.',
+    ])
+  })
+})
+
+describe("diffContracts and the order of an action's outcome lines", () => {
+  /** The fixture contract with `sign-out` answering the outcome lines given. */
+  function answering(result: Contract['screens']['platform']['actions'][string]['result']) {
+    const contract = fixtureContract()
+    const action = contract.screens.platform.actions['sign-out']
+
+    if (action === undefined) {
+      throw new Error('the fixture lost sign-out')
+    }
+
+    action.result = result
+
+    return contract
+  }
+
+  it('lists a reorder of the outcome lines, whose first is the plain success', () => {
+    expect(
+      diffContracts(
+        answering(['this device signs out', 'with unsent changes: asks first']),
+        answering(['with unsent changes: asks first', 'this device signs out']),
+      ).actionLines['sign-out'],
+    ).toEqual({
+      added: ['result #1: with unsent changes: asks first', 'result #2: this device signs out'],
+      removed: ['result #1: this device signs out', 'result #2: with unsent changes: asks first'],
+    })
+  })
+  it('lists a one-string result split into lines by position', () => {
+    expect(
+      diffContracts(
+        answering('this device signs out'),
+        answering(['this device signs out', 'with unsent changes: asks first']),
+      ).actionLines['sign-out'],
+    ).toEqual({
+      added: ['result #1: this device signs out', 'result #2: with unsent changes: asks first'],
+      removed: ['result: this device signs out'],
     })
   })
 })

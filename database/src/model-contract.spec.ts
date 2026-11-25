@@ -15,7 +15,10 @@
  * schema's length parameters are generated from the same values. The values are held to the
  * contract by their own spec, now or, in the ahead mode, as they were at the base or the head of
  * the branch, so a business commit that changes a limit does not fail this spec before the
- * implementation emits the values and the parameters again.
+ * implementation emits the values and the parameters again. Likewise, on a branch
+ * (`CONTRACT_AHEAD=1`) an entity the model declares now and did not declare at the branch's merge
+ * base waits while the schema lacks the table the model names for it (`entities-ahead.ts`), and is
+ * held once that table exists; on `main` and in `bun run check` every entity is held.
  */
 
 import { join } from 'node:path'
@@ -27,6 +30,7 @@ import { CONTRACT_VALUES } from '@workspace/kernel'
 import { loadSchemaModel, type TableModel } from '@workspace/modeling'
 import { loadResolvedModel, type ResolvedValue } from '@workspace/ui-contract'
 
+import { entitiesAhead } from './__fixtures__/entities-ahead'
 import { type Limits, readAssert } from './assert-limits'
 import { lengthBoundProblems } from './length-bounds'
 
@@ -102,8 +106,17 @@ if (loaded.model === undefined) {
   throw new Error(`the model does not load: ${JSON.stringify(loaded.problems)}`)
 }
 
-const entities = Object.values(loaded.model.entities)
 const schema = loadSchema()
+
+/** The entities a business commit of the branch declared before their tables, while none exists. */
+const waiting = entitiesAhead({
+  declared: Object.values(loaded.model.entities),
+  stored: new Set((await schema).tables.keys()),
+  root: ROOT,
+  env: process.env,
+})
+
+const entities = Object.values(loaded.model.entities).filter((entity) => !waiting.has(entity.name))
 
 async function tableOf(name: string): Promise<TableModel> {
   const table = (await schema).tables.get(name)

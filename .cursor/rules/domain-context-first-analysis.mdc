@@ -24,7 +24,7 @@ alwaysApply: false
 
 ## Core rule
 
-- Name the bounded context and the invariant before touching adapters.
+- Name the bounded context and the invariant before touching adapters; a rule the platform keeps across actions is one of `platform.invariants` in `contract/domain/platform.yaml`, named from there.
 - Dependencies point inwards: presentation and adapters depend on application, application depends on domain, domain depends on nothing with IO.
 - `domain/` holds entities, value objects, identifiers and pure rules: no IO, no React, no database or CRDT driver.
 - `application/` holds use cases, ports and state machines: no UI framework and no concrete driver.

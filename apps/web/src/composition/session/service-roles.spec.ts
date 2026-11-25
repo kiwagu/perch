@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { FakeLocks } from '@workspace/replica/testing'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
@@ -119,14 +120,14 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const writesB = roleWrites(storageB)
     const channels = { a: a.contexts().length, b: b.contexts().length }
 
-    welcomed(a, ['operator'])
+    welcomed(a, [CONTRACT_ROLES.operator])
 
-    expect(savedRoles(storageA, anns)).toEqual(['operator'])
-    expect([...a.session.roles()]).toEqual(['operator'])
-    expect(heardA).toEqual([['operator']])
+    expect(savedRoles(storageA, anns)).toEqual([CONTRACT_ROLES.operator])
+    expect([...a.session.roles()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heardA).toEqual([[CONTRACT_ROLES.operator]])
 
-    await vi.waitFor(() => expect(heardB).toEqual([['operator']]))
-    expect([...b.session.roles()]).toEqual(['operator'])
+    await vi.waitFor(() => expect(heardB).toEqual([[CONTRACT_ROLES.operator]]))
+    expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     // The following tab reads and tells: it writes no record, and no channel opens again.
     expect(writesB()).toEqual([])
     expect(b.contexts()).toHaveLength(channels.b)
@@ -137,8 +138,8 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const { a, b, storageA, anns } = await annInTwoTabs()
     const heardB = rolesHeard(b.session)
 
-    welcomed(a, ['operator'])
-    await vi.waitFor(() => expect(heardB).toEqual([['operator']]))
+    welcomed(a, [CONTRACT_ROLES.operator])
+    await vi.waitFor(() => expect(heardB).toEqual([[CONTRACT_ROLES.operator]]))
 
     // The leading tab connects again: the gateway's welcome carries no role.
     a.transports().at(-1)?.goOnline()
@@ -172,35 +173,35 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     expect(tab.session.roles().size).toBe(0)
     expect(heard.every((roles) => roles.length === 0)).toBe(true)
 
-    welcomed(tab, ['operator'])
+    welcomed(tab, [CONTRACT_ROLES.operator])
 
     expect(writes()).toEqual([rolesKeyOf(kept.signIn)])
-    expect(savedRoles(storage, kept)).toEqual(['operator'])
-    expect([...tab.session.roles()]).toEqual(['operator'])
-    expect(heard.at(-1)).toEqual(['operator'])
+    expect(savedRoles(storage, kept)).toEqual([CONTRACT_ROLES.operator])
+    expect([...tab.session.roles()]).toEqual([CONTRACT_ROLES.operator])
+    expect(heard.at(-1)).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('restores the roles kept for the saved identity with it, while its space opens and after', async () => {
     const storage = memoryStorage()
 
-    saveRoles(storage, signedIn(storage, ann), ['operator'])
+    saveRoles(storage, signedIn(storage, ann), [CONTRACT_ROLES.operator])
 
     const tab = await world({ storage, online: false })
     const writes = roleWrites(storage)
     const restoring = tab.session.restore()
 
     expect(tab.session.current()?.id).toBe(ann.identity.id)
-    expect([...tab.session.roles()]).toEqual(['operator'])
+    expect([...tab.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     expect((await restoring).isOk()).toBe(true)
-    expect([...tab.session.roles()]).toEqual(['operator'])
+    expect([...tab.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     expect(writes()).toEqual([])
   })
 
   it('removes the roles at sign-out, and every tab hears the empty set', async () => {
     const { a, b, storageA, anns } = await annInTwoTabs()
 
-    welcomed(a, ['operator'])
-    await vi.waitFor(() => expect([...b.session.roles()]).toEqual(['operator']))
+    welcomed(a, [CONTRACT_ROLES.operator])
+    await vi.waitFor(() => expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator]))
 
     const heardA = rolesHeard(a.session)
     const heardB = rolesHeard(b.session)
@@ -223,7 +224,7 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
 
     const writes = roleWrites(storageA)
 
-    context.onRoles(['operator'])
+    context.onRoles([CONTRACT_ROLES.operator])
 
     expect(writes()).toEqual([])
     expect(storageA.get(rolesKeyOf(anns.signIn))).toBeUndefined()
@@ -238,7 +239,7 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     // Another tab signs Ann out and Bob in; this tab has not heard of it yet.
     const bobs = signedIn(browser.tab(), bob)
 
-    context.onRoles(['operator'])
+    context.onRoles([CONTRACT_ROLES.operator])
 
     expect(writes()).toEqual([])
     expect(storageA.get(rolesKeyOf(anns.signIn))).toBeUndefined()
@@ -262,11 +263,11 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     // before this tab hears any of it.
     const other = browser.tab()
 
-    saveRoles(other, signedIn(other, bob), ['operator'])
+    saveRoles(other, signedIn(other, bob), [CONTRACT_ROLES.operator])
 
     await vi.waitFor(() => expect(b.session.current()?.id).toBe(bob.identity.id))
-    expect([...b.session.roles()]).toEqual(['operator'])
-    await vi.waitFor(() => expect(heardB.at(-1)).toEqual(['operator']))
+    expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator])
+    await vi.waitFor(() => expect(heardB.at(-1)).toEqual([CONTRACT_ROLES.operator]))
     expect(writesB()).toEqual([])
     await vi.waitFor(() => expect(a.session.current()?.id).toBe(bob.identity.id))
   })
@@ -274,13 +275,13 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
   it('drops a role from the record of the sign-in a refusal names, and every tab hears it', async () => {
     const { a, b, storageA, anns } = await annInTwoTabs()
 
-    welcomed(a, ['operator'])
-    await vi.waitFor(() => expect([...b.session.roles()]).toEqual(['operator']))
+    welcomed(a, [CONTRACT_ROLES.operator])
+    await vi.waitFor(() => expect([...b.session.roles()]).toEqual([CONTRACT_ROLES.operator]))
 
     const heardA = rolesHeard(a.session)
     const heardB = rolesHeard(b.session)
 
-    b.session.dropRole(anns, 'operator')
+    b.session.dropRole(anns, CONTRACT_ROLES.operator)
 
     expect(savedRoles(storageA, anns)).toEqual([])
     expect(b.session.roles().size).toBe(0)
@@ -292,14 +293,17 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
   it('drops nothing of the sign-in shown for a refusal of another sign-in, and creates no record', async () => {
     const { a, storageA, anns } = await annInTwoTabs()
 
-    welcomed(a, ['operator'])
+    welcomed(a, [CONTRACT_ROLES.operator])
 
     const writes = roleWrites(storageA)
 
-    a.session.dropRole({ signIn: newSignInId(), identity: bob.identity.id }, 'operator')
+    a.session.dropRole(
+      { signIn: newSignInId(), identity: bob.identity.id },
+      CONTRACT_ROLES.operator,
+    )
 
-    expect(savedRoles(storageA, anns)).toEqual(['operator'])
-    expect([...a.session.roles()]).toEqual(['operator'])
+    expect(savedRoles(storageA, anns)).toEqual([CONTRACT_ROLES.operator])
+    expect([...a.session.roles()]).toEqual([CONTRACT_ROLES.operator])
     expect(writes()).toEqual([])
   })
 
@@ -310,7 +314,7 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const bobs = { signIn: newSignInId(), identity: other }
 
     // The record of a sign-in of Bob, kept on the browser, and changed by another tab.
-    saveRoles(storageB, bobs, ['operator'])
+    saveRoles(storageB, bobs, [CONTRACT_ROLES.operator])
     storageB.changeElsewhere(rolesKeyOf(bobs.signIn), storageB.get(rolesKeyOf(bobs.signIn)))
 
     expect(b.session.roles().size).toBe(0)

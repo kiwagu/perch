@@ -1,8 +1,7 @@
-import { LoroMap } from 'loro-crdt'
-
 import { type DataError, type LocalDb, tenantRegionId } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 import { tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { replicaSchema } from '../../__fixtures__/note'
 import { profileSchema } from '../../__fixtures__/profile'
@@ -30,7 +29,7 @@ export const bob = 'idn_bob'
 /** Ann's and Bob's membership of Acme: both are members, neither an admin. */
 export const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 export const acmeRegion: RegionRef = { kind: 'tenant', id: tenantRegionId(acme.tenant.key) }
@@ -80,6 +79,8 @@ export interface DeviceOptions {
   readonly batchRows?: number
   /** How many local log rows past its snapshot a region holds before a full pass compacts it. */
   readonly localCompactionRows?: number
+  /** The Loro peer the device writes as, a random one by default: two fixed ones fix their order. */
+  readonly peerId?: bigint
 }
 
 const opened: Array<{ readonly gateway: Gateway; readonly devices: Device[] }> = []
@@ -87,7 +88,7 @@ const opened: Array<{ readonly gateway: Gateway; readonly devices: Device[] }> =
 /** Names the profile, creating it for the identity when the region does not hold it yet. */
 export function writeName(region: RegionDoc, name: string): void {
   if (region.recordJson(profileKey) === undefined) {
-    const record = region.records().setContainer(profileKey, new LoroMap())
+    const record = region.records().ensureMergeableMap(profileKey)
 
     record.set('identity', regionId)
     record.set('email', 'ann@example.test')
@@ -131,6 +132,7 @@ export async function openDevice(gateway: Gateway, options: DeviceOptions = {}):
     await RegionDoc.open(
       database,
       options.region ?? { kind: 'private', id: privateRegionId(owner) },
+      options.peerId === undefined ? {} : { peerId: options.peerId },
     )
   )._unsafeUnwrap()
   const transport = gateway.stub.transport(owner, options.device)

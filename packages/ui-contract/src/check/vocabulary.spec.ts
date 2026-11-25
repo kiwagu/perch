@@ -36,7 +36,7 @@ describe('vocabularyProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].derived[0]: "close-button" is not a derived suffix of the vocabulary',
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].codes[0]: "gone" is not a code of the vocabulary',
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].states[0]: "busy" is not a state of the vocabulary',
-      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].roles[0]: "owner" is not a role of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].roles[0]: "owner" is not a role of the contract',
     ])
   })
   it('checks the roles of bindings and platform actions and the codes of actions', () => {
@@ -48,10 +48,33 @@ describe('vocabularyProblems', () => {
     Object.assign(action ?? {}, { roles: ['root'], codes: ['devices-read-failed', 'nope'] })
 
     expect(printed(contract)).toEqual([
-      'contract/domain/screens/sample/$key.yaml:1: bindings[0].roles[0]: "visitor" is not a role of the vocabulary',
-      'contract/domain/platform.yaml:1: actions["devices.list"].roles[0]: "root" is not a role of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].roles[0]: "visitor" is not a role of the contract',
+      'contract/domain/platform.yaml:1: actions["devices.list"].roles[0]: "root" is not a role of the contract',
       'contract/domain/platform.yaml:1: actions["devices.list"].codes[1]: "nope" is not a code of the vocabulary',
     ])
+  })
+  it('checks the codes of an action written as a map, each at its code', () => {
+    const contract = sampleContract()
+    const action = contract.screens.platform.actions['devices.list']
+
+    Object.assign(action ?? {}, {
+      codes: { 'devices-read-failed': 'the devices cannot be read', nope: 'never' },
+    })
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/platform.yaml:1: actions["devices.list"].codes.nope: "nope" is not a code of the vocabulary',
+    ])
+  })
+  it('counts a code an action writes as a key of its map as used', () => {
+    const contract = sampleContract()
+    const action = contract.screens.platform.actions['devices.list']
+
+    contract.vocabulary.codes['spare'] = { where: 'nowhere', meaning: 'nothing' }
+    Object.assign(action ?? {}, {
+      codes: { 'devices-read-failed': 'the devices cannot be read', spare: 'a spare reason' },
+    })
+
+    expect(printed(contract)).toEqual([])
   })
   it('names a screen id and an anchor prefix that are not screen names', () => {
     const contract = sampleContract()
@@ -266,7 +289,7 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: choice values of "sample.save-button.option": no such anchor in the screens',
     ])
   })
-  it('wants every permission role of the model to be a role of the vocabulary', () => {
+  it('wants every permission role of the model to be a role of the contract', () => {
     const contract = sampleContract()
     const thing = contract.model.entities['thing']
 
@@ -280,7 +303,7 @@ describe('vocabularyProblems', () => {
     })
 
     expect(printed(contract)).toEqual([
-      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the contract',
     ])
   })
 })

@@ -8,6 +8,7 @@ import {
   identityIdFactory,
   idSchemas,
 } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban, sessionState, setBanned } from '../__fixtures__/account-ban'
@@ -112,14 +113,14 @@ describe('AuthSessions', () => {
       await local.db.query(identityRoleSetStatement, { identity: user.id, role })
     }
 
-    await roleOf('operator')
-    expect(callerOf(await sessions.read(token)).roles).toEqual(['operator'])
+    await roleOf(CONTRACT_ROLES.operator)
+    expect(callerOf(await sessions.read(token)).roles).toEqual([CONTRACT_ROLES.operator])
 
     await roleOf('user')
     expect(callerOf(await sessions.read(token)).roles).toEqual([])
 
-    await roleOf('operator')
-    expect(callerOf(await sessions.read(token)).roles).toEqual(['operator'])
+    await roleOf(CONTRACT_ROLES.operator)
+    expect(callerOf(await sessions.read(token)).roles).toEqual([CONTRACT_ROLES.operator])
   })
 
   it('reads no session for a token nobody holds, or one no header can carry', async () => {

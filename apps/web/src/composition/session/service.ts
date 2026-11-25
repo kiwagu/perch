@@ -22,6 +22,7 @@ import {
   type SignInOwner,
   savedIdentity,
 } from '../storage'
+import { TenantKeyWritePath } from '../tenant-key-write-path'
 
 import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
@@ -72,6 +73,7 @@ export class SessionService implements SessionPort {
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
   readonly #signInNotice: SignInNotice
+  readonly #spaces: SpaceSource
 
   constructor(options: SessionOptions) {
     this.#options = options
@@ -162,6 +164,7 @@ export class SessionService implements SessionPort {
 
     this.runner = new CurrentSpaceRunner(spaces)
     this.writePath = new CurrentSpaceWritePath(spaces)
+    this.#spaces = spaces
     this.#unlisten = [
       options.storage.onChangeElsewhere((key) => {
         if (key === undefined || isSessionKey(key)) {
@@ -174,6 +177,11 @@ export class SessionService implements SessionPort {
       }),
       options.visibility.onChange((state) => this.#state.open()?.space.visibility(state)),
     ]
+  }
+
+  /** Writes into the organisation `key`'s region, whichever is current, as `writePath` does. */
+  tenantWritePath(key: string, admitted?: () => boolean): TenantKeyWritePath {
+    return new TenantKeyWritePath(this.#spaces, key, admitted)
   }
 
   current(): AuthUser | undefined {

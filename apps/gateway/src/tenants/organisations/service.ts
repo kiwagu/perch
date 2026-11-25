@@ -2,6 +2,7 @@ import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import { AccountDeparture, type DepartureError, type DepartureSteps } from '../account-departure'
@@ -116,7 +117,9 @@ export class Organisations {
         .existing(identity)
         .andThen(() => this.#creation.create(identity, key, name))
         .andThen((tenant) =>
-          this.#listeners.tell(identity).map((): Membership => ({ tenant, role: 'admin' })),
+          this.#listeners
+            .tell(identity)
+            .map((): Membership => ({ tenant, role: CONTRACT_ROLES.admin })),
         ),
     )
   }

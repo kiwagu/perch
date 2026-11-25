@@ -23,7 +23,7 @@
 import { type Contract, codesOf } from '../check'
 import type { Activity, Flow, ModelAction } from '../files'
 
-import { actionLines, changesLines } from './action-lines'
+import { actionLines, changesLines, invariantLines } from './action-lines'
 import { branchesOf } from './activities'
 import { anchorChanges, carriedChanges } from './anchor-changes'
 import { byName, type Change, changeOf } from './change'
@@ -113,6 +113,11 @@ export interface ContractChanges {
    */
   actionLines: Record<string, Change>
   /**
+   * Per invariant of the platform either contract holds, by its name, its lines (`rule: <text>` with its values written in,
+   * `refuses <code>` and `value <name>: <value>`), an invariant one side lacks having none.
+   */
+  invariantLines: Record<string, Change>
+  /**
    * Per action of the model either contract holds, by `<entity>.<action>`, the reads its
    * `changes` names, as `changes <read>`, an action one side lacks naming none.
    */
@@ -135,6 +140,20 @@ function actionLineChanges(
 
   return Object.fromEntries(
     names.map((name) => [name, changeOf(actionLines(was[name]), actionLines(is[name]))]),
+  )
+}
+
+/** Per invariant of the platform either contract holds, by its name, the lines added and removed. */
+function invariantLineChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+): ContractChanges['invariantLines'] {
+  const was = before?.screens.platform.invariants ?? {}
+  const is = after?.screens.platform.invariants ?? {}
+  const names = [...new Set([...Object.keys(was), ...Object.keys(is)])].sort(byName)
+
+  return Object.fromEntries(
+    names.map((name) => [name, changeOf(invariantLines(was[name]), invariantLines(is[name]))]),
   )
 }
 
@@ -303,6 +322,7 @@ export function diffContracts(
     values: valueChanges(before, after),
     actions: changeOf(Object.keys(actionsOf(before)), Object.keys(actionsOf(after))),
     actionLines: actionLineChanges(before, after),
+    invariantLines: invariantLineChanges(before, after),
     modelActionLines: modelActionLineChanges(before, after),
     descriptions: descriptionChanges(before, after, anchors.renamed),
   }

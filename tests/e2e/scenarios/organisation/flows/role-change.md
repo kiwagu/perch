@@ -11,9 +11,9 @@ data:
 ---
 # Promote and demote a member
 
-Where: [/org] on device A (user A, administrator) and [/org] on device B (user B, another browser)
+Where: [/org] on device A (user A, admin) and [/org] on device B (user B, another browser)
 
-## Scenario: A promoted member becomes an administrator on its device without a reload, and its next change is judged by the new role; the new administrator demotes the first, and the last administrator cannot demote itself
+## Scenario: A promoted member becomes an admin on its device without a reload, and its next change is judged by the new role; the new admin demotes the first, and the last admin cannot demote itself
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]

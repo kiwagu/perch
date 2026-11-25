@@ -43,6 +43,9 @@ export const FIELD_FACTS = {
   "organisation.page.current-select": {
     "holdsInput": false
   },
+  "organisation.settings.locale-select": {
+    "holdsInput": false
+  },
   "user.forgot-password.email-input": {
     "maxLength": 254,
     "type": "email",

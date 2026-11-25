@@ -10,7 +10,7 @@ data:
 ---
 # Accept an invitation by the link of its mail
 
-Where: [/org] on device A (user A, administrator) and [/invitation] from [mail:organisations.invite] on device B (user B, in Spanish, another browser)
+Where: [/org] on device A (user A, admin) and [/invitation] from [mail:organisations.invite] on device B (user B, in Spanish, another browser)
 
 ## Scenario: The invitation mail speaks the invited account's language; its link shows the organisation and the role and, accepted, opens the organisation; the same link then no longer works
 

@@ -43,7 +43,7 @@ values:
     type: string
     minLength: 1
     maxLength: 64
-    description: "The id of a platform record: an identity, a device session, an invitation, a passkey."
+    description: "The id of a platform record: an account, a session, an invitation, a passkey."
   invitation-ref:
     type: string
     minLength: 1
@@ -62,6 +62,49 @@ values:
     maxLength: 11
     description: "A code of the second factor: the six digits an authenticator app shows now, or a backup code."
     examples: [ "123456", abcde-12345 ]
+invariants:
+  failed-sign-ins:
+    rule: "Ten wrong passwords or second-factor codes of one email within a quarter of an hour keep its password out: every check of it answers rate-limited until that quarter of an hour has passed."
+    refuses: rate-limited
+  device-limit:
+    rule: "An account is signed in on ten devices at most, each counted once while its session lasts; one more signs nothing in, unless signOutOldest then signs out its device seen least recently."
+    refuses: device-limit
+  banned-account:
+    rule: "An account an operator banned signs no device in until the ban is lifted; the ban is told only once its password, a passkey or its verification link passed, so nobody else learns of it."
+    refuses: account-banned
+  one-account-per-browser:
+    rule: "A browser holds one signed-in account: while another is signed in here, the action answers other-account before anything is asked or checked, and signs no device in or out."
+    refuses: other-account
+  last-admin:
+    rule: "An organisation keeps an admin: its only one becomes a member only after another is made one, and is deleted or removed only after that or once no other member is left."
+    refuses: last-admin
+  admins-only:
+    rule: "Only an admin of the organisation may do it; an account whose role changed meanwhile is refused and nothing changes."
+    refuses: not-admin
+  operators-only:
+    rule: "Only an operator of the platform may do it; an account whose role was taken away while the console was open is refused."
+    refuses: not-operator
+  existing-account:
+    rule: "The account an operator acts on exists; an id with no account, one removed meanwhile included, is refused and nothing changes."
+    refuses: account-gone
+  not-own-account:
+    rule: "The console refuses, before anything changes, to ban, sign out everywhere or remove the operator's own account; its devices page signs it out, its settings delete it."
+    refuses: own-account
+  address-attempts:
+    rule: "A network address takes twenty attempts at each kind of mailed link within ten minutes, refused or not; the next answers rate-limited."
+    refuses: rate-limited
+  address-mails:
+    rule: "A network address is charged 200 mail requests a quarter of an hour at most, whatever the email, sign-ups included; one another limit refuses is given back. The next answers rate-limited."
+    refuses: rate-limited
+  credential-checks:
+    rule: "A network address makes twenty credential checks within ten seconds: each of these actions takes one before reading the request's body, whatever it then answers; the next answers rate-limited."
+    refuses: rate-limited
+  email-changes:
+    rule: "An account's email takes three change requests a quarter of an hour, its own or an operator's, each counted once the new email is well formed if address-mails allows; the next answers rate-limited."
+    refuses: rate-limited
+  invitation-attempts:
+    rule: "An account makes thirty invitations in ten minutes, its network address sixty of those the account allows, counted before the email is checked if address-mails allows; the next answers rate-limited."
+    refuses: rate-limited
 actions:
   sign-up:
     description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
@@ -79,18 +122,21 @@ actions:
         description: The name of the profile.
       locale:
         value: settings.locale
-        description: The language the new account's mails speak and its settings start with.
-    result: "the account is created and the mail below is sent to it; the device is not signed in, and /sign-in asks to check the mail; an email that has an account already gets the same answer and no mail"
+        description: "The language the new account's mails speak and its settings start with, unless an organisation's pending invitation to the email sets one."
+    result:
+      - "the account is created and the mail below is sent to it; the device is not signed in, and /sign-in asks to check the mail"
+      - "an email that has an account already gets the same answer, and no mail"
+      - "an email with a pending invitation of an organisation whose settings on the server name a language: the account starts in it, the newest such invitation's"
     changes: [ accounts.list ]
     codes:
-      - sign-up-rejected
-      - rate-limited
-      - name-required
-      - name-too-long
-      - failed
+      sign-up-rejected: "the sign-up's details are refused: the email is not an email, the password breaks the password rules, or the language is not one the app speaks"
+      rate-limited: { invariant: [ credential-checks, address-mails ] }
+      name-required: "the name, trimmed, is empty"
+      name-too-long: "the name, trimmed, is longer than its value allows"
+      failed: "anything else fails"
     mail:
       to: email
-      language: locale
+      language: account
       link: { screen: user.verify-email, search: token }
   sign-in:
     description: Signs this device in to an account whose email is verified.
@@ -105,15 +151,23 @@ actions:
         type: boolean
         optional: true
         description: Sign in past the account's limit of devices, signing out its device seen least recently, but only when this device would otherwise be one too many.
-    result: "the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email was verified without a device signing in (by a password reset, by its verification link opened while it was banned, or by an operator's email change confirmed) also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices; an account an operator banned is refused with account-banned once its password is right, so nobody without the password learns of the ban, and nothing is signed in; an account whose second factor is on is not signed in by its password alone: the answer asks for a code (confirm-sign-in), its ban is judged as above, and this step signs no device in or out, the limit of devices being judged at the code step, before the code is checked; a wrong password counts toward the email's failed sign-ins, ten within a quarter of an hour, after which a sign-in answers rate-limited until the quarter of an hour has passed; these are the account's one count of failed sign-ins, the codes of its second factor held to it too, and they are forgotten once a sign-in's last step passes: the right password, even when the dialog device-limit then asks, or for an account whose second factor is on the right code, never its right password alone; a passkey sign-in (sign-in-passkey) is not kept out by them and forgets them"
+    result:
+      - "the device is signed in, and the app moves to /me with code welcome"
+      - "the first sign-in of an account whose email was verified without a device signing in also creates its settings and profile, as verify-email does"
+      - "such an email was verified by a password reset, by its verification link opened while it was banned, or by an operator's email change confirmed"
+      - "with the second factor on: a banned account is refused at this step; else the answer asks for a code (confirm-sign-in), signing nothing in or out; the device limit is judged then"
+      - "no second factor, no signOutOldest, one device over the limit: device-limit refuses and the dialog asks whether to sign out the device seen least recently; nothing signs in"
+      - "with signOutOldest: signs this device in and signs out the device seen least recently, only when the account would otherwise be on more than ten devices"
+      - "the right password forgets the email's failed sign-ins, even when device-limit then refuses; with the second factor on only the right code does, never the password"
     changes: [ devices.list, accounts.read ]
     codes:
-      - invalid-credentials
-      - email-not-verified
-      - account-banned
-      - rate-limited
-      - other-account
-      - failed
+      invalid-credentials: "the email or the password is wrong; a wrong password counts toward the email's failed sign-ins"
+      email-not-verified: "the email is not verified yet; nothing is sent"
+      account-banned: { invariant: banned-account }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
+      other-account: { invariant: one-account-per-browser }
+      device-limit: { invariant: device-limit }
+      failed: "anything else fails"
   sign-in-passkey:
     description: Signs this device in to an account with one of its passkeys, which the browser asks for, with no password and no code.
     params:
@@ -121,14 +175,19 @@ actions:
         type: boolean
         optional: true
         description: Sign in past the limit of devices of the account the dialog device-limit asked about, once it is confirmed.
-    result: "the browser asks to pick a passkey of this site and to unlock it; the device is then signed in to that passkey's account as by sign-in with the right password, the limit of devices (dialog device-limit) and the ban judged alike, and its second factor asks nothing; signOutOldest holds only for the account the dialog asked about, so a passkey of another account picked on the confirmation is asked about afresh; the email's failed sign-ins never keep it out, since a passkey cannot be guessed, while they keep a sign-in by password out (rate-limited), and a passkey sign-in that passes forgets them, the dialog device-limit asking or not; a passkey no account here holds, one removed from its account included, answers passkey-unknown; the browser's window closed or timed out answers passkey-cancelled; an account signed in on this browser answers other-account before the browser asks for a passkey, so no device is signed in or out; nothing is signed in on a refusal"
+    result:
+      - "the browser asks to pick a passkey of this site and to unlock it; the device is then signed in to that passkey's account, as by sign-in with the right password"
+      - "its second factor asks nothing; the failed sign-ins never keep it out, since a passkey cannot be guessed, and one that passes forgets them, the dialog device-limit asking or not"
+      - "signOutOldest holds only for the account the dialog device-limit asked about, so a passkey of another account picked on the confirmation is asked about afresh"
+      - "nothing is signed in on a refusal"
     changes: [ devices.list, accounts.read ]
     codes:
-      - passkey-cancelled
-      - passkey-unknown
-      - account-banned
-      - other-account
-      - failed
+      passkey-cancelled: "the browser's window was closed or timed out"
+      passkey-unknown: "no account here holds the passkey picked, one removed from its account included"
+      account-banned: { invariant: banned-account }
+      other-account: { invariant: one-account-per-browser }
+      device-limit: { invariant: device-limit }
+      failed: "anything else fails"
   confirm-sign-in:
     description: Signs this device in to the account whose sign-in by password asked for a code, with a code of its second factor.
     params:
@@ -139,15 +198,21 @@ actions:
         type: boolean
         optional: true
         description: Sign in past the account's limit of devices as for sign-in, once the dialog device-limit is confirmed.
-    result: "the device is signed in as by sign-in, the ban and the limit of devices (dialog device-limit) judged now, and a backup code is used up when it signs this device in: if the limit of devices, a ban or a code step that ended stops the attempt before the code is checked, the backup code stays usable, while once the check has started a failure of the server, the code step ending, or another change to the account during the check can leave it used up with nothing signed in; the email's failed sign-ins are judged first: while they keep a password out it answers rate-limited, whatever else holds, and looks at no code; a wrong code answers invalid-code and counts toward them as a wrong password does, and a right code forgets them; once five wrong codes were given, about ten minutes have passed since the password, or the account's password or email has changed since then, the next code answers code-expired and the sign-in starts again from the password; another account signed in on this browser answers other-account before the server is asked, as for sign-in, so no device is signed in or out; the limit of devices is judged before the code is checked: past it nothing is signed in, the code is neither checked nor spent and the failed sign-ins stay as they were, so the dialog's confirmation signs in again from the password, which asks for a code again"
+    result:
+      - "the device is signed in as by sign-in; a right code forgets the email's failed sign-ins"
+      - "the failed sign-ins are judged before the challenge and the code: while they keep a password out, a well-formed request answers rate-limited whatever its challenge and code, and no code is looked at"
+      - "a backup code is used up when it signs the device in; one the attempt stops at before the check (the device limit, a ban, an ended code step) stays usable"
+      - "once the check has started, a server failure, the code step ending or another change to the account during it can leave a backup code used up, nothing signed in"
+      - "past the limit of devices nothing is signed in, no code is checked or spent, the failed sign-ins stay; the confirmation signs in again from the password, asking a code again"
     changes: [ devices.list, accounts.read ]
     codes:
-      - invalid-code
-      - code-expired
-      - account-banned
-      - rate-limited
-      - other-account
-      - failed
+      invalid-code: "the code is wrong; it counts toward the email's failed sign-ins as a wrong password does"
+      code-expired: "five wrong codes were given, about ten minutes passed since the password, or its password or email changed since; the sign-in starts again from the password"
+      account-banned: { invariant: banned-account }
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
+      other-account: { invariant: one-account-per-browser }
+      device-limit: { invariant: device-limit }
+      failed: "anything else fails"
   verify-email:
     description: Verifies the email of an account with the token its verification mail carries, and signs this device in to the account the first time.
     params:
@@ -155,26 +220,35 @@ actions:
         value: token
         codes: [ link-invalid, link-expired ]
         description: The token the link of the verification mail carries in the address of /verify-email.
-    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened once the email is verified, by an earlier opening or by a password reset, answers verified-before, signs nothing in and creates nothing; a link older than a day answers link-expired; a link of an account an operator banned verifies the email, signs nothing in, creates nothing, and answers account-banned; the account's first sign-in once the ban is lifted creates its settings and profile"
+    result:
+      - "the first time, the email is verified, this device is signed in, and the account's settings (the language it starts in) and profile (its name as it signed up) are created"
+      - "then the app moves to /me with code welcome"
+      - "a link opened once the email is verified (an earlier opening, a password reset) answers verified-before, signs nothing in and creates nothing"
+      - "a link of a banned account verifies the email but signs nothing in and creates nothing; its first sign-in once the ban is lifted creates its settings and profile"
     changes: [ devices.list, accounts.list, accounts.read ]
     codes:
-      - link-invalid
-      - link-expired
-      - account-banned
-      - other-account
-      - rate-limited
-      - failed
+      link-invalid: "the token is no verification link the platform made, or its email no longer belongs to the account it was sent for"
+      link-expired: "the link is older than a day"
+      account-banned: { invariant: banned-account }
+      other-account: "the link's exchange signs in an account other than the one this browser holds, which it keeps; it queues the new session for sign-out and schedules a revocation attempt when online"
+      rate-limited: { invariant: credential-checks }
+      failed: "anything else fails"
   resend-verification:
     description: Sends the mail whose link verifies an account's email again.
     params:
       email:
         value: email
         description: The email of the account.
-    result: "the mail below is on its way when the email has an account not verified yet; an unknown email, or one verified already, gets the same answer and no mail; one email takes three resends within a quarter of an hour, and a fourth answers rate-limited and sends nothing"
+    result:
+      - "the mail below is on its way when the email has an account not verified yet"
+      - "an unknown email, or one verified already, gets the same answer and no mail"
+      - "a rate-limited refusal sends nothing"
     changes: []
     codes:
-      - rate-limited
-      - failed
+      rate-limited:
+        invariant: address-mails
+        condition: "a fourth resend for one email within a quarter of an hour"
+      failed: "anything else fails"
     mail:
       to: email
       language: account
@@ -185,11 +259,16 @@ actions:
       email:
         value: email
         description: The email of the account.
-    result: "the mail below is on its way when the email has an account, and its link replaces the links of earlier requests, so only the newest works; an unknown email gets the same answer, in the same time, and no mail, so the answer tells nobody which emails have accounts; one email takes three requests within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the network address's budget of mails, shared with sign-up and the resend of a verification mail"
+    result:
+      - "the mail below is on its way when the email has an account, and its link replaces the links of earlier requests, so only the newest works"
+      - "an unknown email gets the same answer, in the same time, and no mail, so the answer tells nobody which emails have accounts"
+      - "a rate-limited refusal sends nothing"
     changes: []
     codes:
-      - rate-limited
-      - failed
+      rate-limited:
+        invariant: address-mails
+        condition: "a fourth request for one email within a quarter of an hour"
+      failed: "anything else fails"
     mail:
       to: email
       language: account
@@ -204,14 +283,18 @@ actions:
       password:
         value: new-password
         description: The new password, kept to the composite password-rules.
-    result: "the account's password is the new one, its email is verified when it was not yet, since only that mailbox got the link (its first sign-in then creates the account's settings and profile, as the link of the sign-up mail would have), every other reset link of the account stops working, and every device signed in to the account is signed out, this one too when it is: the page then keeps its message; nothing is signed in by it. A link unknown, used before or replaced by a newer one answers link-invalid, one older than an hour link-expired, and a password that breaks the rules password-rejected, the old password then unchanged. A network address takes twenty attempts within ten minutes, refused or not, and the next answers rate-limited"
+    result:
+      - "the password is the new one, and the email is verified when it was not yet, since only that mailbox got the link"
+      - "an email it verifies gets the account's settings and profile at its first sign-in, as the sign-up mail's link would have"
+      - "every other reset link of the account stops working, and every device signed in to the account is signed out, this one too when it is: the page keeps its message"
+      - "nothing is signed in by it"
     changes: [ devices.list, accounts.list, accounts.read ]
     codes:
-      - link-invalid
-      - link-expired
-      - password-rejected
-      - rate-limited
-      - failed
+      link-invalid: "the link is unknown, used before or replaced by a newer one"
+      link-expired: "the link is older than an hour"
+      password-rejected: "the new password breaks the rules; the old password stays unchanged"
+      rate-limited: { invariant: address-attempts }
+      failed: "anything else fails"
     notices:
       - name: password-changed
         to: account
@@ -226,13 +309,15 @@ actions:
       password:
         value: new-password
         description: The new password, kept to the composite password-rules.
-    result: "the password is the new one, every reset link of the account stops working, every other device of the account is signed out and this one stays signed in; a wrong current password answers invalid-credentials and counts toward the account's failed sign-ins, ten within a quarter of an hour, after which it answers rate-limited until the quarter of an hour has passed; a password that breaks the rules answers password-rejected; the password stays unchanged on any refusal"
+    result:
+      - "the password is the new one, every reset link of the account stops working, every other device of the account is signed out, and this one stays signed in"
+      - "the password stays unchanged on any refusal"
     changes: [ devices.list, accounts.read ]
     codes:
-      - invalid-credentials
-      - password-rejected
-      - rate-limited
-      - failed
+      invalid-credentials: "the current password is wrong; it counts toward the email's failed sign-ins"
+      password-rejected: "the new password breaks the rules"
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
+      failed: "anything else fails"
     notices:
       - name: password-changed
         to: account
@@ -247,13 +332,16 @@ actions:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the mail below is on its way to the new email, its link replacing the link of an earlier request, and the account keeps its email until that link is opened; a new email that has an account already gets the same answer, in the same time, and no mail; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password; one account asks three changes within a quarter of an hour, and a fourth answers rate-limited and sends nothing; an email that is not an email answers email-invalid; the mails count toward the network address's budget of mails"
+    result:
+      - "the mail below is on its way to the new email, its link replacing an earlier request's, and the account keeps its email until that link is opened"
+      - "a new email that has an account already gets the same answer, in the same time, and no mail"
+      - "a rate-limited refusal sends nothing"
     changes: []
     codes:
-      - invalid-credentials
-      - email-invalid
-      - rate-limited
-      - failed
+      invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
+      email-invalid: "the new email is not an email"
+      rate-limited: { invariant: [ credential-checks, address-mails, email-changes, failed-sign-ins ] }
+      failed: "anything else fails"
     mail:
       to: email
       language: account
@@ -265,13 +353,17 @@ actions:
         value: token
         codes: [ link-invalid, link-expired ]
         description: The token the link of the confirmation mail carries in the address of /confirm-email.
-    result: "the account's email is the new one, which signs it in from now on, and every device of the account shows it; every reset link of the account stops working, since it went to the old email; the old email gets the notice below, which names neither the new email nor any part of it; the device that opens the link is not signed in by it. A link unknown, used before or replaced by a newer one, one whose account changed its email or its password since the mail was sent, or one whose new email has got an account meanwhile, answers link-invalid; one older than a day link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    result:
+      - "the account's email is the new one, which signs it in from now on, and every device of the account shows it"
+      - "every reset link of the account stops working, since it went to the old email"
+      - "the old email gets the notice below, which names neither the new email nor any part of it"
+      - "the device that opens the link is not signed in by it"
     changes: [ accounts.list, accounts.read, organisations.members, invitations.mine ]
     codes:
-      - link-invalid
-      - link-expired
-      - rate-limited
-      - failed
+      link-invalid: "the link is unknown, used or replaced, its account changed its email or password since the mail, or its new email has got an account meanwhile"
+      link-expired: "the link is older than a day"
+      rate-limited: { invariant: address-attempts }
+      failed: "anything else fails"
     notices:
       - name: email-changed
         to: account
@@ -282,13 +374,17 @@ actions:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the mail below is on its way to the account's email, its link replacing the link of an earlier request, and the account stays as it is until the button of the page that link opens is pressed; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password; an account that is the only administrator of an organisation with other members answers last-admin and sends nothing, until another member of it is made an administrator or those members are removed; one account asks three deletions within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the network address's budget of mails"
+    result:
+      - "the mail below is on its way to the account's email, its link replacing an earlier request's; the account stays as it is until that link's page has its button pressed"
+      - "on any refusal nothing is sent"
     changes: []
     codes:
-      - invalid-credentials
-      - last-admin
-      - rate-limited
-      - failed
+      invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
+      last-admin: { invariant: last-admin }
+      rate-limited:
+        invariant: [ credential-checks, address-mails, failed-sign-ins ]
+        condition: "a fourth request by the account within a quarter of an hour; nothing is sent"
+      failed: "anything else fails"
     mail:
       to: account
       language: account
@@ -300,14 +396,18 @@ actions:
         value: token
         codes: [ link-invalid, link-expired ]
         description: The token the link of the deletion mail carries in the address of /delete-account.
-    result: "the account is gone for good, with its profile and its settings, its sessions, so every device of the account is signed out, this one too when it is, and its memberships; each organisation it was the only member of goes with it, its data too; the other organisations keep what it wrote there, without it as a member; its email can sign up again at once, and gets the notice below; nothing brings the account back. A link unknown, used before or replaced by a newer one, or one whose account changed its password or its email since the mail was sent, answers link-invalid; one older than an hour link-expired, since what it does cannot be undone; an account that became the only administrator of an organisation with other members since the mail was sent answers last-admin and deletes nothing. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    result:
+      - "the account is gone for good with its profile, settings, sessions and memberships, so every device of it is signed out, this one too when it is"
+      - "each organisation it was the only member of goes with it, its data too; the other organisations keep what it wrote there, without it as a member"
+      - "its email can sign up again at once, and gets the notice below; nothing brings the account back"
+      - "last-admin is judged again when the button is pressed, and its refusal deletes nothing"
     changes: [ devices.list, accounts.list, accounts.read, organisations.members ]
     codes:
-      - link-invalid
-      - link-expired
-      - last-admin
-      - rate-limited
-      - failed
+      link-invalid: "the link is unknown, used before or replaced, or its account changed its password or its email since the mail was sent"
+      link-expired: "the link is older than an hour, since what it does cannot be undone"
+      last-admin: { invariant: last-admin }
+      rate-limited: { invariant: address-attempts }
+      failed: "anything else fails"
     notices:
       - name: account-deleted
         to: account
@@ -315,76 +415,87 @@ actions:
   two-factor.read:
     description: Reads whether the signed-in account's second factor is on.
     params: {}
-    result: "whether the account's second factor is on, so that each sign-in with its password also asks for a code; each account turns it on or off as it chooses"
+    result:
+      - "whether the account's second factor is on, so that each sign-in with its password also asks for a code; each account turns it on or off as it chooses"
     changes: []
     codes:
-      - failed
+      failed: "anything else fails"
   two-factor.enable:
     description: Starts turning the signed-in account's second factor on, with its password; a code of the key it answers turns it on.
     params:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the answer carries a new key for an authenticator app, as text and as a QR code, and ten new backup codes, each usable at most once in place of a code of the app; the second factor stays off until two-factor.confirm takes a code of that key, and asking again replaces the key and the codes; while the second factor is on, turned on meanwhile from another device, it answers two-factor-changed and changes nothing; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    result:
+      - "the answer carries a new key for an authenticator app, as text and as a QR code, and ten new backup codes, each usable at most once in place of a code of the app"
+      - "the second factor stays off until two-factor.confirm takes a code of that key; asking again replaces the key and the codes"
     changes: []
     codes:
-      - invalid-credentials
-      - two-factor-changed
-      - rate-limited
-      - failed
+      invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
+      two-factor-changed: "the second factor is on already, turned on meanwhile from another device; nothing changes"
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
+      failed: "anything else fails"
   two-factor.confirm:
     description: Turns the signed-in account's second factor on with a code of the key two-factor.enable answered.
     params:
       code:
         value: second-factor-code
         description: The code the authenticator app shows now for that key.
-    result: "the second factor is on: from now on each sign-in of the account with its password asks for a code of that key, or for one of the backup codes two-factor.enable answered; this device and the account's other devices stay signed in; a code the key does not give now answers invalid-code; a code given for a key that a later two-factor.enable replaced, on this device or another, or once the second factor was turned on from another device, answers two-factor-changed whatever the code, and nothing changes"
+    result:
+      - "the second factor is on: each sign-in with the password asks for a code of that key, or for one of the backup codes two-factor.enable answered"
+      - "this device and the account's other devices stay signed in"
     changes: [ two-factor.read ]
     codes:
-      - invalid-code
-      - two-factor-changed
-      - rate-limited
-      - failed
+      invalid-code: "the code is not one the key gives now"
+      two-factor-changed: "a later two-factor.enable replaced the key, here or on another device, or the factor was turned on from another device; whatever the code, nothing changes"
+      rate-limited: { invariant: credential-checks }
+      failed: "anything else fails"
   two-factor.disable:
     description: Turns the signed-in account's second factor off, with its password.
     params:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the second factor is off: its key and its backup codes stop working, and a sign-in asks for the password alone; one off already, turned off meanwhile from another device, gets the same answer; this device and the account's other devices stay signed in; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    result:
+      - "the second factor is off: its key and its backup codes stop working, and a sign-in asks for the password alone"
+      - "one off already, turned off meanwhile from another device, gets the same answer"
+      - "this device and the account's other devices stay signed in"
     changes: [ two-factor.read ]
     codes:
-      - invalid-credentials
-      - rate-limited
-      - failed
+      invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
+      failed: "anything else fails"
   two-factor.renew-codes:
     description: Replaces the backup codes of the signed-in account's second factor, with its password.
     params:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the answer carries ten new backup codes, each usable at most once in place of a code of the app, and the earlier ones stop working; while the second factor is off, turned off meanwhile from another device, it answers two-factor-changed and makes none; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    result:
+      - "the answer carries ten new backup codes, each usable at most once in place of a code of the app, and the earlier ones stop working"
     changes: []
     codes:
-      - invalid-credentials
-      - two-factor-changed
-      - rate-limited
-      - failed
+      invalid-credentials: "the password is wrong; it counts toward the email's failed sign-ins"
+      two-factor-changed: "the second factor is off, turned off meanwhile from another device; no codes are made"
+      rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
+      failed: "anything else fails"
   passkeys.list:
     description: Reads the passkeys of the signed-in account.
     params: {}
     result: "the account's passkeys, the earliest added first: for each its id and when it was added"
     changes: []
     codes:
-      - failed
+      failed: "anything else fails"
   passkeys.add:
     description: Adds a passkey to the signed-in account, which the browser makes on this device or on a security key.
     params: {}
-    result: "the browser asks to make a passkey for this site and to unlock it; the account then signs in with it from the sign-in page, with no password and no code; the browser's window closed or timed out answers passkey-cancelled, and nothing is added"
+    result:
+      - "the browser asks to make a passkey for this site and to unlock it"
+      - "the account then signs in with it from the sign-in page, with no password and no code"
     changes: [ passkeys.list ]
     codes:
-      - passkey-cancelled
-      - failed
+      passkey-cancelled: "the browser's window was closed or timed out; nothing is added"
+      failed: "anything else fails"
   passkeys.remove:
     description: Removes a passkey of the signed-in account.
     params:
@@ -394,7 +505,7 @@ actions:
     result: "the passkey signs nothing in from now on; the devices it signed in stay signed in"
     changes: [ passkeys.list ]
     codes:
-      - failed
+      failed: "anything else fails"
   sign-out:
     description: Signs this device out, after sending what it can.
     params:
@@ -402,34 +513,39 @@ actions:
         type: boolean
         optional: true
         description: Sign out even though this device holds changes the server has not received; they are lost.
-    result: this device signs out, its local data goes, the app moves to /sign-in; with unsent changes and no forgetUnsent the sign-out asks first (dialog unsent-changes) and changes nothing; it waits a few seconds for the sync channel first, except when the browser says it has no network, where it answers at once
+    result:
+      - "this device signs out, its local data goes, and the app moves to /sign-in"
+      - "with unsent changes and no forgetUnsent: asks first (dialog unsent-changes) and changes nothing"
+      - "it waits a few seconds for the sync channel first, except when the browser says it has no network, where it answers at once"
     changes: [ devices.list, accounts.read ]
     codes:
-      - failed
+      failed: "anything else fails"
   sign-out-everywhere:
     description: Signs every device of the account out, this one included.
     params: {}
     result: every device of the account signs out, this one included; /sign-in shows signed-out-elsewhere
     changes: [ devices.list, accounts.read ]
     codes:
-      - device-sign-out-failed
+      device-sign-out-failed: "the devices could not be signed out"
   devices.list:
     description: Reads the devices of the account.
     params: {}
-    result: "the account's devices: for each its device session id, label, last seen, when it was revoked, and whether it is the current device"
+    result: "the account's devices: for each its session id, label, last seen, when it was revoked, and whether it is the current device"
     changes: []
     codes:
-      - devices-read-failed
+      devices-read-failed: "the devices could not be read"
   devices.revoke:
     description: Signs another device of the account out.
     params:
       device:
         value: id
-        description: The device session id of that device.
-    result: that device signs out; the answer lists the account's devices as they are then, or none when they could not be read
+        description: The session id of that device.
+    result:
+      - "that device signs out, and the answer lists the account's devices as they are then"
+      - "the devices could not be read after it: the answer lists none"
     changes: [ devices.list, accounts.read ]
     codes:
-      - device-sign-out-failed
+      device-sign-out-failed: "the device could not be signed out"
   theme.set:
     description: Shows the app in a theme on this device and keeps it there.
     params:
@@ -438,25 +554,28 @@ actions:
         description: "light, dark, or system: the device's own setting, followed as it changes."
     result: the app shows the theme at once and this device keeps it; the other tabs of this browser where no account is signed in show it too
     changes: []
-    codes: []
+    codes: {}
   reload:
     description: Loads the page again from the server.
     params: {}
     result: the page loads again; what this tab held and had not stored is gone
     changes: []
-    codes: []
+    codes: {}
   install.prompt:
     description: Shows the browser's own window that installs the app, where the browser offers one.
     params: {}
-    result: the browser asks the user; installed, the app opens as the installed app and the reminder goes for good on this device; declined, the reminder is put off as by install.postpone
+    result:
+      - "the browser asks the user"
+      - "installed: the app opens as the installed app, and the reminder goes for good on this device"
+      - "declined: the reminder is put off as by install.postpone"
     changes: []
-    codes: []
+    codes: {}
   install.postpone:
     description: Puts the reminder to install the app off on this device.
     params: {}
     result: the reminder goes, and comes back after three days on this device
     changes: []
-    codes: []
+    codes: {}
   organisations.create:
     description: Creates an organisation.
     params:
@@ -469,12 +588,12 @@ actions:
     result: the organisation exists with the caller as admin and becomes current
     changes: [ accounts.read ]
     codes:
-      - key-invalid
-      - name-required
-      - name-too-long
-      - key-taken
-      - rate-limited
-      - failed
+      key-invalid: "the key breaks its pattern"
+      name-required: "the name, trimmed, is empty"
+      name-too-long: "the name, trimmed, is longer than its value allows"
+      key-taken: "another organisation has the key"
+      rate-limited: "the account asked ten creations within an hour or, when its own limit allows one, its network address thirty; each counted once its key and name are valid"
+      failed: "anything else fails"
   organisations.select:
     description: Makes one of the account's organisations current on this device.
     params:
@@ -483,15 +602,15 @@ actions:
         description: The key of an organisation the account belongs to.
     result: the organisation becomes current on this device (no server call); the choice is kept on this browser
     changes: []
-    codes: []
+    codes: {}
   organisations.members:
     description: Reads the members of the current organisation.
     params: {}
-    result: its members with their identity id, email and role
+    result: its members with their account's id, email and role
     changes: []
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: admins-only }
+      failed: "anything else fails"
     roles:
       - admin
   organisations.invite:
@@ -503,14 +622,18 @@ actions:
       role:
         value: role
         description: "member or admin: the role the account takes when it accepts."
-    result: "an invitation of the email with the role, pending for seven days, and the mail below on its way to the email; an email with an account and one without get the same answer, in the same time; inviting an email again replaces its pending invitation, whose link stops working; the email of a member answers already-member; the email is a member only once the account with that email accepts; the mails count toward the network address's budget of mails"
+    result:
+      - "an invitation of the email with the role, pending for seven days, and the mail below on its way to the email"
+      - "an email with an account and one without get the same answer, in the same time"
+      - "inviting an email again replaces its pending invitation, whose link stops working"
+      - "the email is a member only once the account with that email accepts"
     changes: [ organisations.invitations ]
     codes:
-      - already-member
-      - email-invalid
-      - not-admin
-      - rate-limited
-      - failed
+      already-member: "the email is a member's"
+      email-invalid: "the email is not an email"
+      not-admin: { invariant: admins-only }
+      rate-limited: { invariant: [ address-mails, invitation-attempts ] }
+      failed: "anything else fails"
     roles:
       - admin
     mail:
@@ -523,8 +646,8 @@ actions:
     result: its invitations not accepted, declined, revoked or expired yet, the newest first, each with its id, email, role and link
     changes: []
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: admins-only }
+      failed: "anything else fails"
     roles:
       - admin
   organisations.copy-invitation:
@@ -536,7 +659,7 @@ actions:
     result: the link is on the clipboard (no server call); it is the link the mail carries, and works for the invited email alone
     changes: []
     codes:
-      - failed
+      failed: "the clipboard does not take the link"
     roles:
       - admin
   organisations.revoke-invitation:
@@ -548,8 +671,8 @@ actions:
     result: the invitation is gone and its link stops working
     changes: [ organisations.invitations ]
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: admins-only }
+      failed: "anything else fails"
     roles:
       - admin
   organisations.set-role:
@@ -557,16 +680,18 @@ actions:
     params:
       identity:
         value: id
-        description: The identity id of the member.
+        description: The id of the member's account.
       role:
         value: role
         description: member or admin.
-    result: "the member has the role from now on: its devices show it without a reload, and the next change they send is judged by it; an administrator may make itself a member while another administrator stays; the only administrator of the organisation answers last-admin and keeps its role"
+    result:
+      - "the member has the role from now on: its devices show it without a reload, and the next change they send is judged by it"
+      - "an admin may make itself a member while another admin stays"
     changes: [ organisations.members, accounts.read ]
     codes:
-      - not-admin
-      - last-admin
-      - failed
+      not-admin: { invariant: admins-only }
+      last-admin: { invariant: last-admin }
+      failed: "anything else fails"
     roles:
       - admin
   invitations.read:
@@ -576,56 +701,59 @@ actions:
         value: token
         codes: [ link-invalid, link-expired ]
         description: The token the link of the invitation mail carries in the address of /invitation.
-    result: "the organisation's name, the role, and whether the invitation is for the account signed in on this device, whose email is then the invitation's; never the email. A link unknown, used, declined, revoked or replaced by a newer one, or whose organisation is gone, answers link-invalid; one older than seven days link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    result:
+      - "the organisation's name, the role, and whether the invitation is for the account signed in here, whose email is then the invitation's; never the email"
     changes: []
     codes:
-      - link-invalid
-      - link-expired
-      - rate-limited
-      - failed
+      link-invalid: "the link is unknown, used, declined, revoked or replaced by a newer one, or its organisation is gone"
+      link-expired: "the link is older than seven days"
+      rate-limited: { invariant: address-attempts }
+      failed: "anything else fails"
   invitations.mine:
     description: Reads the invitations to the signed-in account's email.
     params: {}
     result: the pending invitations to the account's email, of organisations it is not a member of, the newest first, each with its id, the organisation's name and the role
     changes: []
     codes:
-      - failed
+      failed: "anything else fails"
   invitations.accept:
     description: Accepts an invitation to the signed-in account's email.
     params:
       invitation:
         value: invitation-ref
         description: "The invitation: its id, as the invitations for the account list it, or the token its link carries."
-    result: "the account is a member of the invitation's organisation with its role, that organisation becomes current on this device, the account's devices learn it without a reload, and the invitation is spent; an invitation to another email answers other-account; one revoked, replaced, declined, accepted or expired meanwhile invitation-gone; an account that is a member already already-member"
+    result:
+      - "the account is a member of the invitation's organisation with its role, which becomes current here, its devices learn it without a reload, and the invitation is spent"
     changes: [ invitations.mine, accounts.read ]
     codes:
-      - invitation-gone
-      - other-account
-      - already-member
-      - failed
+      invitation-gone: "the invitation was revoked, replaced, declined, accepted or expired meanwhile"
+      other-account: "the invitation is to another email"
+      already-member: "the account is a member already"
+      failed: "anything else fails"
   invitations.decline:
     description: Declines an invitation to the signed-in account's email.
     params:
       invitation:
         value: invitation-ref
         description: "The invitation: its id, as the invitations for the account list it, or the token its link carries."
-    result: the invitation is gone and its link stops working; an invitation to another email answers other-account, and one gone meanwhile invitation-gone
+    result:
+      - "the invitation is gone and its link stops working"
     changes: [ invitations.mine ]
     codes:
-      - invitation-gone
-      - other-account
-      - failed
+      invitation-gone: "the invitation is gone meanwhile"
+      other-account: "the invitation is to another email"
+      failed: "anything else fails"
   organisations.remove:
     description: Removes a member from the current organisation.
     params:
       identity:
         value: id
-        description: The identity id of the member.
+        description: The id of the member's account.
     result: the member is removed; its devices lose the organisation without a reload
     changes: [ organisations.members, accounts.read ]
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: admins-only }
+      failed: "anything else fails"
     roles:
       - admin
   accounts.list:
@@ -641,11 +769,14 @@ actions:
       size:
         type: number
         description: The accounts a page holds.
-    result: "the accounts the search finds, the newest first (two made at the same moment by their id), that page of them and their number in all: for each its identity id, its name (its profile's, or the one it signed up with while it has no profile), its email, whether the email is verified, whether it is banned, whether it is an operator, and when it was made; a page past the last holds none"
+    result:
+      - "the accounts the search finds, the newest first (two made at the same moment by their id), that page of them and their number in all"
+      - "for each: its id, its name (its profile's, or the one it signed up with while it has none), email, whether verified, banned or an operator, and when made"
+      - "a page past the last holds none"
     changes: []
     codes:
-      - not-operator
-      - failed
+      not-operator: { invariant: operators-only }
+      failed: "anything else fails"
     roles:
       - operator
     paged: { sizes: [ 10, 25, 50 ], default: 25 }
@@ -654,13 +785,17 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
-    result: "the account: its identity id, name (as accounts.list names it), email, whether the email is verified, when it was made, whether it has a profile (none until its first sign-in, so its name is the one it signed up with), when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given, and its organisations, each with its key, its name and the account's role in it; an id with no account answers account-gone"
+        description: The id of the account.
+    result:
+      - "the account: its id, name (as accounts.list names it), email, whether the email is verified, when it was made"
+      - "whether it has a profile: none until it first starts on a device, so its name is the one it signed up with"
+      - "when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given"
+      - "its organisations, each with its key, its name and the account's role in it"
     changes: []
     codes:
-      - not-operator
-      - account-gone
-      - failed
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.rename:
@@ -668,18 +803,20 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
       name:
         value: profile.name
         description: The name.
-    result: "the profile's name is the new one, and the account's devices show it as they show any change of the profile; an account with no profile yet (it never signed in) has no name to set, so the card offers no rename then"
+    result:
+      - "the profile's name is the new one, and the account's devices show it as they show any change of the profile"
+      - "an account with no profile yet has no name to set, so the card offers no rename then"
     changes: [ accounts.list, accounts.read ]
     codes:
-      - name-required
-      - name-too-long
-      - not-operator
-      - account-gone
-      - failed
+      name-required: "the name, trimmed, is empty"
+      name-too-long: "the name, trimmed, is longer than its value allows"
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.change-email:
@@ -687,19 +824,21 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
       email:
         value: email
         description: The new email.
-    result: "the mail below is on its way to the new email, its link replacing the link of an earlier request, by the account or by an operator, and the account keeps its email until that link is opened, which also marks the new email verified, so an account that never signed in starts at its first sign-in with the new email; a new email that has an account answers email-taken and sends nothing, and one that is not an email email-invalid; the mails count toward the operator's network address's budget of mails"
+    result:
+      - "the mail below is on its way to the new email, its link replacing an earlier request's, by the account or an operator; the account keeps its email until it is opened"
+      - "opening it also marks the new email verified, so an account that never signed in starts at its first sign-in with the new email"
     changes: []
     codes:
-      - email-invalid
-      - email-taken
-      - rate-limited
-      - not-operator
-      - account-gone
-      - failed
+      email-invalid: "the new email is not an email"
+      email-taken: "the new email has an account; nothing is sent"
+      rate-limited: { invariant: [ address-mails, email-changes ] }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     mail:
@@ -711,18 +850,21 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
       reason:
         value: ban-reason
         optional: true
         description: Why, for operators alone; the account never sees it.
-    result: "the account is banned and every device of it is signed out in the same step, so each lands on /sign-in told account-banned, and a sign-in with the right password answers account-banned until accounts.unban; an account banned already keeps its ban, with the reason given now; the operator's own account answers own-account and nothing changes"
+    result:
+      - "the account is banned and every device of it is signed out in the same step, so each lands on /sign-in told account-banned"
+      - "a sign-in with the right password answers account-banned until accounts.unban"
+      - "an account banned already keeps its ban, with the reason given now"
     changes: [ accounts.list, accounts.read ]
     codes:
-      - own-account
-      - not-operator
-      - account-gone
-      - failed
+      own-account: { invariant: not-own-account }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.unban:
@@ -730,13 +872,15 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
-    result: the account is not banned and signs in as before; the devices its ban signed out stay signed out; an account not banned stays as it is
+        description: The id of the account.
+    result:
+      - "the account is not banned and signs in as before; the devices its ban signed out stay signed out"
+      - "an account not banned stays as it is"
     changes: [ accounts.list, accounts.read ]
     codes:
-      - not-operator
-      - account-gone
-      - failed
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.revoke-sessions:
@@ -744,14 +888,15 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
-    result: every device of the account signs out, and /sign-in shows signed-out-elsewhere on each; the operator's own account answers own-account, since its own devices page does that
+        description: The id of the account.
+    result:
+      - "every device of the account signs out, and /sign-in shows signed-out-elsewhere on each"
     changes: [ accounts.read ]
     codes:
-      - own-account
-      - not-operator
-      - account-gone
-      - failed
+      own-account: { invariant: not-own-account }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
   accounts.send-reset:
@@ -759,14 +904,18 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
-    result: "the mail below is on its way to the account's email, its link replacing the links of earlier requests, under the account's own allowances: one email takes three within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the operator's network address's budget of mails"
+        description: The id of the account.
+    result:
+      - "the mail below is on its way to the account's email, its link replacing the links of earlier requests"
+      - "a rate-limited refusal sends nothing"
     changes: []
     codes:
-      - rate-limited
-      - not-operator
-      - account-gone
-      - failed
+      rate-limited:
+        invariant: address-mails
+        condition: "a fourth for its email within a quarter of an hour, under the account's own allowances"
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     mail:
@@ -778,15 +927,19 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
-    result: "the mail below is on its way to the account's email, under the account's own allowances: one email takes three within a quarter of an hour, and a fourth answers rate-limited and sends nothing; an account whose email is verified answers verified-before and sends nothing; the mails count toward the operator's network address's budget of mails"
+        description: The id of the account.
+    result:
+      - "the mail below is on its way to the account's email"
+      - "a rate-limited refusal sends nothing"
     changes: []
     codes:
-      - verified-before
-      - rate-limited
-      - not-operator
-      - account-gone
-      - failed
+      verified-before: "the account's email is verified already; nothing is sent"
+      rate-limited:
+        invariant: address-mails
+        condition: "a fourth for its email within a quarter of an hour, under the account's own allowances"
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     mail:
@@ -798,15 +951,18 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
-    result: "the account is gone for good, as delete-account leaves it: its profile and its settings, its sessions, so every device of it is signed out, and its memberships; each organisation it was the only member of goes with it, its data too; its email gets the notice below and can sign up again at once; an account that is the only administrator of an organisation with other members answers last-admin and nothing changes, until another member of it is made an administrator or those members are removed; the operator's own account answers own-account"
+        description: The id of the account.
+    result:
+      - "the account is gone for good, as delete-account leaves it: its profile, settings, sessions and memberships, so every device of it is signed out"
+      - "each organisation it was the only member of goes with it, its data too; its email gets the notice below and can sign up again at once"
+      - "a last-admin refusal changes nothing"
     changes: [ accounts.list, accounts.read, organisations.members ]
     codes:
-      - last-admin
-      - own-account
-      - not-operator
-      - account-gone
-      - failed
+      last-admin: { invariant: last-admin }
+      own-account: { invariant: not-own-account }
+      not-operator: { invariant: operators-only }
+      account-gone: { invariant: existing-account }
+      failed: "anything else fails"
     roles:
       - operator
     notices:

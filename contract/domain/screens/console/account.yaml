@@ -14,7 +14,7 @@ bindings:
           type: string
           minLength: 1
           maxLength: 64
-          description: The identity id of the account, as the entry of the accounts list carries it.
+          description: The id of the account, as the entry of the accounts list carries it.
           examples: [ idn_01jkq5x3y8z2h9m4n6p7r8s9t0 ]
           x-perch: { key: account-gone }
       additionalProperties: false

@@ -4,6 +4,7 @@ import { createActor, waitFor } from 'xstate'
 
 import { type DataError, dataError } from '@workspace/data'
 import { device_sessionIdFactory } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { createDevicesMachine } from './devices.machine'
 
@@ -101,7 +102,7 @@ describe('devices machine', () => {
     expect(signOutEverywhere).toHaveBeenCalledOnce()
     expect(emitted.slice(1)).toEqual([
       { type: 'show', anchor: 'user.sign-in.notice-message', codes: ['signed-out-elsewhere'] },
-      { type: 'navigate', to: '/sign-in' },
+      { type: 'navigate', to: CONTRACT_ROUTES['user.sign-in'] },
     ])
   })
 

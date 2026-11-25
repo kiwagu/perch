@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { recordRef } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
-import { defineAbilityFor } from '@workspace/kernel'
+import { CONTRACT_ROLES, defineAbilityFor } from '@workspace/kernel'
 
 import {
   noteCreate,
@@ -384,8 +384,9 @@ describe('a tenant region', () => {
   const region = { kind: 'tenant', id: 'tenant:acme' } as const
   const ann = 'idn_ann000000000000.0000000000'
   const bob = 'idn_bob000000000000.0000000000'
-  const member = (id: string) => defineAbilityFor({ id, role: 'member' }, replicaSchema)
-  const admin = (id: string) => defineAbilityFor({ id, role: 'admin' }, replicaSchema)
+  const member = (id: string) =>
+    defineAbilityFor({ id, role: CONTRACT_ROLES.member }, replicaSchema)
+  const admin = (id: string) => defineAbilityFor({ id, role: CONTRACT_ROLES.admin }, replicaSchema)
 
   it('accepts a note whose author is the pushing member', () => {
     const doc = new LoroDoc()
@@ -527,7 +528,7 @@ describe('a tenant region', () => {
       doc: new LoroDoc(),
       region,
       actor: ann,
-      ability: defineAbilityFor({ id: ann, role: 'admin' }, closed),
+      ability: defineAbilityFor({ id: ann, role: CONTRACT_ROLES.admin }, closed),
       schema: closed,
       updates: [noteCreate(new LoroDoc(), { id, author: ann, text: 'hello' })],
     })
@@ -588,6 +589,14 @@ describe('a tenant region', () => {
 
     const replaced = (text: string) => {
       const device = server.fork()
+      const deleted = noteDelete(device, { id })
+      const from = device.version()
+      // A new container of its own at the key: what replaces a record, not what a create attaches.
+      const note = device.getMap('records').setContainer(`note/${id}`, new LoroMap())
+
+      note.set('author', `member:${ann}`)
+      note.ensureMergeableText('text').update(text)
+      device.commit()
 
       return validateBatch({
         doc: server,
@@ -595,7 +604,7 @@ describe('a tenant region', () => {
         actor: bob,
         ability: member(bob),
         schema: replicaSchema,
-        updates: [noteDelete(device, { id }), noteCreate(device, { id, author: ann, text })],
+        updates: [deleted, device.export({ mode: 'update', from })],
       })
     }
     const rewritten = replaced('mine now')

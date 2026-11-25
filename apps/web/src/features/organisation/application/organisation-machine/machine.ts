@@ -2,7 +2,9 @@ import { okAsync, type ResultAsync } from 'neverthrow'
 import { assertEvent, assign, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
+import type { Locale } from '@workspace/i18n'
 import type { IdentityId, InvitationId, NoteId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { TenantRole } from '@workspace/replica/protocol'
 
 import { failureOf } from '../../../../platform/actor-outcome'
@@ -17,6 +19,7 @@ import {
   SENT_REVOKE_REGION,
 } from './button-regions'
 import { CREATE_FORM_REGION } from './create-form-region'
+import { DEFAULT_LANGUAGE_REGION } from './default-language-region'
 import { type ListRead, MEMBERS_LIST, RECEIVED_LIST, SENT_LIST } from './effects'
 import {
   type ErrorPart,
@@ -39,6 +42,7 @@ const ERROR_PARTS: Readonly<Record<string, ErrorPart>> = {
   'organisation.notes.error': 'notes',
   'organisation.invite.error': 'members',
   'organisation.received.error': 'received',
+  'organisation.settings.error': 'settings',
 }
 
 /** The organisation a write ran in, which its outcome carries: the one current when it started. */
@@ -130,11 +134,17 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
       'platform.invitations.decline': write(
         ({ invitation }: { readonly invitation: InvitationId }) => deps.decline(invitation),
       ),
+      'organisation_settings.updateLocale': write(({ locale }: { readonly locale: Locale }) =>
+        deps.setDefaultLanguage(locale),
+      ),
+      'organisation_settings.clearLocale': write(() => deps.clearDefaultLanguage()),
     },
     guards: {
       // The account changed its own role to member: the members list stops showing.
       ownDemotion: ({ context: { changingRole } }) =>
-        changingRole?.role === 'member' && changingRole.identity === deps.account(),
+        changingRole?.role === CONTRACT_ROLES.member && changingRole.identity === deps.account(),
+      // The current organisation's settings are on this device: the default language takes a choice.
+      defaultsHeld: () => deps.defaultsHeld(),
     },
     actions: {
       show: enqueueActions(({ enqueue, event, context }, params: ShowParams) => {
@@ -251,6 +261,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
           'sent-revoke': SENT_REVOKE_REGION,
           received: RECEIVED_REGION,
           'received-decline': RECEIVED_DECLINE_REGION,
+          'default-language': DEFAULT_LANGUAGE_REGION,
           'notes-add': NOTES_ADD_REGION,
         },
       },

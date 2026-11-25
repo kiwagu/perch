@@ -72,14 +72,6 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | `not-found` | the screen of an address no route takes (`/$`) |
 | `sample` | the sample screen (`/sample/$key`) |
 
-## Roles
-
-| Role | Meaning |
-|---|---|
-| `guest` | nobody signed in |
-| `identity` | an account signed in |
-| `member` | a member of the organisation |
-
 ## Reserved anchors
 
 | Anchor | Meaning |

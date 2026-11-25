@@ -1,4 +1,7 @@
 // scenario: user/base/reset-link-replaced
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, signOut, signUp, test } from '../../support/fixtures'
 import { mailbox } from '../../support/mailbox'
@@ -26,7 +29,7 @@ test.describe('Ask for the reset mail twice', { tag: '@full' }, () => {
     })
 
     await test.step('2. Open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button] twice', async () => {
-      await page.goto('/forgot-password')
+      await page.goto(CONTRACT_ROUTES['user.forgot-password'])
       await appReady(page)
       await page.getByTestId('user.forgot-password.email-input').fill(data.email)
 

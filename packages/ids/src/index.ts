@@ -18,6 +18,7 @@ export const registry = defineEntityPrefixes({
   device_session: 'dvs',
   note: 'nte',
   settings: 'stg',
+  organisation_settings: 'ost',
   account: 'acc',
   verification: 'vrf',
   invitation: 'inv',
@@ -41,6 +42,8 @@ export type NoteId = EntityIdOf<typeof registry.prefixes, 'note'>
 
 export type SettingsId = EntityIdOf<typeof registry.prefixes, 'settings'>
 
+export type OrganisationSettingsId = EntityIdOf<typeof registry.prefixes, 'organisation_settings'>
+
 export type AccountId = EntityIdOf<typeof registry.prefixes, 'account'>
 
 export type VerificationId = EntityIdOf<typeof registry.prefixes, 'verification'>
@@ -59,6 +62,7 @@ export const {
   device_sessionIdFactory,
   noteIdFactory,
   settingsIdFactory,
+  organisation_settingsIdFactory,
   accountIdFactory,
   verificationIdFactory,
   invitationIdFactory,

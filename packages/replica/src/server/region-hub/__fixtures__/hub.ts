@@ -2,7 +2,7 @@ import { LoroDoc, LoroMap, type VersionVector } from 'loro-crdt'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
-import { defineAbilityFor, OWNER_ABILITY } from '@workspace/kernel'
+import { CONTRACT_ROLES, defineAbilityFor, OWNER_ABILITY } from '@workspace/kernel'
 
 import { replicaSchema } from '../../../__fixtures__/note'
 import type { ServerMessage } from '../../../protocol'
@@ -16,7 +16,7 @@ import { type Actor, RegionHub, type Subscriber } from '../hub'
 export const actor: Actor = { id: 'idn_a', ability: OWNER_ABILITY }
 
 /** What a member of the organisation does through a subscription: the abilities its role gives. */
-export function memberOf(id: string, role: 'member' | 'admin' = 'member'): Actor {
+export function memberOf(id: string, role: 'member' | 'admin' = CONTRACT_ROLES.member): Actor {
   return { id, ability: defineAbilityFor({ id, role }, replicaSchema) }
 }
 

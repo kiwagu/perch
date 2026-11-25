@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 import {
@@ -86,13 +87,20 @@ function open(
   const TestModule = defineModule({
     id: 'test',
     declarations: { Settings: SettingsContainer },
-    routes: [{ path: '/settings', page: 'Settings', guard: 'authenticated', roles: ['identity'] }],
+    routes: [
+      {
+        path: CONTRACT_ROUTES['user.settings'],
+        page: 'Settings',
+        guard: 'authenticated',
+        roles: [CONTRACT_ROLES.identity],
+      },
+    ],
   })
   const router = createAppRouter({
     modules: [TestModule],
     session,
     layout: () => <Outlet />,
-    history: createMemoryHistory({ initialEntries: ['/settings'] }),
+    history: createMemoryHistory({ initialEntries: [CONTRACT_ROUTES['user.settings']] }),
   })
 
   const services = fakeServices(session)

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory, invitationIdFactory, noteIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
@@ -24,9 +25,9 @@ import {
 } from './organisation.view'
 import { useOrganisationDraft } from './use-organisation-draft'
 
-const acme: OrganisationChoice = { key: 'acme', name: 'Acme', role: 'member' }
-const acmeAdmin: OrganisationChoice = { ...acme, role: 'admin' }
-const globex: OrganisationChoice = { key: 'globex', name: 'Globex', role: 'member' }
+const acme: OrganisationChoice = { key: 'acme', name: 'Acme', role: CONTRACT_ROLES.member }
+const acmeAdmin: OrganisationChoice = { ...acme, role: CONTRACT_ROLES.admin }
+const globex: OrganisationChoice = { key: 'globex', name: 'Globex', role: CONTRACT_ROLES.member }
 
 const hello: NoteItem = {
   id: noteIdFactory.create(),
@@ -47,36 +48,36 @@ const agenda: NoteItem = { ...hello, id: noteIdFactory.create(), text: 'Agenda' 
 const ann: MemberItem = {
   id: identityIdFactory.create(),
   email: 'ann@example.test',
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
   removable: false,
 }
 const bea: MemberItem = {
   id: identityIdFactory.create(),
   email: 'bea@example.test',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
   removable: true,
 }
 
 const toBea: SentItem = {
   id: invitationIdFactory.create(),
   email: 'bea@example.test',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 const toCy: SentItem = {
   id: invitationIdFactory.create(),
   email: 'cy@example.test',
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const fromGlobex: ReceivedItem = {
   id: invitationIdFactory.create(),
   name: 'Globex',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 const fromInitech: ReceivedItem = {
   id: invitationIdFactory.create(),
   name: 'Initech',
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 /** The props the page's container gives, which the page here holds as the container holds them. */
@@ -92,7 +93,7 @@ const NO_CREATE: CreateDraft = { key: '', name: '' }
 
 /** The page with the fields of its forms held as its container holds them. */
 function Page(props: Omit<OrganisationViewProps, Held>) {
-  const [invite, setInvite] = useState<InviteDraft>({ email: '', role: 'member' })
+  const [invite, setInvite] = useState<InviteDraft>({ email: '', role: CONTRACT_ROLES.member })
   const create = useOrganisationDraft(props.current?.key, NO_CREATE)
   const note = useOrganisationDraft(props.current?.key, '')
 
@@ -128,6 +129,8 @@ function renderView(
     onRevoke: vi.fn(),
     onAccept: vi.fn(),
     onDecline: vi.fn(),
+    onChooseDefaultLanguage: vi.fn(),
+    onClearDefaultLanguage: vi.fn(),
   }
   const view = (more: Partial<Omit<OrganisationViewProps, Held>>) => (
     <Page
@@ -297,12 +300,56 @@ describe('OrganisationView without memberships', () => {
 })
 
 describe('OrganisationView of a member', () => {
+  describe("the organisation's default language", () => {
+    const anchors = [
+      'organisation.settings.locale-select',
+      'organisation.settings.clear-button',
+      'organisation.settings.error',
+    ]
+
+    it('shows an admin its select, and the clear button only while a default is set', () => {
+      const { rerender } = renderView({ current: acmeAdmin, organisations: [acmeAdmin] })
+
+      expect(
+        screen.getByTestId('organisation.settings.locale-select').hasAttribute('data-value'),
+      ).toBe(false)
+      expect(screen.queryByTestId('organisation.settings.clear-button')).toBeNull()
+
+      rerender({ defaultLanguage: 'es' })
+
+      expect(
+        screen.getByTestId('organisation.settings.locale-select').getAttribute('data-value'),
+      ).toBe('es')
+      expect(screen.getByTestId('organisation.settings.clear-button')).toBeDefined()
+    })
+
+    it("shows the error of the admin's last refused change under the select", () => {
+      renderView({
+        current: acmeAdmin,
+        organisations: [acmeAdmin],
+        errors: { settings: 'organisation_settings:FORBIDDEN' },
+      })
+
+      expect(screen.getByTestId('organisation.settings.error').getAttribute('data-code')).toBe(
+        'forbidden',
+      )
+    })
+
+    it('shows a member none of it', () => {
+      renderView({ defaultLanguage: 'es', errors: { settings: 'organisation_settings:FAILED' } })
+
+      for (const anchor of anchors) {
+        expect(screen.queryByTestId(anchor)).toBeNull()
+      }
+    })
+  })
+
   it('shows the organisation, the role and its notes, oldest first', () => {
     renderView()
 
     expect(screen.getByTestId('organisation.page.heading').textContent).toBe('Acme')
     expect(screen.getByTestId('organisation.page.role-badge').getAttribute('data-value')).toBe(
-      'member',
+      CONTRACT_ROLES.member,
     )
     expect(screen.getByTestId('organisation.page.role-badge').textContent).toBe(
       en['organisation.role.member'],
@@ -694,7 +741,7 @@ describe('OrganisationView of an administrator', () => {
     })
 
     expect(screen.getByTestId('organisation.page.role-badge').getAttribute('data-value')).toBe(
-      'admin',
+      CONTRACT_ROLES.admin,
     )
     expect(screen.getByTestId('organisation.page.role-badge').textContent).toBe(
       en['organisation.role.admin'],
@@ -735,7 +782,10 @@ describe('OrganisationView of an administrator', () => {
       within(item).getByTestId('organisation.members.role-select'),
     )
 
-    expect(selects.map((select) => select.getAttribute('data-value'))).toEqual(['admin', 'member'])
+    expect(selects.map((select) => select.getAttribute('data-value'))).toEqual([
+      CONTRACT_ROLES.admin,
+      CONTRACT_ROLES.member,
+    ])
     expect(selects.map((select) => select.textContent)).toEqual([
       expect.stringContaining(en['organisation.role.admin']),
       expect.stringContaining(en['organisation.role.member']),
@@ -761,29 +811,32 @@ describe('OrganisationView of an administrator', () => {
 
     const options = await screen.findAllByTestId('organisation.members.role-select.option')
 
-    expect(options.map((option) => option.getAttribute('data-value'))).toEqual(['member', 'admin'])
+    expect(options.map((option) => option.getAttribute('data-value'))).toEqual([
+      CONTRACT_ROLES.member,
+      CONTRACT_ROLES.admin,
+    ])
 
     await user.click(await screen.findByRole('option', { name: en['organisation.role.admin'] }))
 
-    expect(onSetRole).toHaveBeenCalledWith(bea.id, 'admin')
+    expect(onSetRole).toHaveBeenCalledWith(bea.id, CONTRACT_ROLES.admin)
   })
 
   it('shows the role the row is given: the one being set, or the one kept after a refusal', () => {
     const { rerender } = renderView({
       current: acmeAdmin,
       organisations: [acmeAdmin],
-      members: [ann, { ...bea, role: 'admin' }],
+      members: [ann, { ...bea, role: CONTRACT_ROLES.admin }],
     })
     const roles = () =>
       screen
         .getAllByTestId('organisation.members.role-select')
         .map((select) => select.getAttribute('data-value'))
 
-    expect(roles()).toEqual(['admin', 'admin'])
+    expect(roles()).toEqual([CONTRACT_ROLES.admin, CONTRACT_ROLES.admin])
 
     rerender({ members: [ann, bea] })
 
-    expect(roles()).toEqual(['admin', 'member'])
+    expect(roles()).toEqual([CONTRACT_ROLES.admin, CONTRACT_ROLES.member])
   })
 
   it('invites an email with the role member until another is chosen, and keeps what was typed for the page to empty', async () => {
@@ -798,13 +851,13 @@ describe('OrganisationView of an administrator', () => {
       field('organisation.invite.email-input'),
     )
     expect(expectFieldFacts(document.body)).toContain('organisation.invite.email-input')
-    expect(select.getAttribute('data-value')).toBe('member')
+    expect(select.getAttribute('data-value')).toBe(CONTRACT_ROLES.member)
     expect(select.getAttribute('aria-label')).toBe(en['organisation.invite.role'])
 
     type('organisation.invite.email-input', 'bea@example.test')
     fireEvent.click(screen.getByTestId('organisation.invite.submit-button'))
 
-    expect(onInvite).toHaveBeenCalledWith('bea@example.test', 'member')
+    expect(onInvite).toHaveBeenCalledWith('bea@example.test', CONTRACT_ROLES.member)
     await act(() => Promise.resolve())
 
     expect(field('organisation.invite.email-input').value).toBe('bea@example.test')
@@ -822,18 +875,21 @@ describe('OrganisationView of an administrator', () => {
 
     const options = await screen.findAllByTestId('organisation.invite.role-select.option')
 
-    expect(options.map((option) => option.getAttribute('data-value'))).toEqual(['member', 'admin'])
+    expect(options.map((option) => option.getAttribute('data-value'))).toEqual([
+      CONTRACT_ROLES.member,
+      CONTRACT_ROLES.admin,
+    ])
 
     await user.click(await screen.findByRole('option', { name: en['organisation.role.admin'] }))
 
     expect(screen.getByTestId('organisation.invite.role-select').getAttribute('data-value')).toBe(
-      'admin',
+      CONTRACT_ROLES.admin,
     )
 
     type('organisation.invite.email-input', 'cy@example.test')
     fireEvent.click(screen.getByTestId('organisation.invite.submit-button'))
 
-    expect(onInvite).toHaveBeenCalledWith('cy@example.test', 'admin')
+    expect(onInvite).toHaveBeenCalledWith('cy@example.test', CONTRACT_ROLES.admin)
   })
 
   it('explains an invite, a role change or a removal the gateway refuses', () => {
@@ -940,7 +996,10 @@ describe('OrganisationView of an administrator', () => {
 
     const badges = items.map((item) => within(item).getByTestId('organisation.sent.role-badge'))
 
-    expect(badges.map((badge) => badge.getAttribute('data-value'))).toEqual(['member', 'admin'])
+    expect(badges.map((badge) => badge.getAttribute('data-value'))).toEqual([
+      CONTRACT_ROLES.member,
+      CONTRACT_ROLES.admin,
+    ])
     expect(badges.map((badge) => badge.textContent)).toEqual([
       en['organisation.role.member'],
       en['organisation.role.admin'],
@@ -1020,7 +1079,7 @@ describe('OrganisationView of the invitations for the account', () => {
       items.map((item) =>
         within(item).getByTestId('organisation.received.role-badge').getAttribute('data-value'),
       ),
-    ).toEqual(['member', 'admin'])
+    ).toEqual([CONTRACT_ROLES.member, CONTRACT_ROLES.admin])
     expect(
       screen.getByTestId('organisation.create.form').compareDocumentPosition(list) &
         Node.DOCUMENT_POSITION_PRECEDING,

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { dataError } from '@workspace/data'
 import { identityIdFactory, profileIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
 import { FakeLocks } from '@workspace/replica/testing'
@@ -115,8 +116,8 @@ describe("an operator's ban of the account", () => {
     const heard: Array<readonly string[]> = []
 
     // A welcome had carried the operator's role.
-    contexts().at(-1)?.onRoles(['operator'])
-    expect([...session.roles()]).toEqual(['operator'])
+    contexts().at(-1)?.onRoles([CONTRACT_ROLES.operator])
+    expect([...session.roles()]).toEqual([CONTRACT_ROLES.operator])
     session.onRoles((roles) => heard.push([...roles]))
 
     stub.closeChannels(ann.identity.id, id, CLOSE.banned)

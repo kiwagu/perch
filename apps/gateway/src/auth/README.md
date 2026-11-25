@@ -191,13 +191,24 @@ what was sent or what failed.
 No account signs in before its email is verified (`requireEmailVerification`). A sign-up takes
 `{ name, email, password }` and, optionally, `locale`, the
 language the person signs up in (`en` or `es`, any other answered 400; `en` when it names none),
-which the identity keeps. It signs nothing in: Better Auth writes the identity and its credential
+which the identity keeps. An account's language is chosen by levels, the later winning: the
+environment and the deployment's parameters (named, not built yet), the built-in default (`en`),
+the sign-up page's language, the default of the organisation that invited the email, then the
+member's own settings, which win from the account's first start on. So a sign-up sent in no
+language or in one the app speaks first asks `StartingLanguage` (`starting-language.port.ts`;
+`GatewayRoot.startingLanguage`, the tenants module's `InvitedLanguage`) for the default of the
+organisation whose pending invitation of the email names one, the newest first, and hands Better
+Auth the JSON it was sent with that language alone in place of `locale`; a new and a taken email
+are both looked up, and a lookup that fails or outlasts its budget names none, so the account
+starts in the page's language. A language the app does not speak is a refused body, 400
+`bad-request` at once, before the email's turn: it looks nothing up. It signs nothing in: Better Auth writes the identity and its credential
 row in one transaction and mails the account its verification link (`sendOnSignUp`), and for an
 email that has an account it writes nothing, mails nothing, and answers with an account it made up,
 whose fields differ from a real one's. So the mount answers every sign-up Better Auth accepted
 (`auth-handler/sign-up.ts`) with its own `202` and no body, the same headers for a new, a taken
-and a concurrently taken email, never sooner than `SIGN_UP_FLOOR_MS` (800 ms) after its request
-began: the floor sits above the work of either branch (a new account's writes, a taken email's
+and a concurrently taken email, never sooner than `SIGN_UP_FLOOR_MS` (1050 ms) after its request
+began: the starting language's budget (`STARTING_LANGUAGE_BUDGET_MS`, 250 ms), then
+`SIGN_UP_WORK_MS` (800 ms), which sits above the work of either branch (a new account's writes, a taken email's
 hashing) and above Better Auth's own floor for a resend, so neither the answer nor its time tells
 whether the email has an account. One email's sign-ups run one at a time (the account's turn,
 `GatewayRoot.accountTurns`, by the email in lower case): two at once of a new email would
@@ -216,8 +227,9 @@ field's length in characters once trimmed); one that breaks it answers 400 `name
 Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
 which it checks on a new password only: a sign-in checks no rule, and a password of another
 length is no account's, so it is refused as a wrong one. Better Auth's refusals (a malformed
-email, a language the gateway does not speak) pass as their status and code alone; they do not
-depend on the email having an account. A sign-in takes `{ email, password }` with the device's headers and
+email) pass as their status and code alone; they do not depend on the email having an account,
+and they come after the starting language was looked up, so they wait for the same floor and their
+time tells nothing of the lookup. A sign-in takes `{ email, password }` with the device's headers and
 answers 200 with the raw session token (`token`) and the account (`user`: its `id`, the
 identity's, its `email`, its `name` and `emailVerified`). The answer is built by that allowlist
 from Better Auth's, parsed (`auth-handler/sign-in.ts`), never forwarded: nothing else of it
@@ -252,7 +264,9 @@ confirmation freed an email and a new sign-up took it, it would verify, and sign
 account. Better Auth's token inside lives a day (`VERIFICATION_LINK_LIFETIME_S`), and so does the
 link. The mail is written by `@workspace/email`
 (`renderVerificationMail`) and sent through the mail port. It speaks the account's language: the one its settings
-name once it has settings (`accountLocale`, `account-locale.ts`), the one it signed up in before.
+name once it has settings (`accountLocale`, `account-locale.ts`), the one it signed up in before,
+which for an account an invitation created is its starting language: the inviting organisation's
+default when one names it, else the language it signed up in.
 Settings that could not be read, or name a language the gateway does not speak, send no mail and are
 logged as `mail:LOCALE_UNREADABLE`, never a mail in a guessed language; a mail that could not be
 written or sent is logged by its code (`mail:SEND_FAILED`, `mail:LINK_INVALID`, or the email

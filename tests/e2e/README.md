@@ -229,7 +229,7 @@ devices of such an account as the test opens, each a browser context of its own)
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
-the gateway answers a sign-up no sooner than 800 ms, by when an assertion would look only every
+the gateway answers a sign-up no sooner than 1050 ms, by when an assertion would look only every
 500 ms), `signUp` (counts the email's mails, `startSignUp`, then
 opens the link of the declared `sign-up` mail, the first after those counted, in the same page,
 which signs the account in, on `/me`: an email invited before it signs up holds the invitation
@@ -266,6 +266,10 @@ same way, and the step check reads `browsers`.
 front (`CLIENT_ADDRESS_HEADER`, `clientAddressOf`), one per worker slot, from 198.18.0.0/15, a
 range set aside for benchmarks: the front names it to the gateway as the request's address, so
 each worker spends per-address limits of its own.
+`src/support/routes.ts`: `atRoute`, the address a test expects a page at by a route of the
+contract: the URL ends with the route's path, then with what a pattern allows after it (nothing by
+default). Tests name a route through `CONTRACT_ROUTES` and a role through `CONTRACT_ROLES`, both
+from `@workspace/kernel`, never by hand: the ESLint rule `workspace/contract-terms` refuses one.
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and
@@ -285,8 +289,10 @@ the organisation of that name among those received, and waits for the toast
 `invitation-accepted` and the heading), `expectMembers` (the members list holds exactly these
 emails: an item shows its email beside its role select), `expectInvitationMail` and
 `openInvitationMail` (the mail of `organisations.invite` after the mails of the address counted
-before the invitation, held to its declaration, the second one also opening its link), and the
-locators `memberItems`, `sentItems`, `receivedItem` and `noteItem`.
+before the invitation, held to its declaration with the values `invitationValues` gives,
+`src/support/invitation-values.ts`: the invited email, the inviter, and the invited account's
+and the organisation's languages where the test knows them; the second one also opening its
+link), and the locators `memberItems`, `sentItems`, `receivedItem` and `noteItem`.
 `src/support/password-reset.ts`: the reset of a password the tests share: `askForReset` (opens
 `/forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
 its send button and waits for the gateway's answer), `resetRequested` (its message),
@@ -338,9 +344,11 @@ moment a test saw the answer to an action that must send none until `MAIL_DELIVE
 `src/support/mail-contract.ts`: every mail a test reads is held to its declaration in
 `platform.yaml`: `expectDeclaredMail` (its one recipient, the path of the screen its link opens
 with the declared search parameter set, and the `lang` of its HTML's root element as parse5
-reads it, from the action's parameters, the account, or, for an invitation to an email that has
-an account, that account's language (`recipient`; an email with none is mailed in the inviter's
-language); each check asserts a comparison's outcome
+reads it, the language `languageOf` (`src/support/mail-language.ts`) reads from what the test
+gave: the first source of the declared `language` it gave a value for, among the action's
+parameters, the account, the organisation (its default language, else English) and, for an
+email that has an account, that account's language (`recipient`, which written alone falls back
+on the account's); each check asserts a comparison's outcome
 under a fixed message), `openMailLink` (opens a mail's link; its failure names no link) and
 `openDeclaredMail` (waits for the action's mail to its declared recipient after the ones a test
 has seen, holds it to its declaration and opens its link).
@@ -373,17 +381,19 @@ parameters expected), `expectRange` (the list's range by its `data-from`, `data-
 ## Commands
 
 - `bun run test:e2e` (repository root): runs the launcher through `mcproc exec`, under a 4G
-  memory lease (the run waits its turn when the host is short of memory), in mcproc's `e2e`
-  group (`--exclusive e2e`: one e2e run or `perf:measure` at a time on the host, whichever
-  checkout starts it; a waiting run says whom it waits for, for up to an hour) and with
-  `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
+  memory lease (the run waits its turn when the host is short of memory, for up to an hour:
+  `--timeout 3600`) and with `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright in a network namespace of its own (below); extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
   `playwright.config.ts`, measured on the dev host), and its log is
-  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
+  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own. The runs of two
+  checkouts go at the same time, each on its own stand (its ports come from the checkout's
+  slot) with its browser in a network of its own, so a gate never waits for another checkout's.
+  Within one checkout a run and `perf:measure` share its stand, and the later one's `--reload`
+  empties it under the earlier one: one at a time there.
 - The browser's own network (`scripts/isolated-network.ts`): Chromium on Linux aborts every
   request in flight (`net::ERR_NETWORK_CHANGED`) when a network interface it can see comes, goes
   or changes its address, and every container started or stopped on the host adds or removes one,
@@ -400,8 +410,10 @@ parameters expected), `expectRange` (the list's range by its `data-from`, `data-
   stops before the build and names the package; it never runs the browser on the host's network.
   `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
-  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease and in the
-  `e2e` group, so no e2e run shares the CPU with its timings). It builds
+  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease and in
+  mcproc's `e2e` group, `--exclusive e2e`, so two measurements never run at once). The e2e runs
+  stay out of that group, so a measurement taken while `mcproc leases` shows one running
+  shares the CPU with it: measure when none runs. It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
   a Pixel 7 with the CPU slowed four times and the service worker blocked, a guest's first
   visit (first paint 500 ms, ready 1 s) and a signed-in reload with the cache kept and cleared

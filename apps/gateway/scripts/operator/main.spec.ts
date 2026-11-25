@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { dataError, type LocalDb } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import identityCreateStatement from './__fixtures__/identity-create.surql'
 import identityReadStatement from './__fixtures__/identity-read.surql'
 import identityRoleGivenStatement from './__fixtures__/identity-role-given.surql'
 import { main } from './main'
 import type { OperatorRequest } from './operator-options'
+import type { PlatformRoleSetting } from './platform-role'
 
 const DEV = { SURREAL_DEV_URL: 'http://127.0.0.1:8000' }
 
@@ -47,7 +49,7 @@ function run() {
   }
 }
 
-async function directory(role?: 'user' | 'operator'): Promise<LocalDb> {
+async function directory(role?: PlatformRoleSetting): Promise<LocalDb> {
   const local = (await openTestDb({ namespace: 'app', database: 'directory' }))._unsafeUnwrap()
 
   closers.push(local.close)
@@ -74,7 +76,7 @@ describe('main', () => {
     const command = run()
 
     expect(await main(['grant', 'ann@example.test'], DEV, command.over(local))).toBe(0)
-    expect(await roleOf(local)).toBe('operator')
+    expect(await roleOf(local)).toBe(CONTRACT_ROLES.operator)
     expect(command.closed).toHaveLength(1)
     expect(command.printed()).toContain('ann@example.test')
   })
@@ -102,7 +104,7 @@ describe('main', () => {
   })
 
   it('revokes it, leaving the default role, and exits 0', async () => {
-    const local = await directory('operator')
+    const local = await directory(CONTRACT_ROLES.operator)
     const command = run()
 
     expect(await main(['revoke', 'ann@example.test'], DEV, command.over(local))).toBe(0)

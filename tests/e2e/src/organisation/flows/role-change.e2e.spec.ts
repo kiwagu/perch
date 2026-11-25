@@ -1,4 +1,7 @@
 // scenario: organisation/flows/role-change
+
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, pageLoads, signUp, test, toast } from '../../support/fixtures'
 import {
@@ -13,7 +16,7 @@ import {
 } from '../../support/organisation'
 
 test.describe('Promote and demote a member', { tag: '@full' }, () => {
-  test('A promoted member becomes an administrator on its device without a reload, and its next change is judged by the new role; the new administrator demotes the first, and the last administrator cannot demote itself', async ({
+  test('A promoted member becomes an admin on its device without a reload, and its next change is judged by the new role; the new admin demotes the first, and the last admin cannot demote itself', async ({
     page,
     anotherAccount,
   }, testInfo) => {
@@ -92,7 +95,7 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
 
       const chosenAt = Date.now()
 
-      await memberRoleOption(page, 'admin').click()
+      await memberRoleOption(page, CONTRACT_ROLES.admin).click()
       // Expected: After step 5 [app-shell.toast] carries [code:role-changed] on device A
       await expect(toast(page, 'role-changed')).toBeVisible()
       // Expected: Within 5 seconds of step 5 device B shows [organisation.page.role-badge]
@@ -132,7 +135,7 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
     })
 
     await test.step("7. On device B, on user A's [organisation.members.item], set [organisation.members.role-select] to [value:member]", async () => {
-      await chooseMemberRole(deviceB, userA.email, 'member')
+      await chooseMemberRole(deviceB, userA.email, CONTRACT_ROLES.member)
       // Expected: Within 5 seconds of step 7 device A shows [organisation.page.role-badge]
       //   carrying [value:member], and no [organisation.members.list] and no
       //   [organisation.invite.form], without a reload
@@ -147,7 +150,7 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
     })
 
     await test.step('8. On device B, on its own [organisation.members.item], set [organisation.members.role-select] to [value:member]', async () => {
-      await chooseMemberRole(deviceB, userB.email, 'member')
+      await chooseMemberRole(deviceB, userB.email, CONTRACT_ROLES.member)
       // Expected: After step 8 [organisation.invite.error] carries [code:last-admin] on device B,
       //   and its own [organisation.members.item] has [organisation.members.role-select] showing
       //   [value:admin]

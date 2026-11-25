@@ -239,6 +239,25 @@ describe('buildManifest', () => {
       '/sample/$key': contract.screens.screens[0]?.bindings[0]?.params,
     })
   })
+  it('carries no terms for a contract that writes no terms file', () => {
+    expect(manifest.terms).toBeUndefined()
+    expect(Object.keys(manifest)).not.toContain('terms')
+  })
+  it('carries the terms file verbatim, after the vocabulary, for a contract that writes one', () => {
+    const terms = {
+      contexts: { sample: { meaning: 'The sample platform.' } },
+      terms: { account: { meaning: 'Whoever signs in.', synonyms: ['user'], storage: 'identity' } },
+      roles: { guest: { meaning: 'Nobody is signed in.' }, member: { meaning: 'A member.' } },
+    }
+    const withTerms = buildManifest({ ...contract, terms, product: PRODUCT, now: NOW })
+
+    expect(withTerms.terms).toEqual(terms)
+    expect(Object.keys(withTerms).slice(4, 6)).toEqual(['contract', 'terms'])
+    expect(manifestSchema.safeParse(withTerms).success).toBe(true)
+  })
+  it('tells an agent where the terms are', () => {
+    expect(manifest.contract.instructions.model).toContain('`terms`')
+  })
   it('gives each binding of a screen its example link', () => {
     const [binding] = contract.screens.screens[0]?.bindings ?? []
 
@@ -443,6 +462,70 @@ describe('the value a field takes', () => {
       minLength: 1,
       maxLength: 500,
     })
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('carries each invariant once, with the actions that name it derived, the codes as written', () => {
+    const base = fixtureContract()
+    const codes = {
+      'device-limit': { invariant: 'device-limit' },
+      failed: 'anything else fails',
+    }
+
+    base.screens.platform.invariants = {
+      'device-limit': { rule: 'Ten devices at most at once.', refuses: 'device-limit' },
+    }
+    base.screens.platform.actions['report'] = {
+      description: 'Reports a thing.',
+      params: {},
+      result: ['the report is in', 'past the limit: nothing is reported'],
+      codes,
+      changes: [],
+    }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.platform.invariants).toEqual({
+      'device-limit': {
+        rule: 'Ten devices at most at once.',
+        refuses: 'device-limit',
+        actions: ['report'],
+      },
+    })
+    expect(built.platform.actions['report']?.codes).toEqual(codes)
+    expect(base.screens.platform.invariants['device-limit']).not.toHaveProperty('actions')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it("carries an invariant's rule with its values written in, the values beside it", () => {
+    const base = fixtureContract()
+
+    base.screens.platform.invariants = {
+      'device-limit': {
+        rule: '{limit} devices at most, each kept {window}.',
+        refuses: 'device-limit',
+        values: { limit: 10, window: { hours: 1 } },
+      },
+    }
+    base.screens.platform.actions['report'] = {
+      description: 'Reports a thing.',
+      params: {},
+      result: 'the report is in',
+      codes: { 'device-limit': { invariant: 'device-limit' } },
+      changes: [],
+    }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.platform.invariants).toEqual({
+      'device-limit': {
+        rule: '10 devices at most, each kept 1 hour.',
+        refuses: 'device-limit',
+        values: { limit: 10, window: { hours: 1 } },
+        actions: ['report'],
+      },
+    })
+    expect(base.screens.platform.invariants['device-limit']?.rule).toBe(
+      '{limit} devices at most, each kept {window}.',
+    )
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
   it('gives no value to a select, which is no text field', () => {

@@ -3,8 +3,11 @@ import { expect, type Page } from '@playwright/test'
 import type { Mail } from '@workspace/mailbox'
 
 import { toast } from './fixtures'
-import { expectDeclaredMail, type MailValues, openDeclaredMail } from './mail-contract'
+import { type InvitationMail, invitationValues } from './invitation-values'
+import { expectDeclaredMail, openDeclaredMail } from './mail-contract'
 import { mailbox } from './mailbox'
+
+export type { InvitationMail } from './invitation-values'
 
 /** The role an invitation gives, or a member holds. */
 export type Role = 'member' | 'admin'
@@ -150,25 +153,28 @@ export async function chooseMemberRole(page: Page, email: string, role: Role): P
   await memberRoleOption(page, role).click()
 }
 
-/** What a test knows of an invitation's mail: the invited email and the account that invited. */
-export interface InvitationMail {
-  readonly email: string
-  /** The signed-in administrator who invited: its email and the language it uses. */
-  readonly inviter: { readonly email: string; readonly language: string }
-  /**
-   * The language of the account the invited email belongs to; given only when it has an account.
-   * An email with none gets its mail in the inviter's language.
-   */
-  readonly recipientLanguage?: string
+/**
+ * Chooses `locale` as the organisation's default language on an administrator's "/org" page: the
+ * select takes a choice once the organisation's settings row is on the device, which the leading
+ * tab creates after the organisation's region caught up.
+ */
+export async function chooseDefaultLanguage(page: Page, locale: string): Promise<void> {
+  const select = page.getByTestId('organisation.settings.locale-select')
+
+  await expect(select).toBeEnabled({ timeout: 15_000 })
+  await select.click()
+  await page
+    .locator(`[data-testid="organisation.settings.locale-select.option"][data-value="${locale}"]`)
+    .click()
+  await expect(select).toHaveAttribute('data-value', locale)
 }
 
-/** What the invitation mail's declaration is checked against: the email, the inviter, the recipient. */
-function valuesOf({ email, inviter, recipientLanguage }: InvitationMail): MailValues {
-  return {
-    params: { email },
-    account: { email: inviter.email, language: inviter.language },
-    ...(recipientLanguage === undefined ? {} : { recipient: { language: recipientLanguage } }),
-  }
+/** Removes the organisation's default language on an administrator's "/org" page. */
+export async function removeDefaultLanguage(page: Page): Promise<void> {
+  const clear = page.getByTestId('organisation.settings.clear-button')
+
+  await clear.click()
+  await expect(clear).toHaveCount(0)
 }
 
 /**
@@ -181,7 +187,7 @@ export async function expectInvitationMail(
 ): Promise<Mail> {
   const mail = await mailbox.next(invitation.email, seen)
 
-  expectDeclaredMail(mail, 'organisations.invite', valuesOf(invitation))
+  expectDeclaredMail(mail, 'organisations.invite', invitationValues(invitation))
 
   return mail
 }
@@ -194,5 +200,5 @@ export function openInvitationMail(
   invitation: InvitationMail,
   seen: number,
 ): Promise<Mail> {
-  return openDeclaredMail(page, 'organisations.invite', valuesOf(invitation), seen)
+  return openDeclaredMail(page, 'organisations.invite', invitationValues(invitation), seen)
 }

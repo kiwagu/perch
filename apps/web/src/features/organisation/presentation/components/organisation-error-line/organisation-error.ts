@@ -21,7 +21,7 @@ export type OrganisationErrorCode =
 /**
  * The contract code of a refused change, with its text: the gateway's code, which is the contract's
  * as it is sent, or the code of a domain rule the app holds the form to itself (`organisation:…`,
- * `note:…`).
+ * `note:…`, `organisation_settings:…`).
  */
 export function organisationErrorOf(
   t: ReturnType<typeof useT>,
@@ -55,6 +55,8 @@ export function organisationErrorOf(
       return { code: 'last-admin', text: t('organisation.error.last-admin') }
     case 'note:FORBIDDEN':
       return { code: 'forbidden', text: t('organisation.error.forbidden') }
+    case 'organisation_settings:FORBIDDEN':
+      return { code: 'forbidden', text: t('organisation.error.settings-forbidden') }
     case 'note:TEXT_REQUIRED':
       return { code: 'text-required', text: t('organisation.error.text-required') }
     case 'note:TEXT_TOO_LONG':

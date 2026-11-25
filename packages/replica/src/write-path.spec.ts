@@ -1,3 +1,4 @@
+import type { LoroMap } from 'loro-crdt'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -10,6 +11,7 @@ import {
   updateName,
 } from './__fixtures__/profile'
 import { RegionDoc } from './region-doc'
+import { invert } from './sync'
 import { LoroWritePath } from './write-path'
 
 const ann = { id: profileId, identity: identityId, name: 'Ann', email: 'ann@example.test' }
@@ -104,6 +106,77 @@ describe('LoroWritePath', () => {
     expect(retried._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(region.recordJson(key)).toMatchObject({ name: 'Ann', bio: 'Hello' })
     expect(region.doc.version().encode()).toEqual(version)
+  })
+
+  it('creates one record of two devices that both create it before either sees the other, merging their fields', async () => {
+    // Peers of one order and creates of equal Lamport: a fresh map of each would let B's win the key.
+    const a = RegionDoc.inMemory('private', 'private', 1n)
+    const b = RegionDoc.inMemory('private', 'private', 2n)
+
+    expect((await new LoroWritePath(a, profileSchema).run(createProfile, ann)).isOk()).toBe(true)
+    expect(
+      (
+        await new LoroWritePath(a, profileSchema).run(updateBio, { id: profileId, bio: 'Hello' })
+      ).isOk(),
+    ).toBe(true)
+    expect((await new LoroWritePath(b, profileSchema).run(createProfile, ann)).isOk()).toBe(true)
+
+    const fromA = a.doc.export({ mode: 'update' })
+    const fromB = b.doc.export({ mode: 'update' })
+
+    // The server takes them in either order.
+    for (const order of [
+      [fromA, fromB],
+      [fromB, fromA],
+    ]) {
+      const server = RegionDoc.inMemory('private', 'private', 3n)
+
+      for (const bytes of order) {
+        server.doc.import(bytes)
+      }
+
+      expect(server.recordJson(key)).toMatchObject({ name: 'Ann', bio: 'Hello' })
+    }
+
+    expect((a.records().get(key) as LoroMap).id).toBe((b.records().get(key) as LoroMap).id)
+  })
+
+  it("starts a record created again after its delete from the create's fields alone", async () => {
+    const region = RegionDoc.inMemory('private')
+    const path = new LoroWritePath(region, profileSchema)
+
+    expect((await path.run(createProfile, ann)).isOk()).toBe(true)
+    expect((await path.run(updateBio, { id: profileId, bio: 'Hello' })).isOk()).toBe(true)
+    expect((await path.run(deleteProfile, { id: profileId })).isOk()).toBe(true)
+    expect((await path.run(createProfile, { ...ann, name: 'Anna' })).isOk()).toBe(true)
+    expect(region.recordJson(key)).toEqual({
+      identity: `identity:${identityId}`,
+      name: 'Anna',
+      email: 'ann@example.test',
+    })
+  })
+
+  it("starts a record created again after the rollback of its create from the create's fields alone", async () => {
+    const region = RegionDoc.inMemory('private')
+    const path = new LoroWritePath(region, profileSchema)
+    const from = region.doc.version()
+
+    expect((await path.run(createProfile, ann)).isOk()).toBe(true)
+    expect((await path.run(updateBio, { id: profileId, bio: 'Hello' })).isOk()).toBe(true)
+
+    // The gateway refused both: the rollback's inverse undoes them, as it does on a device.
+    invert(region.doc, [
+      { id: 'refused', seq: 1, bytes: region.doc.export({ mode: 'update', from }) },
+    ])
+    region.doc.commit()
+    expect(region.records().get(key)).toBeUndefined()
+
+    expect((await path.run(createProfile, { ...ann, name: 'Anna' })).isOk()).toBe(true)
+    expect(region.recordJson(key)).toEqual({
+      identity: `identity:${identityId}`,
+      name: 'Anna',
+      email: 'ann@example.test',
+    })
   })
 
   it('refuses a command meant for another region', async () => {

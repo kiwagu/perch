@@ -23,7 +23,7 @@
  *     with its schema and the model's beside it, into `<dir>` (default `ui-manifest`,
  *     relative to the working directory; its last segment is `ui-manifest`). Runs from the
  *     root or any folder under it.
- *   ui-contract emit values|fields --out <file>
+ *   ui-contract emit values|fields|terms --out <file>
  *     writes the module of plain data a layer below the contract reads into `<file>`, relative
  *     to the working directory: `values`, every value of the platform and every field of the
  *     model as the contract resolves it (`CONTRACT_VALUES`); `fields`, what the element of each
@@ -104,7 +104,7 @@ function dispatch(argv: readonly string[]): number {
       return flow(rest)
     default:
       console.error(
-        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "emit values|fields --out <file>", "diff <ref> [--json]", "inflight", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
+        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "emit values|fields|terms --out <file>", "diff <ref> [--json]", "inflight", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
       )
 
       return 1

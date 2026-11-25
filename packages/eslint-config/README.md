@@ -12,7 +12,9 @@ with an `index.ts`, or a module, only through its index, and no raw `<input>`, `
 or `<select>` in views (`react/forbid-elements` under `presentation/`): the kit's `Input`,
 `Textarea` and `Select` track unsaved input, a raw field would not. It never formats tokens. Tests
 (`*.spec.*`) may cross layers: like the composition root, they wire real adapters and
-generated models.
+generated models. A fixture (`__fixtures__/`) is test data, which no rule of the base reads; the
+UI contract's roles, routes and invariants' numbers, which test data names too, are refused by hand there as
+everywhere (`contractTerms`).
 
 Type-aware rules run on TypeScript 6 (the `lint` catalog), because TypeScript 7 does not
 ship the JavaScript compiler API that typescript-eslint needs.
@@ -29,6 +31,23 @@ ship the JavaScript compiler API that typescript-eslint needs.
   every static import form counts (declarations, re-exports, `import()` types, dynamic
   imports of a literal), resolved by TypeScript (workspace packages to their source, a
   relative `.surql` at its path), fixtures exempt.
+- `workspace/contract-terms`: reports a role or a route of the UI contract written by hand as a
+  string where the code expects one, by TypeScript's type at the string (made of string literals
+  that are all roles, or all routes); with `routeValues`, also any string, part of a template or
+  regular expression that names a route by its value; and a number of an invariant written by
+  hand where the code expects one: a property of an object typed by an invariant's numbers (whole
+  or picked), a variable or an argument whose annotation names one of them, or the other side of a
+  comparison whose value comes from one (through member reads, constants, parameters, destructured
+  bindings, type queries such as `typeof DEVICE_LIMIT`, type aliases, imports and re-exports),
+  read from where the module declares that number, the literal read through an `as`, a
+  `satisfies` or a `!`; a bound compared with a counter of the code's own (`i < 10`) is out of its
+  reach. It
+  reads the roles, routes and invariants' numbers from the module `ui-contract emit terms`
+  writes (`module`), and fails the lint when that module is missing or malformed
+  (`contract/REFERENCE.md#rule-terms`).
+- `contractTerms({ module, files, routeValues })`: the config blocks of that rule over `files`,
+  fixtures included, and by value over `routeValues.files` but its `ignores`; the root
+  `eslint.config.js` uses it.
 - `importBoundaries({ modules, reachIn })`: the config block that gives the rule the
   repository's module roots (with their `flat` and `outside` folders) and its `reachIn`
   entries (a folder or one file that may still import inside another folder), by absolute

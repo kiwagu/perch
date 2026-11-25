@@ -1,6 +1,8 @@
 import type { ResultAsync } from 'neverthrow'
 import { assertEvent, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { failureOf, settled } from '../../../platform/actor-outcome'
 import type {
   ClearParams,
@@ -160,7 +162,10 @@ export function createForgotPasswordMachine(deps: ForgotPasswordMachineDeps) {
               },
               {
                 type: 'navigate',
-                params: { to: '/sign-in', search: { email: { anchor: EMAIL_INPUT } } },
+                params: {
+                  to: CONTRACT_ROUTES['user.sign-in'],
+                  search: { email: { anchor: EMAIL_INPUT } },
+                },
               },
             ],
           },

@@ -3,6 +3,7 @@ import { createMemoryHistory, Outlet, RouterProvider, useSearch } from '@tanstac
 import { act, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from './__fixtures__/session'
@@ -33,7 +34,7 @@ const PageModule = defineModule({
     {
       path: '/things',
       page: 'Page',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       retain: ['size'],
       search,
     },

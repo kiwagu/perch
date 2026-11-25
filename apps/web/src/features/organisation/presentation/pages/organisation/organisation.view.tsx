@@ -1,7 +1,8 @@
 import { Fragment } from 'react'
 
-import { useT } from '@workspace/i18n'
+import { type Locale, useT } from '@workspace/i18n'
 import type { IdentityId, InvitationId, NoteId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -15,6 +16,7 @@ import {
   type CreateDraft,
   OrganisationCreate,
 } from '../../components/organisation-create/organisation-create.view'
+import { OrganisationDefaultLanguage } from '../../components/organisation-default-language/organisation-default-language.view'
 import {
   type InviteDraft,
   OrganisationInvite,
@@ -51,7 +53,7 @@ export type {
 export interface OrganisationChoice {
   readonly key: string
   readonly name: string
-  readonly role: 'member' | 'admin'
+  readonly role: TenantRole
 }
 
 export interface OrganisationViewProps {
@@ -97,6 +99,10 @@ export interface OrganisationViewProps {
   readonly onRevoke: (id: InvitationId) => void
   readonly onAccept: (id: InvitationId) => void
   readonly onDecline: (id: InvitationId) => void
+  /** The current organisation's default language, shown to an administrator; none while it has none. */
+  readonly defaultLanguage?: Locale | undefined
+  readonly onChooseDefaultLanguage: (locale: Locale) => void
+  readonly onClearDefaultLanguage: () => void
 }
 
 function OrganisationHeader(props: {
@@ -176,7 +182,7 @@ export function OrganisationView(props: OrganisationViewProps) {
               onEdit={props.onEditNote}
               onDelete={props.onDeleteNote}
             />
-            {current.role === 'admin' ? (
+            {current.role === CONTRACT_ROLES.admin ? (
               <>
                 <OrganisationMembers
                   members={props.members}
@@ -197,6 +203,13 @@ export function OrganisationView(props: OrganisationViewProps) {
                   can={props.can}
                   onCopy={props.onCopy}
                   onRevoke={props.onRevoke}
+                />
+                <OrganisationDefaultLanguage
+                  locale={props.defaultLanguage}
+                  error={props.errors?.settings}
+                  can={props.can}
+                  onChoose={props.onChooseDefaultLanguage}
+                  onClear={props.onClearDefaultLanguage}
                 />
               </>
             ) : null}

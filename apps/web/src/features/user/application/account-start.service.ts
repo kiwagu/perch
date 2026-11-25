@@ -1,4 +1,4 @@
-import { errAsync, okAsync, type Result, type ResultAsync } from 'neverthrow'
+import { okAsync, type Result, type ResultAsync } from 'neverthrow'
 
 import type { AuthUser } from '@workspace/data'
 import { token } from '@workspace/di'
@@ -11,6 +11,7 @@ import {
   settingsIdFactory,
 } from '@workspace/ids'
 
+import { ensured } from '../../../platform/ensured'
 import type { Theme } from '../../../platform/theme'
 
 import type { ProfileService } from './profile.service'
@@ -62,27 +63,6 @@ export type Projected = () => ResultAsync<void, SignInError>
 export type StartTurns = <T>(
   run: (projected: Projected) => ResultAsync<T, SignInError>,
 ) => ResultAsync<T, SignInError>
-
-/**
- * A record of the account, created when the store holds none. A create the document refuses because
- * the record is there after all (another device's, which reached this document after the read) is
- * done once its projection shows it; any other failure stays the start's.
- */
-function ensured(
-  read: () => ResultAsync<readonly unknown[], SignInError>,
-  create: () => ResultAsync<void, SignInError>,
-  projected: Projected,
-): ResultAsync<void, SignInError> {
-  return read().andThen((rows) =>
-    rows.length > 0
-      ? okAsync(undefined)
-      : create().orElse((refused) =>
-          projected()
-            .andThen(read)
-            .andThen((now) => (now.length > 0 ? okAsync(undefined) : errAsync(refused))),
-        ),
-  )
-}
 
 /** What an id keeps after its prefix. */
 const bodyOf = (identity: IdentityId): string => identity.slice(identity.indexOf('_') + 1)

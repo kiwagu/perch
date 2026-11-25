@@ -4,6 +4,7 @@ import { createActor, waitFor } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
 import { identityIdFactory, invitationIdFactory, noteIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { projected } from '@workspace/ui-contract/machines'
 
 import { createOrganisationMachine, type OrganisationMachineDeps } from '.'
@@ -61,6 +62,9 @@ function page(
     copy: vi.fn(() => okAsync(undefined)),
     accept: vi.fn(() => okAsync(undefined)),
     decline: vi.fn(() => okAsync(undefined)),
+    setDefaultLanguage: vi.fn(() => okAsync(undefined)),
+    clearDefaultLanguage: vi.fn(() => okAsync(undefined)),
+    defaultsHeld: () => true,
     account: () => ann,
     current: () => current,
     ...(typeof writes === 'function' ? writes(becomes) : writes),
@@ -201,11 +205,11 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
     await region('invite', 'idle')
 
-    expect(deps.invite).toHaveBeenCalledWith('bea@example.test', 'admin')
+    expect(deps.invite).toHaveBeenCalledWith('bea@example.test', CONTRACT_ROLES.admin)
     expect(emitted).toEqual([
       { type: 'clear', anchor: 'organisation.invite.email-input' },
       { type: 'clear', anchor: 'organisation.invite.role-select' },
@@ -222,7 +226,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
     // Another organisation becomes current without the page choosing it, and its form is typed in.
     becomes('globex')
@@ -266,6 +270,57 @@ describe('organisation machine', () => {
     await region('notes-add', 'idle')
 
     expect(emitted).toEqual([toast('note-created')])
+  })
+
+  describe('the default language of the organisation', () => {
+    it('takes no choice before the organisation settings are on this device', () => {
+      const { actor } = page({ defaultsHeld: () => false })
+
+      expect(
+        actor.getSnapshot().can({ type: 'organisation.settings.locale-select', locale: 'es' }),
+      ).toBe(false)
+    })
+
+    it('stores the chosen language with no toast, and clears the error once stored', async () => {
+      const { actor, deps, emitted, region } = page()
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+      await region('default-language', 'idle')
+
+      expect(deps.setDefaultLanguage).toHaveBeenCalledWith('es')
+      expect(emitted).toEqual([])
+    })
+
+    it('keeps the code of a refused change for the error, and takes no other change meanwhile', async () => {
+      const pending = later()
+      const { actor, snapshot, region } = page({ setDefaultLanguage: () => pending.result })
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+
+      expect(snapshot().can({ type: 'organisation.settings.clear-button' })).toBe(false)
+      expect(snapshot().can({ type: 'organisation.settings.locale-select', locale: 'en' })).toBe(
+        false,
+      )
+
+      pending.refuse('organisation_settings:FORBIDDEN')
+      await region('default-language', 'idle')
+
+      expect(snapshot().context.errors.codes.settings).toBe('organisation_settings:FORBIDDEN')
+    })
+
+    it('removes the language by the clear button, and forgets the earlier error', async () => {
+      const { actor, deps, snapshot, region } = page({
+        setDefaultLanguage: () => refused('organisation_settings:FAILED'),
+      })
+
+      actor.send({ type: 'organisation.settings.locale-select', locale: 'es' })
+      await region('default-language', 'idle')
+      actor.send({ type: 'organisation.settings.clear-button' })
+      await region('default-language', 'idle')
+
+      expect(deps.clearDefaultLanguage).toHaveBeenCalledOnce()
+      expect(snapshot().context.errors.codes.settings).toBeUndefined()
+    })
   })
 
   describe("clears an area's error through its flow", () => {
@@ -332,7 +387,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     await region('invite', 'idle')
 
@@ -351,50 +406,78 @@ describe('organisation machine', () => {
     const change = later()
     const { actor, deps, snapshot, emitted, region } = page({ setRole: vi.fn(() => change.result) })
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
 
-    expect(snapshot().context.changingRole).toEqual({ identity: bea, role: 'admin', of: 'acme' })
+    expect(snapshot().context.changingRole).toEqual({
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+      of: 'acme',
+    })
     expect(
-      snapshot().can({ type: 'organisation.members.role-select', identity: ann, role: 'member' }),
+      snapshot().can({
+        type: 'organisation.members.role-select',
+        identity: ann,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toBe(false)
 
     change.done()
     await region('member-roles', 'idle')
 
-    expect(deps.setRole).toHaveBeenCalledWith({ identity: bea, role: 'admin' })
+    expect(deps.setRole).toHaveBeenCalledWith({ identity: bea, role: CONTRACT_ROLES.admin })
     expect(emitted).toEqual([toast('role-changed')])
     expect(snapshot().context.membersChanged).toBe(1)
     expect(snapshot().context.changingRole).toBeUndefined()
     expect(
-      snapshot().can({ type: 'organisation.members.role-select', identity: ann, role: 'member' }),
+      snapshot().can({
+        type: 'organisation.members.role-select',
+        identity: ann,
+        role: CONTRACT_ROLES.member,
+      }),
     ).toBe(true)
   })
 
   it('remembers a role set, with the read of the members that confirms it, until another is set on its row', async () => {
     const { actor, snapshot, region } = page()
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.changingRole).toBeUndefined()
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: bea, role: 'admin', read: 1, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' },
     ])
 
-    actor.send({ type: 'organisation.members.role-select', identity: cy, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: cy,
+      role: CONTRACT_ROLES.admin,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: bea, role: 'admin', read: 1, of: 'acme' },
-      { identity: cy, role: 'admin', read: 2, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' },
+      { identity: cy, role: CONTRACT_ROLES.admin, read: 2, of: 'acme' },
     ])
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: cy, role: 'admin', read: 2, of: 'acme' },
-      { identity: bea, role: 'member', read: 3, of: 'acme' },
+      { identity: cy, role: CONTRACT_ROLES.admin, read: 2, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.member, read: 3, of: 'acme' },
     ])
   })
 
@@ -404,23 +487,35 @@ describe('organisation machine', () => {
       setRole: () => (refuse ? refused('not-admin') : okAsync(undefined)),
     })
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
     await region('member-roles', 'idle')
 
     refuse = true
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.changingRole).toBeUndefined()
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: bea, role: 'admin', read: 1, of: 'acme' },
+      { identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' },
     ])
   })
 
   it('does not read the members again after the account demoted itself', async () => {
     const { actor, snapshot, emitted, region } = page()
 
-    actor.send({ type: 'organisation.members.role-select', identity: ann, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: ann,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(emitted).toEqual([toast('role-changed')])
@@ -433,7 +528,11 @@ describe('organisation machine', () => {
     const change = later()
     const { actor, snapshot, becomes, region } = page({ setRole: vi.fn(() => change.result) })
 
-    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: bea,
+      role: CONTRACT_ROLES.admin,
+    })
     becomes('globex')
     change.done()
     await region('member-roles', 'idle')
@@ -444,7 +543,11 @@ describe('organisation machine', () => {
   it('shows a refused role change under the invitation and lets the select show the role kept', async () => {
     const { actor, snapshot, emitted, region } = page({ setRole: () => refused('last-admin') })
 
-    actor.send({ type: 'organisation.members.role-select', identity: ann, role: 'member' })
+    actor.send({
+      type: 'organisation.members.role-select',
+      identity: ann,
+      role: CONTRACT_ROLES.member,
+    })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.errors.codes).toEqual({ members: 'last-admin' })
@@ -577,7 +680,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     await region('invite', 'idle')
 
@@ -597,7 +700,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     becomes('globex')
     actor.send({ type: 'organisation.members.remove-button', identity: bea })
@@ -621,7 +724,7 @@ describe('organisation machine', () => {
     actor.send({
       type: 'organisation.invite.submit-button',
       email: 'bea@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     becomes('globex')
     actor.send({ type: 'organisation.notes.add-button', text: 'Plans' })

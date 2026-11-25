@@ -54,7 +54,108 @@ describe('mailsProblems', () => {
       ),
     ).toEqual([
       `${AT}.to: "address" is neither a parameter of "invite.send" nor account`,
-      `${AT}.language: "tongue" is neither a parameter of "invite.send", account nor recipient`,
+      `${AT}.language: "tongue" is neither a parameter of "invite.send", account, organisation nor recipient`,
+    ])
+  })
+  it('takes a list of sources, the first that has a language speaking', () => {
+    expect(
+      printed(
+        sending({ to: 'email', language: ['recipient', 'organisation'], link: LINK }, ['admin']),
+      ),
+    ).toEqual([])
+    expect(
+      printed(sending({ to: 'email', language: ['recipient', 'locale'], link: LINK })),
+    ).toEqual([])
+    expect(
+      printed(sending({ to: 'email', language: ['recipient', 'account'], link: LINK }, ['member'])),
+    ).toEqual([])
+  })
+  it('refuses a source of a list that is no parameter, account, organisation nor recipient', () => {
+    expect(
+      printed(sending({ to: 'email', language: ['recipient', 'tongue'], link: LINK })),
+    ).toEqual([
+      `${AT}.language[1]: "tongue" is neither a parameter of "invite.send", account, organisation nor recipient`,
+    ])
+  })
+  it('refuses a source after one that always has a language: only the recipient may have none', () => {
+    for (const [first, second] of [
+      ['organisation', 'recipient'],
+      ['locale', 'recipient'],
+      ['account', 'organisation'],
+    ] as const) {
+      expect(
+        printed(sending({ to: 'email', language: [first, second], link: LINK }, ['admin'])),
+        `${first}, ${second}`,
+      ).toEqual([
+        `${AT}.language[1]: "${second}" is never reached: "${first}" always has a language, so it ends the list`,
+      ])
+    }
+  })
+  it('lets an optional parameter be followed, and wants a list to end with a source that always has a language', () => {
+    const optional = (language: unknown, roles?: readonly string[]) => {
+      const contract = sending({ to: 'email', language, link: LINK }, roles)
+      const params = contract.screens.platform.actions['invite.send']?.params ?? {}
+
+      Object.assign(params, {
+        tongue: { type: 'string', optional: true, description: 'A language.' },
+      })
+
+      return printed(contract)
+    }
+
+    expect(optional(['tongue', 'organisation'], ['admin'])).toEqual([])
+    expect(optional(['recipient', 'tongue', 'locale'])).toEqual([])
+    expect(optional(['recipient', 'tongue'])).toEqual([
+      `${AT}.language[1]: "tongue" may have no language: a mail's language ends with a source that always has one`,
+    ])
+    expect(optional(['tongue', 'recipient'])).toEqual([
+      `${AT}.language[1]: "recipient" may have no language: a mail's language ends with a source that always has one`,
+    ])
+    expect(optional('tongue')).toEqual([
+      `${AT}.language: "tongue" may have no language: a mail's language ends with a source that always has one`,
+    ])
+  })
+  it('takes the organisation only on an action run in an organisation: roles listed, neither guest nor identity', () => {
+    const refusal = `${AT}.language[1]: "organisation" speaks the language of the organisation the action runs in, so "invite.send" lists its roles, neither guest nor identity among them`
+
+    expect(
+      printed(sending({ to: 'email', language: ['recipient', 'organisation'], link: LINK })),
+    ).toEqual([refusal])
+    expect(
+      printed(
+        sending({ to: 'email', language: ['recipient', 'organisation'], link: LINK }, ['identity']),
+      ),
+    ).toEqual([refusal])
+    expect(
+      printed(
+        sending({ to: 'email', language: ['recipient', 'organisation'], link: LINK }, [
+          'guest',
+          'admin',
+        ]),
+      ),
+    ).toEqual([refusal])
+    expect(
+      printed(sending({ to: 'email', language: 'organisation', link: LINK }, ['member'])),
+    ).toEqual([])
+  })
+  it('refuses the recipient in a list beside to: account, whose language is account', () => {
+    expect(
+      printed(
+        sending({ to: 'account', language: ['recipient', 'organisation'], link: LINK }, ['admin']),
+      ),
+    ).toEqual([
+      `${AT}.language[0]: "recipient" of a mail to account is the account itself: write account`,
+    ])
+  })
+  it('refuses a parameter named organisation on an action that sends a mail', () => {
+    const contract = sending({ to: 'email', language: 'locale', link: LINK }, ['member'])
+
+    Object.assign(contract.screens.platform.actions['invite.send']?.params ?? {}, {
+      organisation: { type: 'string', description: 'An organisation.' },
+    })
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/platform.yaml:1: actions["invite.send"].params.organisation: "organisation" names the language of the organisation the action runs in, so an action that sends a mail gives no parameter that name',
     ])
   })
   it('takes the recipient as the language of a mail to a parameter, sent only for a signed-in account', () => {

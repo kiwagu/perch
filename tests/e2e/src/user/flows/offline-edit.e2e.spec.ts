@@ -1,4 +1,7 @@
 // scenario: user/flows/offline-edit
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test, toast } from '../../support/fixtures'
 import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
@@ -14,7 +17,7 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
     }
 
     await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
         timeout: 10_000,

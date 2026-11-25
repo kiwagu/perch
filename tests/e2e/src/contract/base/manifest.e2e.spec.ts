@@ -1,6 +1,7 @@
 // scenario: contract/base/manifest
 import { fileURLToPath } from 'node:url'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import {
   createValidator,
   formatProblem,
@@ -58,7 +59,7 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
     })
 
     await test.step('2. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
 
@@ -89,7 +90,7 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
     // - After step 3 the helper reports the page's URL, on [/sign-in], with [app-shell.status] in
     //   [state:ready]
     expect(onPage.url).toBe(page.url())
-    expect(new URL(onPage.url).pathname).toBe('/sign-in')
+    expect(new URL(onPage.url).pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(onPage.anchors).toContainEqual(
       expect.objectContaining({ anchor: 'app-shell.status', state: 'ready' }),
     )

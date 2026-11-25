@@ -15,7 +15,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991,
-          "description": "The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`."
+          "description": "Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`."
         }
       },
       "required": [
@@ -63,7 +63,7 @@
             "maximum": 9007199254740991
           },
           "maxLength": {
-            "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.",
+            "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes `defaults.maxLength`, and `null` takes no limit. See the rule `declared-values`.",
             "anyOf": [
               {
                 "type": "integer",
@@ -80,7 +80,7 @@
             "type": "string"
           },
           "format": {
-            "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+            "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
             "type": "string",
             "enum": [
               "email"
@@ -141,7 +141,7 @@
                 "value": {
                   "type": "string",
                   "pattern": "^([a-z][a-z0-9-]*|[a-z_]+\\.[a-z_]+)$",
-                  "description": "The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints a value has it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`."
+                  "description": "The value the parameter takes: a name of `platform.values` or a model field, `<entity>.<field>`, with its constraints; a keyword beside it may narrow them, never widen. See the rule `declared-values`."
                 },
                 "enum": {
                   "description": "The values it takes, each a string or a number.",
@@ -172,7 +172,7 @@
                   "type": "string"
                 },
                 "format": {
-                  "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                  "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
                   "type": "string",
                   "enum": [
                     "email"
@@ -215,17 +215,87 @@
             "description": "The parameters by name."
           },
           "result": {
-            "type": "string",
-            "description": "What holds once the action succeeds."
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "One outcome; from version 6 at most 200 characters."
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "One outcome of the action: the plain success first, then each other outcome under its condition. A refusal is said by its code's condition. At most 200 characters."
+                }
+              }
+            ],
+            "description": "What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`."
           },
           "codes": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A code of the vocabulary (data-code)."
-            },
-            "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`."
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "description": "A code of the vocabulary (data-code)."
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named under the code with or instead of it. At most 200 characters."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "invariant": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                            },
+                            {
+                              "minItems": 2,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                              },
+                              "uniqueItems": true
+                            }
+                          ],
+                          "description": "The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`."
+                        },
+                        "condition": {
+                          "description": "A cause of the code that is no invariant, beside the ones named: when else the action answers with it. At most 200 characters.",
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "invariant"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The code answers when the rule of an invariant named would break; each rule is said once, under `platform.invariants`. See the rule `action-outcomes`."
+                    }
+                  ]
+                },
+                "description": "Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`."
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "description": "A code of the vocabulary (data-code)."
+                },
+                "description": "The older form, before version 6: the codes by name alone, with no condition."
+              }
+            ],
+            "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`."
           },
           "roles": {
             "description": "The roles that may run the action.",
@@ -233,11 +303,11 @@
             "items": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
+              "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
             }
           },
           "paged": {
-            "description": "The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.",
+            "description": "The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.",
             "type": "object",
             "properties": {
               "sizes": {
@@ -270,7 +340,7 @@
               "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
               "description": "A platform action: `sign-in`, `organisations.create`."
             },
-            "description": "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none."
+            "description": "Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`."
           },
           "mail": {
             "description": "The mail the action sends, when it sends one.",
@@ -279,12 +349,24 @@
               "to": {
                 "type": "string",
                 "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name."
+                "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`."
               },
               "language": {
-                "type": "string",
-                "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                  },
+                  {
+                    "minItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$"
+                    }
+                  }
+                ],
+                "description": "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient`, or a list of them, the first that has a language speaking. See the rule `mail-recipients`."
               },
               "link": {
                 "type": "object",
@@ -297,7 +379,7 @@
                   "search": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`."
+                    "description": "The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`."
                   }
                 },
                 "required": [
@@ -330,12 +412,12 @@
                 "to": {
                   "type": "string",
                   "pattern": "^[a-z][a-zA-Z0-9]*$",
-                  "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address)."
+                  "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`."
                 },
                 "language": {
                   "type": "string",
                   "pattern": "^[a-z][a-zA-Z0-9]*$",
-                  "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in."
+                  "description": "Where the mail's language comes from: a language parameter of the action, or `account` (the account the action acts on). See the rule `mail-recipients`."
                 },
                 "link": {
                   "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
@@ -375,6 +457,103 @@
       },
       "description": "The platform actions by name: `platform.<name>` in a binding."
     },
+    "invariants": {
+      "description": "The invariants by name: each a rule said once, named by the actions it limits under the code it refuses with. See the rule `action-outcomes`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The rule, said once for every action that names it under the code it refuses with. At most 200 characters."
+          },
+          "refuses": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "The code an action refuses with when the rule would break: each action names the invariant under it."
+          },
+          "values": {
+            "description": "The numbers the rule states, by camelCase name: a count or a duration; the rule writes each as `{name}`. See the rule `action-outcomes`.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9]*$"
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "A count: a limit, how many."
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "seconds": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "The duration in seconds."
+                        }
+                      },
+                      "required": [
+                        "seconds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "minutes": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "The duration in minutes."
+                        }
+                      },
+                      "required": [
+                        "minutes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "hours": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "The duration in hours."
+                        }
+                      },
+                      "required": [
+                        "hours"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "description": "A duration in one unit: `{ minutes: 15 }`."
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "rule",
+          "refuses"
+        ],
+        "additionalProperties": false,
+        "description": "A rule several actions keep, said once: each names it under the code it refuses with, and the engine derives the actions it limits. See the rule `action-outcomes`."
+      }
+    },
     "events": {
       "description": "The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.",
       "type": "object",
@@ -388,7 +567,7 @@
       }
     },
     "leaving": {
-      "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.",
+      "description": "Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.",
       "type": "array",
       "items": {
         "type": "string",
@@ -397,7 +576,7 @@
       }
     },
     "toasts": {
-      "description": "The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.",
+      "description": "The platform actions whose success toasts, each with its toast's code (`organisations.create: organisation-created`); an unlisted platform action never toasts. See the rule `success-toast`.",
       "type": "object",
       "propertyNames": {
         "type": "string",

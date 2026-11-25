@@ -2,7 +2,8 @@
  * The record the tab that leads this browser's sync shares with the other tabs, a fact of the
  * browser rather than of an account: whether its channel is up, whether changes made on this
  * device wait to be sent, whether the sync stopped for good, and when it last said so. Only the
- * leading tab writes it; every tab reads it (`composition/sync-status.ts`).
+ * leading tab writes it; every tab reads it (`composition/sync-status.ts`). Beside it, the ask
+ * another tab writes when the record is late, which the leading tab answers by writing it anew.
  */
 
 import { z } from '@workspace/zod'
@@ -10,6 +11,7 @@ import { z } from '@workspace/zod'
 import type { KeyValueStorage } from './key-value'
 
 export const SYNC_LEADER_KEY = 'perch.sync.leader'
+export const SYNC_ASK_KEY = 'perch.sync.ask'
 
 const leaderSchema = z.object({
   channel: z.enum(['up', 'down']),
@@ -48,4 +50,12 @@ export function saveSyncLeader(storage: KeyValueStorage, leader: SyncLeader): vo
 /** Forgets the leading tab's record: it stopped leading, and the next leader writes its own. */
 export function forgetSyncLeader(storage: KeyValueStorage): void {
   storage.remove(SYNC_LEADER_KEY)
+}
+
+/**
+ * Asks the leading tab to write its record anew, at `at`: a value of its own each time, so the
+ * browser tells the other tabs of every ask.
+ */
+export function askSyncLeader(storage: KeyValueStorage, at: number): void {
+  storage.set(SYNC_ASK_KEY, String(at))
 }

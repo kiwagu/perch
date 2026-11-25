@@ -1,5 +1,7 @@
 export { accessProblems } from './access'
+export { actionFormsProblems, BEHAVIOUR_EDITION } from './action-forms'
 export { activitiesProblems } from './activities'
+export { behaviourTextsProblems } from './behaviour-texts'
 export { bindingsProblems } from './bindings'
 export { anchorCarries, type Carried } from './carries'
 export { changesProblems } from './changes'
@@ -35,6 +37,7 @@ export {
   rootOf,
   transitionsOf,
 } from './flow'
+export { invariantsProblems } from './invariants'
 export { keyProblems } from './keys'
 export { leavingProblems } from './leaving'
 export { mailsProblems } from './mails'
@@ -47,6 +50,7 @@ export { runsProblems } from './runs'
 export { pairingResolver, referenceResolver, scenariosProblems, textsOf } from './scenarios'
 export { screensProblems } from './screens'
 export { searchProblems } from './search'
+export { isBeforeTerms } from './terms'
 export { toastsProblems } from './toasts'
 export { unsavedInputProblems } from './unsaved-input'
 export { outdatedProblem, versionProblems } from './version'

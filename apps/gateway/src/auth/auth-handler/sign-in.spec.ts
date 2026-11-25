@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, profileIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban, sessionStates } from '../__fixtures__/account-ban'
@@ -347,7 +348,7 @@ describe('authHandler, the answer of a sign-in', () => {
           locale: 'en',
           createdAt: '2026-10-01T00:00:00.000Z',
           updatedAt: '2026-10-01T00:00:00.000Z',
-          role: 'operator',
+          role: CONTRACT_ROLES.operator,
           banned: false,
           banReason: 'MARKER reason',
           banExpires: '2026-12-01T00:00:00.000Z',
@@ -369,7 +370,7 @@ describe('authHandler, the answer of a sign-in', () => {
 
     await mounted.local.db.query(identityRoleSetStatement, {
       identity: ann.identity,
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
       reason: 'MARKER reason',
     })
 

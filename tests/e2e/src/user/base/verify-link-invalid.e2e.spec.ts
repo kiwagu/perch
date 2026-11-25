@@ -1,4 +1,7 @@
 // scenario: user/base/verify-link-invalid
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, notice, startSignUp, test } from '../../support/fixtures'
 import { expectDeclaredMail, openDeclaredMail } from '../../support/mail-contract'
@@ -18,7 +21,7 @@ test.describe('Open a verification link that does not work', { tag: '@smoke' }, 
     })
 
     await test.step('2. Open [/verify-email] with a made-up token', async () => {
-      await page.goto('/verify-email?token=made.up.token')
+      await page.goto(`${CONTRACT_ROUTES['user.verify-email']}?token=made.up.token`)
       // Expected: After step 2 [user.verify-email.error] carries [code:link-invalid], with
       //   [user.verify-email.email-input] and [user.verify-email.resend-button]
       await expect(page.getByTestId('user.verify-email.error')).toHaveAttribute(
@@ -46,7 +49,7 @@ test.describe('Open a verification link that does not work', { tag: '@smoke' }, 
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible()
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

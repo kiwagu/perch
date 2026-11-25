@@ -26,10 +26,21 @@ TypeScript or React code.
   `<database>/src/replica.schema.gen.ts`, and the contract's length limits as database
   parameters, `<schema>/common/contract-values.gen.surql` (see `emitValueParams`). `--check`
   writes nothing and fails on missing, different or stale output.
-- CLI `lint-surql [dir ...]` (root `bun run lint:surql`, part of `lint` and `check`): fails on a
-  string or template literal in TypeScript that holds a SurrealQL statement; reads the syntax
-  tree with oxc-parser. The modeling sources are exempt: their tests feed SurrealQL to the parsers.
-- `findSurqlLiterals`: the same check for one file.
+- CLI `lint-surql [--allow-role <table>.role=<value> ...] [dir ...]` (root `bun run lint:surql`,
+  part of `lint` and `check`): fails on a string or template literal in TypeScript that holds a
+  SurrealQL statement, read from the syntax tree with oxc-parser, and on a role a `.surql` file
+  writes that the contract does not name (`CONTRACT_ROLES` of `@workspace/kernel`): a schema's
+  assert, a query or a fixture, so a role renamed in the contract fails here until SurrealQL
+  follows. `--allow-role` lets one field of one table hold a value that is no role, in its field's
+  definition alone; the root script allows `identity.role=user`, the auth library's word for an
+  account with no platform role. It reads a role in the forms the schema and the queries write:
+  after `role` compared (`=`, `==`, `!=`), tested (`IN`, `NOT IN`, `INSIDE`) or as an object's
+  `role:`, and after `$value` likewise in `DEFINE FIELD … role`; a role written the other way round
+  (`'admin' = role`), with `CONTAINS`, as a quoted key or through a `LET` is not read, so write
+  roles in the forms above. The modeling sources are exempt: their tests feed SurrealQL to the
+  parsers.
+- `findSurqlLiterals`: the literal check for one file; `findSurqlRoles` (`src/surql-roles.ts`):
+  the role check for one `.surql` file.
 - `parseShapeFile`, `parseCommandsFile`, `parseShape`, `tokenize`: the dialect parsers.
 - `emitValueParams`: the text of `contract-values.gen.surql` for the contract's values
   (`CONTRACT_VALUES` of `@workspace/kernel`, which the stage reads): one `DEFINE PARAM OVERWRITE

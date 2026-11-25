@@ -60,7 +60,10 @@ code and the tests follow; the checks hold them to the contract.
    `notices` (`contract/REFERENCE.md#rule-check-platform`; `references/patterns.md`, "A notice
    mail"). Every action, of the platform or of the model, declares the reads it changes under
    `changes`, `[]` for none (`contract/REFERENCE.md#rule-read-after-an-action`,
-   `contract/REFERENCE.md#platform-actions-name-changes`).
+   `contract/REFERENCE.md#platform-actions-name-changes`). A platform action writes its
+   `result` as outcome lines and each code with the condition it answers on; a rule several
+   actions keep is an invariant of `platform.invariants`, named under its code by each of them
+   and never restated (`contract/REFERENCE.md#rule-action-outcomes`).
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`; `contract/REFERENCE.md#rule-anchor-grammar`). The name

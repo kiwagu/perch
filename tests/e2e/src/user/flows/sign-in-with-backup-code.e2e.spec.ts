@@ -1,4 +1,7 @@
 // scenario: user/flows/sign-in-with-backup-code
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, notice, signOut, signUp, test } from '../../support/fixtures'
 import { submitCode, submitCredentials, turnSecondFactorOn } from '../../support/second-factor'
@@ -30,7 +33,7 @@ test.describe('Sign in with a backup code of the second factor', { tag: '@full' 
 
         await page.getByTestId('user.settings.two-factor.hide-codes-button').click()
         await page.getByTestId('app-shell.nav.profile-link').click()
-        await expectPathname(page, '/me')
+        await expectPathname(page, CONTRACT_ROUTES['user.profile'])
         await signOut(page)
 
         return kept
@@ -46,7 +49,7 @@ test.describe('Sign in with a backup code of the second factor', { tag: '@full' 
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
 
     await test.step('5. Click [user.profile.sign-out-button], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], click [user.sign-in.submit-button], enter that first backup code again into [user.sign-in.code.code-input] and click [user.sign-in.code.dialog.confirm-button]', async () => {
@@ -59,7 +62,7 @@ test.describe('Sign in with a backup code of the second factor', { tag: '@full' 
         'data-code',
         'invalid-code',
       )
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('6. Enter the second backup code step 3 kept into [user.sign-in.code.code-input] and click [user.sign-in.code.dialog.confirm-button]', async () => {
@@ -67,7 +70,7 @@ test.describe('Sign in with a backup code of the second factor', { tag: '@full' 
       // Expected: After step 6 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

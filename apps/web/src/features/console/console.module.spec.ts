@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { Container } from '@workspace/di'
-import { CONTRACT_VALUES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES, CONTRACT_VALUES } from '@workspace/kernel'
 import { loadScreens } from '@workspace/ui-contract'
 import { z } from '@workspace/zod'
 
@@ -35,17 +35,17 @@ describe('ConsoleModule', () => {
   it("routes operators to the platform's accounts, the size they chose kept across a search, and to an account's card", () => {
     expect(ConsoleModule.routes).toEqual([
       {
-        path: '/console/users',
+        path: CONTRACT_ROUTES['console.users'],
         page: 'UsersPage',
-        roles: ['operator'],
+        roles: [CONTRACT_ROLES.operator],
         history: 'push',
         retain: ['size'],
         search: AccountSearchSchema,
       },
       {
-        path: '/console/account',
+        path: CONTRACT_ROUTES['console.account'],
         page: 'AccountPage',
-        roles: ['operator'],
+        roles: [CONTRACT_ROLES.operator],
         history: 'push',
         search: AccountCardSearchSchema,
       },

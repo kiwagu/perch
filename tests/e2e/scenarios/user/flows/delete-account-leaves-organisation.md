@@ -11,7 +11,7 @@ data:
 ---
 # Delete an account that is a member of another account's organisation
 
-Where: [/settings] on device A (user A, member) and [/org] on device B (user B, administrator, another browser)
+Where: [/settings] on device A (user A, member) and [/org] on device B (user B, admin, another browser)
 
 ## Scenario: The deleted account leaves the organisation, and the note it wrote stays
 
