@@ -37,6 +37,11 @@ describe('languageOf', () => {
       'the test gave no value for "locale"',
     )
   })
+  it('reads a parameter of the test, never a property every object has', () => {
+    expect(() => languageOf(['constructor', 'locale'], { params: {} })).toThrow(
+      'the test gave no value for "locale"',
+    )
+  })
   it('fails for a source written alone the test gave no value for', () => {
     expect(() => languageOf('organisation', { params: {} })).toThrow(
       'the test gave no value for "organisation"',

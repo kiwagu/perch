@@ -1,8 +1,10 @@
 /**
  * How the contract-terms rule finds where the code expects a number of the contract's invariants
- * (`CONTRACT_INVARIANTS`): a property, a variable's annotation or the other side of a comparison
- * whose declaration, followed through member reads, constants, destructured bindings and type
- * aliases, lies in the emitted module itself. Literal types carry no origin, so the declaration is
+ * (`CONTRACT_INVARIANTS`): a property, a variable's annotation, an argument's parameter or the
+ * other side of a comparison whose declaration, followed through member reads, constants,
+ * parameters, destructured bindings, type queries (`typeof DEVICE_LIMIT`), type aliases, imports
+ * and re-exports, lies in the emitted module itself; the literal is read through an `as`, a
+ * `satisfies` or a `!` around it. Literal types carry no origin, so the declaration is
  * the only evidence: a number elsewhere is no number of the contract.
  */
 
@@ -47,17 +49,71 @@ export function numberReaders(services, emitted) {
   }
 
   /**
+   * The number of the module `symbol` is or holds: a number the module declares, a constant whose
+   * initializer reads one, a variable or a parameter annotated with one, a destructured binding of
+   * one; an alias (an import, a re-export) by what it names.
+   */
+  function symbolNumber(found, depth) {
+    if (found === undefined || depth > 8) {
+      return undefined
+    }
+
+    const symbol = found.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(found) : found
+    const direct = declaredNumber(symbol)
+
+    if (direct !== undefined) {
+      return direct
+    }
+
+    const declaration = symbol.valueDeclaration
+
+    if (declaration === undefined) {
+      return undefined
+    }
+
+    if (ts.isVariableDeclaration(declaration)) {
+      const constant = (declaration.parent.flags & ts.NodeFlags.Const) !== 0
+
+      return (
+        annotatedNumber(declaration.type, depth + 1) ??
+        (constant ? derivedNumber(declaration.initializer, depth + 1) : undefined)
+      )
+    }
+
+    if (ts.isParameter(declaration)) {
+      return annotatedNumber(declaration.type, depth + 1)
+    }
+
+    if (ts.isBindingElement(declaration)) {
+      const key = declaration.propertyName ?? declaration.name
+      const name = ts.isIdentifier(key) || ts.isStringLiteral(key) ? key.text : undefined
+      const property =
+        name === undefined
+          ? undefined
+          : checker.getPropertyOfType(checker.getTypeAtLocation(declaration.parent), name)
+
+      return property === undefined ? undefined : declaredNumber(property)
+    }
+
+    return undefined
+  }
+
+  /**
    * The number of the module a type annotation names: an indexed access into an invariant's
-   * numbers, `(typeof CONTRACT_INVARIANTS)['device-limit']['limit']`, through parentheses and a
-   * type alias.
+   * numbers, `(typeof CONTRACT_INVARIANTS)['device-limit']['limit']`, a type query of a value that
+   * holds one (`typeof DEVICE_LIMIT`), through parentheses and a type alias.
    */
   function annotatedNumber(type, depth = 0) {
-    if (type === undefined || depth > 4) {
+    if (type === undefined || depth > 8) {
       return undefined
     }
 
     if (ts.isParenthesizedTypeNode(type)) {
       return annotatedNumber(type.type, depth + 1)
+    }
+
+    if (ts.isTypeQueryNode(type)) {
+      return symbolNumber(checker.getSymbolAtLocation(type.exprName), depth + 1)
     }
 
     if (
@@ -88,12 +144,12 @@ export function numberReaders(services, emitted) {
   }
 
   /**
-   * The number of the module the value of the TypeScript expression `expression` comes from:
-   * read as a member of it, or held by a constant or a destructured binding that reads one, or
-   * by a variable annotated with one; none when it comes from anywhere else.
+   * The number of the module the value of the TypeScript expression `expression` comes from: read
+   * as a member of it, or held by what an identifier names (`symbolNumber`); none when it comes from
+   * anywhere else.
    */
   function derivedNumber(expression, depth = 0) {
-    if (expression === undefined || depth > 6) {
+    if (expression === undefined || depth > 8) {
       return undefined
     }
 
@@ -107,49 +163,55 @@ export function numberReaders(services, emitted) {
     }
 
     if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
-      const symbol = checker.getSymbolAtLocation(
-        ts.isPropertyAccessExpression(expression) ? expression.name : expression.argumentExpression,
-      )
-
-      return symbol === undefined ? undefined : declaredNumber(symbol)
-    }
-
-    if (!ts.isIdentifier(expression)) {
-      return undefined
-    }
-
-    const found = checker.getSymbolAtLocation(expression)
-    const symbol =
-      found !== undefined && found.flags & ts.SymbolFlags.Alias
-        ? checker.getAliasedSymbol(found)
-        : found
-    const declaration = symbol?.valueDeclaration
-
-    if (declaration !== undefined && ts.isVariableDeclaration(declaration)) {
-      const constant = (declaration.parent.flags & ts.NodeFlags.Const) !== 0
-
-      return (
-        annotatedNumber(declaration.type) ??
-        (constant ? derivedNumber(declaration.initializer, depth + 1) : undefined)
+      return symbolNumber(
+        checker.getSymbolAtLocation(
+          ts.isPropertyAccessExpression(expression)
+            ? expression.name
+            : expression.argumentExpression,
+        ),
+        depth + 1,
       )
     }
 
-    if (declaration !== undefined && ts.isBindingElement(declaration)) {
-      const key = declaration.propertyName ?? declaration.name
-      const name = ts.isIdentifier(key) || ts.isStringLiteral(key) ? key.text : undefined
-      const property =
-        name === undefined
-          ? undefined
-          : checker.getPropertyOfType(checker.getTypeAtLocation(declaration.parent), name)
-
-      return property === undefined ? undefined : declaredNumber(property)
-    }
-
-    return undefined
+    return ts.isIdentifier(expression)
+      ? symbolNumber(checker.getSymbolAtLocation(expression), depth + 1)
+      : undefined
   }
 
-  /** The number of the module the code expects at the number `node`, if it expects one. */
-  function expectedNumber(node) {
+  /** The node a number literal stands as: itself, or the `as`, `satisfies` or `!` around it. */
+  function standing(node) {
+    let at = node
+
+    while (
+      (at.parent?.type === 'TSAsExpression' ||
+        at.parent?.type === 'TSSatisfiesExpression' ||
+        at.parent?.type === 'TSNonNullExpression') &&
+      at.parent.expression === at
+    ) {
+      at = at.parent
+    }
+
+    return at
+  }
+
+  /** The number of the module the parameter a call or a `new` passes `argument` to is annotated with. */
+  function parameterNumber(call, argument) {
+    const index = call.arguments.indexOf(argument)
+    const signature = checker.getResolvedSignature(tsNodeOf(call))
+    const parameters = signature?.getDeclaration()?.parameters ?? []
+    const parameter =
+      parameters[index] ??
+      (parameters.at(-1)?.dotDotDotToken === undefined ? undefined : parameters.at(-1))
+
+    return index === -1 || parameter === undefined ? undefined : annotatedNumber(parameter.type)
+  }
+
+  /**
+   * The number of the module the code expects at the number `literal`, if it expects one, the
+   * literal read through an `as`, a `satisfies` or a `!` around it.
+   */
+  function expectedNumber(literal) {
+    const node = standing(literal)
     const { parent } = node
 
     if (parent?.type === 'BinaryExpression' && NUMBER_COMPARISONS.has(parent.operator)) {
@@ -158,6 +220,13 @@ export function numberReaders(services, emitted) {
 
     if (parent?.type === 'VariableDeclarator' && parent.init === node) {
       return annotatedNumber(tsNodeOf(parent).type)
+    }
+
+    if (
+      (parent?.type === 'CallExpression' || parent?.type === 'NewExpression') &&
+      parent.callee !== node
+    ) {
+      return parameterNumber(parent, node)
     }
 
     if (

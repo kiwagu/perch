@@ -54,6 +54,10 @@ const role = (value, name = `CONTRACT_ROLES.${value}`) => ({
 const number = (value, name) => ({ messageId: 'number', data: { value: String(value), name } })
 const invariants = (code) =>
   typed(`import { CONTRACT_INVARIANTS } from '../__fixtures__/contract-terms.gen'\n${code}`)
+const throughKernel = (code) =>
+  typed(
+    `import { CONTRACT_INVARIANTS } from '../__fixtures__/kernel-index'\nconst DEVICE_LIMIT = CONTRACT_INVARIANTS['device-limit'].limit\n${code}`,
+  )
 const route = (value, id) => ({
   messageId: 'route',
   data: { value, name: `CONTRACT_ROUTES[${JSON.stringify(id)}]` },
@@ -65,6 +69,8 @@ tester.run('contract-terms', contractTerms, {
     invariants('export const counted: { limit: number } = { limit: 10 }'),
     invariants('export const answer: { status: 200 } = { status: 200 }'),
     invariants('export const ten: number = 10'),
+    throughKernel('declare function count(n: number): void\ncount(10)'),
+    throughKernel('export const big = DEVICE_LIMIT < (11 as number)'),
     invariants('declare const count: number\nexport const done = count < 10'),
     invariants('export let tries = 10'),
     invariants(
@@ -168,6 +174,18 @@ tester.run('contract-terms', contractTerms, {
       ...invariants(
         "export const devices: Pick<(typeof CONTRACT_INVARIANTS)['device-limit'], 'limit'> = { limit: 10 }",
       ),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel('export const expected: typeof DEVICE_LIMIT = 10'),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel('export const at = DEVICE_LIMIT >= (10 as number)'),
+      errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
+    },
+    {
+      ...throughKernel('declare function count(n: typeof DEVICE_LIMIT): void\ncount(10)'),
       errors: [number(10, 'CONTRACT_INVARIANTS["device-limit"].limit')],
     },
     {

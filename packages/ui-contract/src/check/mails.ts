@@ -94,15 +94,15 @@ function languageMessages(
     source === RECIPIENT ||
     (Object.hasOwn(action.params, source) && action.params[source]?.optional === true)
   const last = sources.at(-1)
+  const single = typeof mail.language === 'string'
   const unended =
-    typeof mail.language !== 'string' &&
     last !== undefined &&
     mayHaveNone(last.source) &&
-    mayHaveNone(sources.at(-2)?.source ?? '')
+    (single ? last.source !== RECIPIENT : mayHaveNone(sources.at(-2)?.source ?? ''))
       ? [
           {
             at: last.at,
-            message: `"${last.source}" may have no language, so it does not end a list: end it with a source that always has one`,
+            message: `"${last.source}" may have no language: a mail's language ends with a source that always has one`,
           },
         ]
       : []

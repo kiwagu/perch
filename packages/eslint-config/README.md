@@ -36,10 +36,12 @@ ship the JavaScript compiler API that typescript-eslint needs.
   that are all roles, or all routes); with `routeValues`, also any string, part of a template or
   regular expression that names a route by its value; and a number of an invariant written by
   hand where the code expects one: a property of an object typed by an invariant's numbers (whole
-  or picked), a variable annotated with one of them, or the other side of a comparison whose value
-  comes from one (through member reads, constants, destructured bindings and type aliases), read
-  from where the module declares that number; a bound compared with a counter of the code's own
-  (`i < 10`) is out of its reach. It
+  or picked), a variable or an argument whose annotation names one of them, or the other side of a
+  comparison whose value comes from one (through member reads, constants, parameters, destructured
+  bindings, type queries such as `typeof DEVICE_LIMIT`, type aliases, imports and re-exports),
+  read from where the module declares that number, the literal read through an `as`, a
+  `satisfies` or a `!`; a bound compared with a counter of the code's own (`i < 10`) is out of its
+  reach. It
   reads the roles, routes and invariants' numbers from the module `ui-contract emit terms`
   writes (`module`), and fails the lint when that module is missing or malformed
   (`contract/REFERENCE.md#rule-terms`).

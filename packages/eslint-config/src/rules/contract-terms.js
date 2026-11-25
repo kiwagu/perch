@@ -28,11 +28,13 @@
  * A number of an invariant (`CONTRACT_INVARIANTS`) is reported where the code expects a property
  * the module itself declares, written as the number the module holds there: an object's property
  * whose declared type is an invariant's numbers, whole or picked (`Pick<…>` keeps the
- * declaration); a variable annotated with one of its numbers
- * (`(typeof CONTRACT_INVARIANTS)['device-limit']['limit']`, through a type alias too); the other
- * side of a comparison (`===`, `!==`, `==`, `!=`, `<`, `<=`, `>`, `>=`) whose value comes from a
- * number of the module, followed through a member read, a constant's initializer, a destructured
- * binding and such an annotation. Numbers are common, so only that declaration says the code
+ * declaration); a variable or an argument whose annotation names one of its numbers
+ * (`(typeof CONTRACT_INVARIANTS)['device-limit']['limit']`, `typeof DEVICE_LIMIT`, through a type
+ * alias too); the other side of a comparison (`===`, `!==`, `==`, `!=`, `<`, `<=`, `>`, `>=`)
+ * whose value comes from a number of the module, followed through a member read, a constant's
+ * initializer, a parameter, a destructured binding, such an annotation, an import and a re-export;
+ * the literal read through an `as`, a `satisfies` or a `!` around it
+ * (`contract-terms-numbers.js`). Numbers are common, so only that declaration says the code
  * expects one of the contract's: a literal type of the code's own (`status: 200`) says nothing, a
  * bound compared with a counter of its own (`i < 10`) is out of reach, and a number the module
  * does not hold there is the compiler's to refuse.
@@ -64,7 +66,8 @@ export const contractTerms = {
   meta: {
     type: 'problem',
     docs: {
-      description: 'Disallow a role or a route of the UI contract written by hand',
+      description:
+        "Disallow a role, a route or an invariant's number of the UI contract written by hand",
     },
     messages: {
       role: '"{{value}}" is a role of the contract written by hand: name it {{name}}, from the module the contract emits.',

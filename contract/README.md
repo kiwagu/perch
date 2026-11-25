@@ -212,7 +212,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   and each source to the action's parameters and those three words, refuses a parameter named
   `account` on an action that sends a mail or a notice and one named `organisation` or
   `recipient` on an action that sends a mail, refuses a source after one that always has a
-  language (it is never reached) and a list whose last source may have none, takes `recipient`
+  language (it is never reached) and a last source that may have none (an optional parameter,
+  alone too), takes `recipient`
   only for a mail whose `to` is a parameter
   (written alone, only on an action whose `roles` leave `guest` out, as it falls back on a
   signed-in account) and `organisation` only on an action whose `roles` leave out `guest` and

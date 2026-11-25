@@ -36,7 +36,7 @@ function languageGiven(source: string, values: MailValues): string | undefined {
     case 'organisation':
       return values.organisation?.language
     default:
-      return values.params[source]
+      return Object.hasOwn(values.params, source) ? values.params[source] : undefined
   }
 }
 
