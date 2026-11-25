@@ -152,7 +152,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   carries. A rule that states a number (a limit, a window) declares it under `values`, by a
   camelCase name, as a count or a duration in one unit, and writes it as `{name}`: a number is
   said once, the manifest carries the rule with each value written in (`10`, `15 minutes`), the
-  check refuses a `{name}` that names no value and a value the rule never names, and the engine
+  check refuses a `{name}` that names no value, a brace outside a `{name}`, a value the rule
+  never names and two values code would read by one name (`window` beside `windowMs`), and the engine
   emits the values for code to name, `CONTRACT_INVARIANTS` (`ui-contract emit terms`). Each
   outcome line, condition and rule keeps the budget of a description. From version
   6 the check refuses the older forms, a list of the codes' names and a `result` of one string

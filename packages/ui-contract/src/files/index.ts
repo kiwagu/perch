@@ -51,7 +51,7 @@ export {
   transitionsOf,
 } from './flow-nodes'
 export { hintBudgetProblems } from './hint-budget'
-export { PLACEHOLDER, renderedRule, renderedValue } from './invariant-values'
+export { emittedName, PLACEHOLDER, renderedRule, renderedValue } from './invariant-values'
 export { invariantActions } from './invariants'
 export {
   MIGRATIONS,

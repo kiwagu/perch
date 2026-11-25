@@ -16,6 +16,13 @@ const UNITS = {
   hours: ['hour', 'hours'],
 } as const
 
+/**
+ * The name code reads a value by (`CONTRACT_INVARIANTS`): a count's own, a duration's with `Ms`, as
+ * it is emitted in milliseconds.
+ */
+export const emittedName = (name: string, value: InvariantValue): string =>
+  typeof value === 'number' ? name : `${name}Ms`
+
 /** A value as the rule reads it: a count as digits, a duration with its unit. */
 export function renderedValue(value: InvariantValue): string {
   if (typeof value === 'number') {

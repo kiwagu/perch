@@ -13,7 +13,7 @@
  */
 
 import type { Contract } from '../check'
-import { routeKeyOf } from '../files'
+import { emittedName, routeKeyOf } from '../files'
 import type { InvariantValue } from '../schemas'
 
 import { constantsText } from './module-text'
@@ -23,12 +23,12 @@ const MILLISECONDS = { seconds: 1000, minutes: 60_000, hours: 3_600_000 } as con
 /** A value as code reads it: a count by its name, a duration in milliseconds under `<name>Ms`. */
 function numberOf(name: string, value: InvariantValue): readonly [string, number] {
   if (typeof value === 'number') {
-    return [name, value]
+    return [emittedName(name, value), value]
   }
 
   const [unit, amount] = Object.entries(value)[0] as [keyof typeof MILLISECONDS, number]
 
-  return [`${name}Ms`, amount * MILLISECONDS[unit]]
+  return [emittedName(name, value), amount * MILLISECONDS[unit]]
 }
 
 const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number =>

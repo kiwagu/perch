@@ -4,10 +4,12 @@
  * writes each number it declares under `values` as `{name}`. Five rules hold them: each invariant
  * an action names exists, and its `refuses` is the code it is named under, both at that code; an
  * invariant no action names is refused, at the invariant; a placeholder of a rule names a value of
- * its invariant, at the rule; a value the rule never names is refused, at the value.
+ * its invariant, and a brace stands in a placeholder alone, at the rule; a value the rule never names,
+ * and one emitted under the name another value has (`window` beside `windowMs`), is refused, at the
+ * value.
  */
 
-import { codeEntriesOf, invariantActions, PLACEHOLDER, type Problem } from '../files'
+import { codeEntriesOf, emittedName, invariantActions, PLACEHOLDER, type Problem } from '../files'
 
 import { type Contract, has, locate } from './contract'
 
@@ -51,7 +53,32 @@ export function invariantsProblems(contract: Contract): Problem[] {
     ...Object.entries(invariants).flatMap(([name, { rule, values = {} }]) => {
       const named = new Set([...rule.matchAll(PLACEHOLDER)].map(([, value]) => value))
 
+      const emitted = Object.entries(values).map(([value, stated]) => [
+        value,
+        emittedName(value, stated),
+      ])
+
       return [
+        ...(/[{}]/.test(rule.replace(PLACEHOLDER, ''))
+          ? [
+              inScreens(
+                ['platform', 'invariants', name, 'rule'],
+                'a brace that is no placeholder: write each value as "{name}", and the rest without braces',
+              ),
+            ]
+          : []),
+        ...emitted.flatMap(([value, as], index) => {
+          const earlier = emitted.slice(0, index).find(([, other]) => other === as)
+
+          return earlier === undefined
+            ? []
+            : [
+                inScreens(
+                  ['platform', 'invariants', name, 'values', value ?? ''],
+                  `"${earlier[0]}" and "${value}" of "${name}" are both emitted as "${as}": rename one`,
+                ),
+              ]
+        }),
         ...[...named]
           .filter((value) => value === undefined || !Object.hasOwn(values, value))
           .map((value) =>

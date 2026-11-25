@@ -161,6 +161,29 @@ describe('invariantsProblems', () => {
       ),
     ])
   })
+  it('refuses a brace outside a placeholder, and two values that name one constant, at their place', () => {
+    expect(
+      invariantsProblems(
+        signingIn(
+          { 'device-limit': { invariant: 'device-limit' } },
+          {
+            'device-limit': {
+              rule: '{{limit}} devices within {window}, {windowMs} } ms.',
+              refuses: 'device-limit',
+              values: { limit: 10, window: { minutes: 15 }, windowMs: 900_000 },
+            },
+          },
+        ),
+      ),
+    ).toEqual([
+      problem(
+        'invariants["device-limit"].rule: a brace that is no placeholder: write each value as "{name}", and the rest without braces',
+      ),
+      problem(
+        'invariants["device-limit"].values.windowMs: "window" and "windowMs" of "device-limit" are both emitted as "windowMs": rename one',
+      ),
+    ])
+  })
   it('refuses a placeholder in the rule of an invariant with no values', () => {
     expect(
       invariantsProblems(
