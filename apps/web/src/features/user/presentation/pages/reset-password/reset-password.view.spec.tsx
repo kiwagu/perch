@@ -20,7 +20,9 @@ import {
 /** What a state renders of the anchors only some render: `anchor` alone. */
 const only = (anchor: ResetPasswordListed) => (asked: ResetPasswordListed) => asked === anchor
 
-/** Renders the view in a state that renders the form, unless `props` says otherwise. */
+/**
+ * Renders the view for a guest in a state that renders the form, unless `props` says otherwise.
+ */
 function renderView(props: Partial<ResetPasswordViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const handlers = {
     onTypePassword: vi.fn(),
@@ -30,6 +32,7 @@ function renderView(props: Partial<ResetPasswordViewProps> = {}, locale: 'en' | 
   renderWithFacts(
     <ResetPasswordView
       renders={only('user.reset-password.form')}
+      guest={true}
       can={() => true}
       {...handlers}
       {...props}
@@ -158,6 +161,19 @@ describe('ResetPasswordView', () => {
     expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
   })
 
+  it.each([
+    ['user.reset-password.forgot-link', { error: 'data:LINK_INVALID' }],
+    ['user.reset-password.sign-in-link', { message: 'password-reset' }],
+  ] as const)(
+    'leaves %s out while an account is signed in here, though the state renders it',
+    (link, shown) => {
+      renderView({ ...shown, renders: only(link), guest: false })
+
+      expect(screen.queryByTestId(link)).toBeNull()
+      expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
+    },
+  )
+
   it('holds the submit while the flow does not take its event', () => {
     renderView({ can: () => false })
 
@@ -195,6 +211,7 @@ describe('the state colour of the fields', () => {
       <UnsavedInputScope>
         <ResetPasswordView
           renders={only('user.reset-password.form')}
+          guest={true}
           can={() => true}
           onTypePassword={() => {}}
           onSubmit={() => Promise.resolve(true)}
