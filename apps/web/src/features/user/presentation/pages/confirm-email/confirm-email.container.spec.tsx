@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -24,7 +24,10 @@ type AuthUser = NonNullable<ReturnType<SessionPort['current']>>
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
-/** The page at `at`, `here` signed in, over a confirmation that answers as `answer` says. */
+/**
+ * The page at `at`, `here` signed in, over a confirmation that answers as `answer` says; `signIn`
+ * changes who is signed in on this device while the page is open, as another tab would.
+ */
 function open(
   at: string,
   here: AuthUser | undefined,
@@ -33,8 +36,19 @@ function open(
     email: 'ann.new@example.test',
   }),
 ) {
+  let user = here
+  const listeners = new Set<(next: AuthUser | undefined) => void>()
   const confirmEmail = vi.fn((_token: string) => answer)
-  const session: SessionPort = { ...fakeSession().session, current: () => here, confirmEmail }
+  const session: SessionPort = {
+    ...fakeSession().session,
+    current: () => user,
+    subscribe: (listener) => {
+      listeners.add(listener)
+
+      return () => listeners.delete(listener)
+    },
+    confirmEmail,
+  }
   const TestModule = defineModule({
     id: 'test',
     declarations: { Confirm: ConfirmEmailContainer },
@@ -62,8 +76,20 @@ function open(
     </I18nProvider>,
   )
 
-  return { confirmEmail }
+  const signIn = (next: AuthUser | undefined) =>
+    act(() => {
+      user = next
+
+      for (const listener of listeners) {
+        listener(next)
+      }
+    })
+
+  return { confirmEmail, signIn }
 }
+
+/** The code the page's message carries. */
+const messageCode = () => screen.getByTestId('user.confirm-email.message').getAttribute('data-code')
 
 describe('ConfirmEmailContainer', () => {
   it('confirms the token of its address once, and leads this account to its profile', async () => {
@@ -78,6 +104,35 @@ describe('ConfirmEmailContainer', () => {
     open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, undefined)
 
     expect(await screen.findByTestId('user.confirm-email.sign-in-link')).toBeTruthy()
+  })
+
+  it('hides the sign-in link once an account signs in here, and shows it again once it signs out', async () => {
+    const { signIn } = open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, undefined)
+
+    expect(await screen.findByTestId('user.confirm-email.sign-in-link')).toBeTruthy()
+
+    signIn(ann)
+
+    await waitFor(() => expect(screen.queryByTestId('user.confirm-email.sign-in-link')).toBeNull())
+    expect(screen.queryByTestId('user.confirm-email.profile-link')).toBeNull()
+    expect(messageCode()).toBe('email-changed')
+
+    signIn(undefined)
+
+    expect(await screen.findByTestId('user.confirm-email.sign-in-link')).toBeTruthy()
+    expect(messageCode()).toBe('email-changed')
+  })
+
+  it('hides the profile link once this device signs out, offering no other', async () => {
+    const { signIn } = open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, ann)
+
+    expect(await screen.findByTestId('user.confirm-email.profile-link')).toBeTruthy()
+
+    signIn(undefined)
+
+    await waitFor(() => expect(screen.queryByTestId('user.confirm-email.profile-link')).toBeNull())
+    expect(screen.queryByTestId('user.confirm-email.sign-in-link')).toBeNull()
+    expect(messageCode()).toBe('email-changed')
   })
 
   it('leads nowhere while another account is signed in here', async () => {

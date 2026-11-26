@@ -50,6 +50,11 @@ export interface ResetPasswordViewProps {
    * asking for a new mail once the link does not work, the way to sign in once it is set.
    */
   readonly renders: (anchor: ResetPasswordListed) => boolean
+  /**
+   * Whether nobody is signed in here now: both links lead to pages of a guest's, and show to a
+   * guest alone, whatever state the flow is in.
+   */
+  readonly guest: boolean
   /** Whether the flow takes the event now: the button is enabled exactly while it does. */
   readonly can: (event: ResetPasswordEvent) => boolean
   /** A keystroke in a password, with both passwords as they are after it. */
@@ -196,7 +201,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
               </Alert>
             ) : null}
             {aboveForm}
-            {props.renders('user.reset-password.sign-in-link') ? (
+            {props.renders('user.reset-password.sign-in-link') && props.guest ? (
               <Link
                 to={CONTRACT_ROUTES['user.sign-in']}
                 className="text-sm underline"
@@ -205,7 +210,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
                 {t('user.reset-password.sign-in')}
               </Link>
             ) : null}
-            {props.renders('user.reset-password.forgot-link') ? (
+            {props.renders('user.reset-password.forgot-link') && props.guest ? (
               <Link
                 to={CONTRACT_ROUTES['user.forgot-password']}
                 className="text-sm underline"
