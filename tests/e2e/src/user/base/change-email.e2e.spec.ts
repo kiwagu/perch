@@ -35,7 +35,7 @@ test.describe('Change the email in the settings', { tag: '@smoke' }, () => {
 
     await test.step('3. Open the link of [mail:change-email]', async () => {
       await openChangeEmailMail(page, data)
-      // Expected: After step 3 the link opens [/confirm-email], [user.confirm-email.message]
+      // Expected: After step 3 the link opens [screen:user.confirm-email], [user.confirm-email.message]
       //   carries [code:email-changed], and [notice:confirm-email.email-changed] reaches the
       //   email, naming neither the new email nor any part of it
       await expectPathname(page, CONTRACT_ROUTES['user.confirm-email'])
@@ -53,7 +53,7 @@ test.describe('Change the email in the settings', { tag: '@smoke' }, () => {
 
     await test.step('4. Click [user.confirm-email.profile-link]', async () => {
       await page.getByTestId('user.confirm-email.profile-link').click()
-      // Expected: After step 4 the URL is [/me] and [user.profile.email-input] holds the new
+      // Expected: After step 4 the URL is [screen:user.profile] and [user.profile.email-input] holds the new
       //   email
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await expect(page.getByTestId('user.profile.email-input')).toHaveValue(data.newEmail, {
@@ -67,7 +67,7 @@ test.describe('Change the email in the settings', { tag: '@smoke' }, () => {
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 5 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

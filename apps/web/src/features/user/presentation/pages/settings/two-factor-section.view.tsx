@@ -26,7 +26,8 @@ const ERROR_TEST_ID = 'user.settings.two-factor.error'
 
 /**
  * A press that takes the password the form holds: it goes ahead only once the form's fields are
- * valid, as a submit does (the password is `required`), and the browser says which is not.
+ * valid, as a submit does (the contract says the password must be filled, so the kit makes it
+ * `required` from its field facts), and the browser says which is not.
  */
 const pressWhenValid = (press: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
   if (event.currentTarget.form?.reportValidity()) {
@@ -113,7 +114,6 @@ export function TwoFactorSectionView(props: TwoFactorSectionViewProps) {
         value={props.password}
         onChange={(event) => props.onPassword(event.target.value)}
         autoComplete="current-password"
-        required
         aria-invalid={concerns === 'password' ? true : undefined}
         aria-describedby={concerns === 'password' ? ids.error : undefined}
         showLabel={t('user.password.show')}

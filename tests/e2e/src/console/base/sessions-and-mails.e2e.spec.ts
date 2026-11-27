@@ -38,7 +38,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
       otherName: generate.otherName(),
     }
 
-    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
+    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [screen:user.profile]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
       await signUpOperator(page, {
         ...generate.account(),
         email: data.operatorEmail,
@@ -48,7 +48,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
     })
 
     const deviceB =
-      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await freshDevices.open()
 
         await signUp(b, {
@@ -80,7 +80,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
       })
 
     const id =
-      await test.step("4. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
+      await test.step("4. On device A, open [screen:console.users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
         await openUsers(page)
 
         const opened = await openAccount(page, data.email)
@@ -96,7 +96,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
       await page.getByTestId('console.account.sessions.revoke-button').click()
       await page.getByTestId('app-shell.confirmation.confirm-button').click()
       // Expected: After step 5 [app-shell.toast] carries [code:sessions-revoked] on device A and
-      //   the card stays; within 5 seconds device B is on [/sign-in], where
+      //   the card stays; within 5 seconds device B is on [screen:user.sign-in], where
       //   [user.sign-in.notice-message] carries [code:signed-out-elsewhere]
       await Promise.all([
         (async () => {
@@ -146,19 +146,19 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
       )
     })
 
-    await test.step('8. On device B, open [/sign-in], enter the email and the new password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
+    await test.step('8. On device B, open [screen:user.sign-in], enter the email and the new password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
       await deviceB.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(deviceB)
       await deviceB.getByTestId('user.sign-in.email-input').fill(data.email)
       await deviceB.getByTestId('user.sign-in.password-input').fill(data.newPassword)
       await deviceB.getByTestId('user.sign-in.submit-button').click()
-      // Expected: After step 8 device B is on [/me] and [app-shell.notice-message] carries
+      // Expected: After step 8 device B is on [screen:user.profile] and [app-shell.notice-message] carries
       //   [code:welcome]: the account signs in with the new password
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
-    await test.step("9. On device A, open [/console/users], enter the other email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the other account's [console.users.list.account-item]", async () => {
+    await test.step("9. On device A, open [screen:console.users], enter the other email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the other account's [console.users.list.account-item]", async () => {
       await openUsers(page)
       await openAccount(page, data.otherEmail)
       // Expected: After step 9 [console.account.heading] shows the other name, no
@@ -200,7 +200,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
 
     await test.step('11. On device C, open the link of [mail:accounts.resend-verification]', async () => {
       await openMailLink(deviceC, resent, 'accounts.resend-verification')
-      // Expected: After step 11 device C is on [/me] and [app-shell.notice-message] carries
+      // Expected: After step 11 device C is on [screen:user.profile] and [app-shell.notice-message] carries
       //   [code:welcome]: the link verified the email and signed the device in
       await expect(notice(deviceC, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(deviceC, CONTRACT_ROUTES['user.profile'])

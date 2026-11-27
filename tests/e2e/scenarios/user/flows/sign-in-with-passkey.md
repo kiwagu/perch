@@ -10,7 +10,7 @@ data:
 ---
 # Sign in with a passkey
 
-Where: [/sign-in] by [user.sign-in.passkey-button], in a browser whose authenticator makes passkeys, unlocks them at once and keeps them until the browser closes, whatever the account does with them
+Where: [screen:user.sign-in] by [user.sign-in.passkey-button], in a browser whose authenticator makes passkeys, unlocks them at once and keeps them until the browser closes, whatever the account does with them
 
 ## Scenario: A passkey signs the account in with no password and no code, even with the second factor on, and one removed from the account signs nothing in
 
@@ -23,6 +23,6 @@ Where: [/sign-in] by [user.sign-in.passkey-button], in a browser whose authentic
 6. Click [app-shell.nav.profile-link], click [user.profile.sign-out-button] and click [user.sign-in.passkey-button]
 
 ### Expected result
-- After step 4 [app-shell.notice-message] carries [code:welcome], the URL is [/me], and [user.sign-in.code.dialog] never showed
+- After step 4 [app-shell.notice-message] carries [code:welcome], the URL is [screen:user.profile], and [user.sign-in.code.dialog] never showed
 - After step 5 [user.settings.passkeys.list] holds no [user.settings.passkeys.passkey-item]
-- After step 6 the authenticator offers the passkey it still keeps, [user.sign-in.error] carries [code:passkey-unknown], and the URL is still [/sign-in]: the account no longer has that passkey
+- After step 6 the authenticator offers the passkey it still keeps, [user.sign-in.error] carries [code:passkey-unknown], and the URL is still [screen:user.sign-in]: the account no longer has that passkey

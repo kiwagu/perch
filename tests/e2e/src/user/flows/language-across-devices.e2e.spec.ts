@@ -11,7 +11,7 @@ test.describe('Keep the language of an account on every device', { tag: '@full' 
   }) => {
     const select = page.getByTestId('user.settings.locale-select')
 
-    await test.step('1. On device A, open [/settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. On device A, open [screen:user.settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       // The select takes a choice once the account's settings are on the device.
@@ -28,7 +28,7 @@ test.describe('Keep the language of an account on every device', { tag: '@full' 
     })
 
     const deviceB =
-      await test.step('3. On device B, sign in with the same account, wait for [/me] and open [/settings]', async () => {
+      await test.step('3. On device B, sign in with the same account, wait for [screen:user.profile] and open [screen:user.settings]', async () => {
         const b = await secondDevice.signIn()
 
         await b.getByTestId('app-shell.nav.settings-link').click()

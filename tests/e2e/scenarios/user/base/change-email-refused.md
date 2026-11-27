@@ -13,7 +13,7 @@ data:
 ---
 # Ask to change the email with a wrong password, and to an email that has an account
 
-Where: [/settings], the form [user.settings.email.form]
+Where: [screen:user.settings], the form [user.settings.email.form]
 
 ## Scenario: A wrong password is refused under it; a new email that has an account gets the same answer as a free one, and no mail
 

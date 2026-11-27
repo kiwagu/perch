@@ -23,7 +23,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
     const network = await SyncNetwork.attach(page)
 
     const database =
-      await test.step('1. On device A, open [/me], enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]', async () => {
+      await test.step('1. On device A, open [screen:user.profile], enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]', async () => {
         await page.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(page)
         await page.getByTestId('user.profile.bio-textarea').fill(data.bio)
@@ -38,7 +38,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       })
 
     const deviceB =
-      await test.step('2. On device B, sign in with the same account and wait for [/me]', async () => {
+      await test.step('2. On device B, sign in with the same account and wait for [screen:user.profile]', async () => {
         const b = await secondDevice.signIn()
 
         await expect(b.getByTestId('user.profile.bio-textarea')).toHaveValue(data.bio, {
@@ -50,7 +50,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     await test.step('3. On device A, click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
-      // Expected: After step 3 device A is on [/sign-in], and its browser keeps no local database of
+      // Expected: After step 3 device A is on [screen:user.sign-in], and its browser keeps no local database of
       //   the account
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
       await expect.poll(() => databases(page), { timeout: 10_000 }).not.toContain(database)
@@ -66,7 +66,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.newName)
     })
 
-    await test.step('5. On device A, sign in again with the same account and wait for [/me]', async () => {
+    await test.step('5. On device A, sign in again with the same account and wait for [screen:user.profile]', async () => {
       await signIn(page, signedIn)
       // Expected: After step 5 device A shows the profile the server holds: the new name from
       //   device B and the bio from step 1, and [app-shell.notice-message] carries [code:welcome]
@@ -104,7 +104,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     await test.step('8. Click [user.profile.sign-out-dialog.cancel-button]', async () => {
       await page.getByTestId('user.profile.sign-out-dialog.cancel-button').click()
-      // Expected: After step 8 device A stays on [/me] with the unsent name, and its local database
+      // Expected: After step 8 device A stays on [screen:user.profile] with the unsent name, and its local database
       //   is kept
       await expect(page.getByTestId('user.profile.sign-out-dialog.confirm-button')).toBeHidden()
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
@@ -118,7 +118,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       await expect(page.getByTestId('user.profile.sign-out-dialog')).toBeVisible()
       await expect(notice(page, 'welcome')).toBeVisible()
       await page.getByTestId('user.profile.sign-out-dialog.confirm-button').click()
-      // Expected: After step 9 device A is on [/sign-in] and shows no [app-shell.notice-message]:
+      // Expected: After step 9 device A is on [screen:user.sign-in] and shows no [app-shell.notice-message]:
       //   the notice of step 5 went with the account
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
       await expect(page.getByTestId('app-shell.notice-message')).toHaveCount(0)

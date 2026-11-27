@@ -117,7 +117,6 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
       setValues(next)
       props.onTypePassword(field, next)
     },
-    required: true,
     autoComplete: 'new-password',
     'aria-describedby':
       [field === 'password' ? ids.rules : undefined, concerns === field ? ids.error : undefined]

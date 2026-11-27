@@ -13,7 +13,7 @@ test.describe('Open the sign-in page without the database engines', { tag: '@smo
       await test.step("1. Hold back the page's database engines, so that none of them can load", () =>
         holdEngines(page.context()))
 
-    await test.step('2. Open [/sign-in] as a guest', async () => {
+    await test.step('2. Open [screen:user.sign-in] as a guest', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'], { waitUntil: 'commit' })
     })
 

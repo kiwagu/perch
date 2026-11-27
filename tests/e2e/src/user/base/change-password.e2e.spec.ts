@@ -84,7 +84,7 @@ test.describe('Change the password in the settings', { tag: '@smoke' }, () => {
       await page.getByTestId('user.sign-in.password-input').fill(data.newPassword)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

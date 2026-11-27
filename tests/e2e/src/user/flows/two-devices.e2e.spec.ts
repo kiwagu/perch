@@ -17,7 +17,7 @@ test.describe('Keep one account in step on two devices', { tag: '@full' }, () =>
       secondName: generate.newName(),
     }
 
-    await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. On device A, open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toBeVisible()
@@ -32,7 +32,7 @@ test.describe('Keep one account in step on two devices', { tag: '@full' }, () =>
     })
 
     const deviceB =
-      await test.step('3. On device B, sign in with the same account and wait for [/me]', async () => {
+      await test.step('3. On device B, sign in with the same account and wait for [screen:user.profile]', async () => {
         const b = await secondDevice.signIn()
 
         // Expected: After step 3 device B shows the bio entered on device A in

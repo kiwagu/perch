@@ -13,13 +13,13 @@ data:
 ---
 # Keep an organisation invisible to accounts outside it
 
-Where: [/org] on device A (user A) and [/org] on device C (user C, another browser)
+Where: [screen:organisation] on device A (user A) and [screen:organisation] on device C (user C, another browser)
 
 ## Scenario: An account that was not invited sees no organisation and no notes
 
 ### Steps
-1. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]
-2. On device C, sign up as user C, open the link of its [mail:sign-up] and open [/org]
+1. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]
+2. On device C, sign up as user C, open the link of its [mail:sign-up] and open [screen:organisation]
 3. On device C, create C's own organisation with [organisation.create.submit-button]
 
 ### Expected result

@@ -20,7 +20,7 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
       account: { email: data.email, language: 'es' },
     }
 
-    await test.step('1. On device A, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. On device A, open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
@@ -37,7 +37,7 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
       await page.getByTestId('user.sign-in.password-confirmation-input').fill(data.password)
       await page.getByTestId('user.sign-in.name-input').fill(data.name)
       await page.getByTestId('user.sign-in.submit-button').click()
-      // Expected: After step 3 device A stays on [/sign-in] with [user.sign-in.mail-message]
+      // Expected: After step 3 device A stays on [screen:user.sign-in] with [user.sign-in.mail-message]
       //   carrying [code:check-your-mail], and [mail:sign-up] reaches the email in the language
       //   [value:es]
       await expect(checkYourMail(page)).toBeVisible()
@@ -49,7 +49,7 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
       const deviceB = await anotherAccount.open()
 
       await openDeclaredMail(deviceB, 'sign-up', signedUp)
-      // Expected: After step 4 device B is on [/me], and its [/settings] shows
+      // Expected: After step 4 device B is on [screen:user.profile], and its [screen:user.settings] shows
       //   [user.settings.locale-select] with [value:es], with no choice made on device B
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
       await deviceB.getByTestId('app-shell.nav.settings-link').click()
@@ -63,7 +63,7 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
     await test.step('5. On device A, enter the password into [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
       await page.getByTestId('user.sign-in.submit-button').click()
-      // Expected: After step 5 device A is on [/me], and its [/settings] shows
+      // Expected: After step 5 device A is on [screen:user.profile], and its [screen:user.settings] shows
       //   [user.settings.locale-select] with [value:es]
       await page.waitForURL(`**${CONTRACT_ROUTES['user.profile']}`)
       await page.getByTestId('app-shell.nav.settings-link').click()

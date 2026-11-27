@@ -10,7 +10,7 @@ data:
 ---
 # Open an account deletion link a second time
 
-Where: [/delete-account] from [mail:request-account-deletion], once its button has deleted the account
+Where: [screen:user.delete-account] from [mail:request-account-deletion], once its button has deleted the account
 
 ## Scenario: A deletion link deletes once; opened again it says the link does not work, and offers no button
 

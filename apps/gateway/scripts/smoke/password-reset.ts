@@ -21,7 +21,7 @@ function deviceNamed(id: string) {
 
 /**
  * The token of the reset link a mail carries, once its first link opens the front's
- * /reset-password; its failures name nothing of the link.
+ * `user.reset-password`; its failures name nothing of the link.
  */
 function resetToken(mail: Parameters<typeof firstLink>[0]): string {
   const url = URL.parse(firstLink(mail))

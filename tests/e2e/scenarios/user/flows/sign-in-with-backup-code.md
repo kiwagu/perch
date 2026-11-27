@@ -10,7 +10,7 @@ data:
 ---
 # Sign in with a backup code of the second factor
 
-Where: [/sign-in], once the account turned its second factor on at [/settings]
+Where: [screen:user.sign-in], once the account turned its second factor on at [screen:user.settings]
 
 ## Scenario: A backup code takes the place of a code of the app once, and is used up by it
 
@@ -23,6 +23,6 @@ Where: [/sign-in], once the account turned its second factor on at [/settings]
 6. Enter the second backup code step 3 kept into [user.sign-in.code.code-input] and click [user.sign-in.code.dialog.confirm-button]
 
 ### Expected result
-- After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]
-- After step 5 [user.sign-in.code.error] carries [code:invalid-code] and the URL is still [/sign-in]: the backup code was used up
-- After step 6 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]
+- After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is [screen:user.profile]
+- After step 5 [user.sign-in.code.error] carries [code:invalid-code] and the URL is still [screen:user.sign-in]: the backup code was used up
+- After step 6 [app-shell.notice-message] carries [code:welcome] and the URL is [screen:user.profile]

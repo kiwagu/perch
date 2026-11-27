@@ -34,7 +34,7 @@ export interface VerificationMailerOptions {
   readonly log: AuthLog
 }
 
-/** The link a verification mail carries: the front's /verify-email with the token. */
+/** The link a verification mail carries: the front's `user.verify-email` with the token. */
 export const verificationLink = (publicUrl: string, token: string): string =>
   `${publicUrl}${VERIFY_EMAIL_PATH}?${new URLSearchParams({ token }).toString()}`
 

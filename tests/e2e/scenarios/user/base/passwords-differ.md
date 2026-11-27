@@ -10,12 +10,12 @@ data:
 ---
 # Sign up with the password typed again differently
 
-Where: [/sign-in] then [user.sign-in.toggle-button]
+Where: [screen:user.sign-in] then [user.sign-in.toggle-button]
 
 ## Scenario: The password typed again is checked as it is typed, and the account is asked for only once the two are the same
 
 ### Steps
-1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]
+1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]
 2. Click [user.sign-in.toggle-button]
 3. Enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input]
 4. Type the password without its last character into [user.sign-in.password-confirmation-input], one character at a time

@@ -108,7 +108,6 @@ export function PasswordFormView(props: PasswordFormViewProps) {
     value: props.values[name],
     onChange: (event: { readonly target: { readonly value: string } }) =>
       props.onChange(name, { ...props.values, [name]: event.target.value }),
-    required: true,
     autoComplete: name === 'current' ? 'current-password' : 'new-password',
     'aria-describedby':
       [name === 'password' ? ids.rules : undefined, concerns === name ? ids.error : undefined]

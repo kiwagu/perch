@@ -50,7 +50,7 @@ test.describe('Load the newer version of the app the server serves', { tag: '@fu
   test('A tab coming back to the front says a newer version is served, its button loads it, and a tab sent to the background with nothing unsaved loads it by itself', async ({
     page,
   }) => {
-    await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       const read = page.waitForResponse(MANIFEST)
 
       await page.goto(CONTRACT_ROUTES['user.sign-in'])

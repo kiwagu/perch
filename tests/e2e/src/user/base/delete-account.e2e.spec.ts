@@ -48,7 +48,7 @@ test.describe('Delete the account', { tag: '@smoke' }, () => {
     await test.step('3. Open the link of [mail:request-account-deletion]', async () => {
       // The email's second mail, after the sign-up's.
       await openDeletionMail(page, data.email, 1)
-      // Expected: After step 3 the link opens [/delete-account] with
+      // Expected: After step 3 the link opens [screen:user.delete-account] with
       //   [user.delete-account.delete-button]
       await expectPathname(page, CONTRACT_ROUTES['user.delete-account'])
       await expect(page.getByTestId('user.delete-account.delete-button')).toBeVisible()

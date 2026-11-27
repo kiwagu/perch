@@ -21,7 +21,7 @@ workers reported a Content-Security-Policy violation on the console. Every test 
 service worker (`serviceWorkers: 'block'`, so requests and page loads stay the network's) but
 `app-shell/base/open-offline`, which lets it run to open the app offline; there the browser, which
 never asked for the settings' script (named by the worker's precache list, `src/support/precache.ts`),
-then opens `/settings` offline, and the worker answers that script, so a lazy script comes from the precache. Each test signs up fresh accounts in fresh browser contexts,
+then opens `user.settings` offline, and the worker answers that script, so a lazy script comes from the precache. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog, each through the link of its verification mail, read
 from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
 (`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
@@ -91,17 +91,17 @@ up, mails, opens a link or creates an organisation counts against these.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
   (`no-store`) is valid against the schema served beside it and names the contract version the
-  stand was built from; on `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in
+  stand was built from; on `user.sign-in`, every anchor `window.__perch.ui.anchors()` reports is in
   the manifest's `ids` with the same kind, or derived from one with a suffix it lists, and the
   helper reports the page's URL with `app-shell.status` in `ready`.
 - `app-shell/base/open-before-data`: a signed-in device reloaded while its database engines
-  are held back shows `app-shell.status` in `opening-data` on `/me`, with the account's four
+  are held back shows `app-shell.status` in `opening-data` on `user.profile`, with the account's four
   navigation links and `user.profile.status` in `loading`; once the engines load, it reaches
   `ready` with the account's name.
 - `app-shell/base/guest-start`: a guest whose database engines cannot load still reaches
-  `ready` on `/sign-in` with the sign-in form.
+  `ready` on `user.sign-in` with the sign-in form.
 - `user/base/sign-up`: a new user signs up and is asked to check the mail, still on
-  `/sign-in`; the link of the sign-up's mail lands on `/me` with the notice `welcome`, the
+  `user.sign-in`; the link of the sign-up's mail lands on `user.profile` with the notice `welcome`, the
   entered name and email, and stays signed in after a reload.
 - `user/base/taken-email`: a sign-up with an email that has an account answers as a new one
   does and sends no mail; the account signs in with its own password, not the other one.
@@ -111,7 +111,7 @@ up, mails, opens a link or creates an organisation counts against these.
   a new one, whose link signs in.
 - `user/base/verified-before`: a link opened again answers `verified-before`, signs nothing in
   and leads to the sign-in page.
-- `user/base/verified-sign-in`: an account whose email is verified signs in onto `/me`.
+- `user/base/verified-sign-in`: an account whose email is verified signs in onto `user.profile`.
 - `user/base/resend-same-answer`: a resend answers alike for an email waiting for its link, an
   unknown one and a verified one, and only the first gets a mail.
 - `user/base/resend-limit`: one email takes three resends within a quarter of an hour; the
@@ -127,7 +127,7 @@ up, mails, opens a link or creates an organisation counts against these.
 - `user/flows/two-devices`: a bio written on device A reaches device B, which signs in after
   it; a name changed on B reaches A within 5 seconds.
 - `user/flows/theme-across-tabs` and `language-across-tabs`: a theme or a language chosen on
-  `/settings` in one tab shows in the account's other tab of the browser within 5 seconds of the
+  `user.settings` in one tab shows in the account's other tab of the browser within 5 seconds of the
   choice, without a reload; the theme is the account's on the next device it signs in on, and
   one chosen there reaches both tabs.
 - `app-shell/flows/theme-across-guest-tabs`: a theme a guest chooses in the frame of one tab
@@ -145,7 +145,7 @@ up, mails, opens a link or creates an organisation counts against these.
   the account's database open, and the sign-in page says the data goes once the other tabs are
   closed (`delete-pending`); the database is gone within 10 seconds of closing that tab.
 - `user/flows/one-account-per-browser`: a tab left on the sign-in page follows the account
-  another tab signs in, onto "/me" within 5 seconds, and the browser keeps one account
+  another tab signs in, onto `user.profile` within 5 seconds, and the browser keeps one account
   database.
 - `device/base/my-devices`: My devices lists the account's devices, this one marked and the
   other seen within the last minute; a device signed out from another one is on the sign-in
@@ -160,7 +160,7 @@ up, mails, opens a link or creates an organisation counts against these.
   confirmed (`passkey-removed`).
 - `user/flows/sign-in-with-code`: the right password of an account with the second factor on
   opens the code dialog and signs nothing in; cancelling it starts from the password again, a
-  wrong code answers `invalid-code`, and a code of the key signs in onto `/me`.
+  wrong code answers `invalid-code`, and a code of the key signs in onto `user.profile`.
 - `user/flows/sign-in-with-backup-code`: a backup code signs in once and answers `invalid-code`
   the second time, while the second code kept still signs in.
 - `user/flows/sign-in-with-passkey`: the sign-in page's passkey button signs the account in
@@ -184,7 +184,7 @@ up, mails, opens a link or creates an organisation counts against these.
 - `organisation/flows/invitation-elsewhere`: the link of an invitation to an email with no
   account, opened by another account, shows the organisation and the role with `other-account`
   and no buttons; opened by a guest, it asks to sign in to the invited account and links to
-  `/sign-in`.
+  `user.sign-in`.
 - `organisation/flows/invitation-replaced`: a second invitation of the same email, as an
   administrator, replaces the first: one item in the invitations sent, the first link
   `link-invalid`, the second makes B an administrator.
@@ -218,7 +218,7 @@ report (`playwright-report/`) has the rest; `--list` prints Playwright's own lis
 `src/support/fixtures.ts`: the `test` with the step
 check and its fixtures, every browser of a test claiming its worker's client address at the front
 (`extraHTTPHeaders`, `client-address.ts`),
-`signedIn` (device A, signed up through its mail on `/me`), `secondDevice` (device B, a browser context of
+`signedIn` (device A, signed up through its mail on `user.profile`), `secondDevice` (device B, a browser context of
 its own that opens and signs in with the same account when a test asks), `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
 a test asks) and `freshDevice` (device B of an account the test makes itself: a browser
@@ -227,12 +227,12 @@ devices of such an account as the test opens, each a browser context of its own)
 (waits for `app-shell.status` in `ready`, `APP_READY`), `syncSays` (waits until
 `app-shell.sync-message` carries a code, `synced` by default), `signIn`
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
-profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
+profile's sign-out button and waits for `user.sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
 the gateway answers a sign-up no sooner than 1050 ms, by when an assertion would look only every
 500 ms), `signUp` (counts the email's mails, `startSignUp`, then
 opens the link of the declared `sign-up` mail, the first after those counted, in the same page,
-which signs the account in, on `/me`: an email invited before it signs up holds the invitation
+which signs the account in, on `user.profile`: an email invited before it signs up holds the invitation
 first), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
 from a mail's link never prints its token), `pageLoads` (counts a page's full loads, for
 "without a reload"), and `notice`,
@@ -281,10 +281,10 @@ report is held to the manifest the stand serves (`settledProblems` of `@workspac
 Of the anchors a screen renders only where its flow lists them, one the state does not render
 is not visible, and one it renders is on the page and visible; a test fails at its end with
 every problem a state it passed through showed, though no line of the test asks for it.
-`src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
+`src/support/organisation.ts`: the organisation flows the tests share, from an open `organisation`
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteEmail` (an
 email with an account or without one, a role when given: the toast `invited` and the email in
-the invitations sent), `acceptOnOrg` (opens "/org" by the navigation, accepts the invitation of
+the invitations sent), `acceptOnOrg` (opens `organisation` by the navigation, accepts the invitation of
 the organisation of that name among those received, and waits for the toast
 `invitation-accepted` and the heading), `expectMembers` (the members list holds exactly these
 emails: an item shows its email beside its role select), `expectInvitationMail` and
@@ -294,11 +294,11 @@ before the invitation, held to its declaration with the values `invitationValues
 and the organisation's languages where the test knows them; the second one also opening its
 link), and the locators `memberItems`, `sentItems`, `receivedItem` and `noteItem`.
 `src/support/password-reset.ts`: the reset of a password the tests share: `askForReset` (opens
-`/forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
+`user.forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
 its send button and waits for the gateway's answer), `resetRequested` (its message),
 `openResetMail` (opens the link of the reset mail, held to its declaration) and
-`enterNewPassword` (types the new password twice on `/reset-password` and submits it).
-`src/support/email-change.ts`: the change of an email from `/settings`: `askToChangeEmail`
+`enterNewPassword` (types the new password twice on `user.reset-password` and submits it).
+`src/support/email-change.ts`: the change of an email from `user.settings`: `askToChangeEmail`
 (sends the confirmation and waits for its message), `emailChangeRequested` (that message) and
 `openChangeEmailMail` (opens the link of the mail to the new email, held to its declaration).
 `src/support/totp.ts`: the codes of an authenticator app for the key the settings show, by Better
@@ -316,18 +316,18 @@ page's browser context closes.
 `src/support/second-factor.ts`: the second factor the tests share: `turnSecondFactorOn` (from the
 settings with the factor off: password, key, code of the key, confirmation; answers the key and the
 ten backup codes, still shown), `expectTwoFactorRead`, `twoFactorSection`, `backupCodesShown`, and
-the sign-in page's steps written out by hand (`signIn` asserts `/me`): `submitCredentials`,
+the sign-in page's steps written out by hand (`signIn` asserts `user.profile`): `submitCredentials`,
 `codeDialog` (by its anchor alone: a test asserts the `code-required` it carries when it expects
 it, and its absence when it expects it gone) and `submitCode`.
-`src/support/account-deletion.ts`: the deletion of an account: `openSettings` (opens `/settings`
+`src/support/account-deletion.ts`: the deletion of an account: `openSettings` (opens `user.settings`
 and waits for its deletion form), `sendDeletionRequest` (types the password into the deletion
 form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends it and waits for
 `deletionRequested`, the form's message), `openDeletionMail` (opens the link of the deletion
-mail, held to its declaration), `deleteAccount` (presses the button of `/delete-account` and
+mail, held to its declaration), `deleteAccount` (presses the button of `user.delete-account` and
 confirms the frame's question, checked for its code `delete-account`) and `accountDeleted` (the
 page's message once the account is gone).
 `src/support/device-limit.ts`: an account at its limit of ten devices and a sign-in past it:
-`signInDevicesCToK` (signs the account in on nine more devices in turn, each synced on `/me`,
+`signInDevicesCToK` (signs the account in on nine more devices in turn, each synced on `user.profile`,
 the first, device C, with its sync socket routed through the test), `submitSignIn` (submits the
 sign-in form without waiting for its answer), `deviceLimitDialog` (the dialog asking whether to
 sign in past the limit, by its anchor and its code) and `expectDeviceCSignedOut` (the list of
@@ -369,7 +369,7 @@ test with its exit code and its own words, never its arguments or the password. 
 a role at its next hello, so a test reloads the operator's page after the grant.
 `src/support/console.ts`: the operator console the tests share: `signUpOperator` (signs up
 through the mail, grants the role, reloads, and waits for the navigation's console link),
-`openUsers` (opens `/console/users` through that link and waits for its search box: the console's
+`openUsers` (opens `console.users` through that link and waits for its search box: the console's
 pages load on their own after the frame), `searchAccounts`, `chooseSize`, `openAccount` (searches
 an email and follows the open link of its entry once the address carries the search, then waits
 for the card, read; answers the account's id), `expectAddress` (the path and exactly the search

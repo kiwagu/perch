@@ -23,9 +23,9 @@ export interface DeviceC {
 }
 
 /**
- * Signs `account` in on devices C to K in turn, each through the sign-in page and synced on `/me`
- * before the next, so that, with device A, the account is signed in on ten devices. Device C's
- * sync socket goes through the test from the start, so the test can take it offline.
+ * Signs `account` in on devices C to K in turn, each through the sign-in page and synced on
+ * `user.profile` before the next, so that, with device A, the account is signed in on ten devices.
+ * Device C's sync socket goes through the test from the start, so the test can take it offline.
  */
 export async function signInDevicesCToK(
   devices: FreshDevices,

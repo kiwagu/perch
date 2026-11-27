@@ -20,11 +20,11 @@ test.describe('Revoke an invitation', { tag: '@full' }, () => {
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', () =>
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', () =>
         anotherAccount.signUp())
 
     const userA =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -77,7 +77,7 @@ test.describe('Revoke an invitation', { tag: '@full' }, () => {
       )
     })
 
-    await test.step('6. On device B, open [/org]', async () => {
+    await test.step('6. On device B, open [screen:organisation]', async () => {
       const received = invitationsRead(deviceB, 'received')
 
       await deviceB.getByTestId('app-shell.nav.organisation-link').click()

@@ -29,7 +29,7 @@ test.describe('Be reminded to install the app until it is installed', { tag: '@f
   test("The reminder comes with the browser's offer, goes for three days when put off, comes back, and goes for good once the app is installed", async ({
     page,
   }) => {
-    await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       // Expected: After step 1 no [app-shell.install-message] shows

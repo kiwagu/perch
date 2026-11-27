@@ -27,7 +27,7 @@ test.describe('Open a reset link after the email changed', { tag: '@full' }, () 
     })
 
     const deviceB =
-      await test.step('2. On device B, open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
+      await test.step('2. On device B, open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
         const b = await freshDevice.open()
 
         await askForReset(b, data.email)
@@ -38,7 +38,7 @@ test.describe('Open a reset link after the email changed', { tag: '@full' }, () 
         return b
       })
 
-    await test.step('3. On device A, open [/settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]', async () => {
+    await test.step('3. On device A, open [screen:user.settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]', async () => {
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await askToChangeEmail(page, data.newEmail, data.password)

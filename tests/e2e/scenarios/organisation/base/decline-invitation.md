@@ -10,16 +10,16 @@ data:
 ---
 # Decline an invitation on the organisation page
 
-Where: [/org] on device A (user A, admin) and [/org] on device B (user B, another browser)
+Where: [screen:organisation] on device A (user A, admin) and [screen:organisation] on device B (user B, another browser)
 
 ## Scenario: The invited account declines on its organisation page; the invitation leaves its list and the admin's, and its link no longer works
 
 ### Steps
-1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
-2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]
+2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]
-4. On device B, open [/org] and click [organisation.received.decline-button] on the organisation's [organisation.received.item]
-5. On device A, reload [/org]
+4. On device B, open [screen:organisation] and click [organisation.received.decline-button] on the organisation's [organisation.received.item]
+5. On device A, reload [screen:organisation]
 6. On device B, open the link of [mail:organisations.invite]
 
 ### Expected result

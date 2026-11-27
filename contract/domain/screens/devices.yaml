@@ -103,7 +103,7 @@ flow:
           actions:
             - show: app-shell.notice-message
     signed-out:
-      description: The app has moved to /sign-in.
+      description: The app has moved to user.sign-in.
       type: final
 wireframe: |-
   - heading "My devices" [level=1]

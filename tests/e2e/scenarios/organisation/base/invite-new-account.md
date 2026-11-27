@@ -13,16 +13,16 @@ data:
 ---
 # Invite an email that has no account yet
 
-Where: [/org] on device A (user A, admin, in Spanish) and [/sign-in], then [/org], on device B (another browser)
+Where: [screen:organisation] on device A (user A, admin, in Spanish) and [screen:user.sign-in], then [screen:organisation], on device B (another browser)
 
 ## Scenario: An invitation to an email with no account is mailed in English, as its organisation sets no language, and waits; the account later made with that email finds it on the organisation page and joins
 
 ### Steps
-1. On device A, open [/sign-in], choose [value:es] in [app-shell.locale-select], sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device A, open [screen:user.sign-in], choose [value:es] in [app-shell.locale-select], sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 2. On device A, enter the invited email into [organisation.invite.email-input] and click [organisation.invite.submit-button]
-3. On device B, sign up with the invited email, the password and the name, open the link of [mail:sign-up] and open [/org]
+3. On device B, sign up with the invited email, the password and the name, open the link of [mail:sign-up] and open [screen:organisation]
 4. On device B, click [organisation.received.accept-button] on the organisation's [organisation.received.item]
-5. On device A, reload [/org]
+5. On device A, reload [screen:organisation]
 
 ### Expected result
 - After step 2 [app-shell.toast] carries [code:invited] on device A, [organisation.invite.email-input] is empty, [organisation.invite.role-select] shows [value:member], and [organisation.sent.list] holds one [organisation.sent.item], whose [organisation.sent.email-cell] shows the invited email and whose [organisation.sent.role-badge] carries [value:member]

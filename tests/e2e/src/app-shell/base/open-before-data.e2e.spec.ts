@@ -11,7 +11,7 @@ test.describe('See the frame and the screen before the data opens', { tag: '@smo
     page,
   }) => {
     const account =
-      await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
+      await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]', async () => {
         const signedUp = await signUp(page)
 
         await appReady(page)
@@ -25,7 +25,7 @@ test.describe('See the frame and the screen before the data opens', { tag: '@smo
 
     await test.step('3. Reload the page', async () => {
       await page.reload({ waitUntil: 'commit' })
-      // Expected: After step 3 [app-shell.status] reaches [state:opening-data] on [/me]:
+      // Expected: After step 3 [app-shell.status] reaches [state:opening-data] on [screen:user.profile]:
       //   [app-shell.nav] shows [app-shell.nav.profile-link], [app-shell.nav.organisation-link],
       //   [app-shell.nav.devices-link] and [app-shell.nav.settings-link], and
       //   [user.profile.status] is in [state:loading]

@@ -33,15 +33,15 @@ test.describe('Sign in past the number of devices an account may be signed in on
 
     const data = { ...generate.account(), name: generate.name() }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
     })
 
     const deviceC =
-      await test.step('2. On devices C to K in turn, sign in with the same account and wait for [app-shell.sync-message] to carry [code:synced] on [/me], so the account is signed in on ten devices', async () =>
+      await test.step('2. On devices C to K in turn, sign in with the same account and wait for [app-shell.sync-message] to carry [code:synced] on [screen:user.profile], so the account is signed in on ten devices', async () =>
         signInDevicesCToK(freshDevices, data))
 
-    await test.step('3. On device A, reload [/me] and wait for [app-shell.sync-message] to carry [code:synced]', async () => {
+    await test.step('3. On device A, reload [screen:user.profile] and wait for [app-shell.sync-message] to carry [code:synced]', async () => {
       // Device A is seen again at its hello, before its welcome, so once it is synced device C is
       // the device seen least recently.
       await page.reload()
@@ -56,10 +56,10 @@ test.describe('Sign in past the number of devices an account may be signed in on
 
     const deviceB = await freshDevices.open()
 
-    await test.step('5. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
+    await test.step('5. On device B, open [screen:user.sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
       await submitSignIn(deviceB, data)
       // Expected: After step 5 [user.sign-in.device-limit-dialog] carries [code:device-limit],
-      //   and device B is still on [/sign-in]: nothing is signed in yet
+      //   and device B is still on [screen:user.sign-in]: nothing is signed in yet
       await expect(deviceLimitDialog(deviceB)).toBeVisible()
       await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'])
     })
@@ -67,7 +67,7 @@ test.describe('Sign in past the number of devices an account may be signed in on
     await test.step('6. Click [user.sign-in.device-limit-dialog.cancel-button]', async () => {
       await deviceB.getByTestId('user.sign-in.device-limit-dialog.cancel-button').click()
       // Expected: After step 6 [user.sign-in.device-limit-dialog] is gone and device B is still
-      //   on [/sign-in]
+      //   on [screen:user.sign-in]
       await expect(deviceB.getByTestId('user.sign-in.device-limit-dialog')).toHaveCount(0)
       await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'])
     })
@@ -81,11 +81,11 @@ test.describe('Sign in past the number of devices an account may be signed in on
 
     await test.step('8. Click [user.sign-in.device-limit-dialog.confirm-button]', async () => {
       await deviceB.getByTestId('user.sign-in.device-limit-dialog.confirm-button').click()
-      // Expected: After step 8 device B is on [/me]
+      // Expected: After step 8 device B is on [screen:user.profile]
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
-    await test.step('9. On device B, open [/devices]', async () => {
+    await test.step('9. On device B, open [screen:device]', async () => {
       await deviceB.getByTestId('app-shell.nav.devices-link').click()
       await expectPathname(deviceB, CONTRACT_ROUTES.device)
       // Expected: After step 9 [device.list] holds eleven [device.list.session-item]: device B's
@@ -96,7 +96,7 @@ test.describe('Sign in past the number of devices an account may be signed in on
 
     await test.step("10. Bring device C's browser back online", async () => {
       await deviceC.network.goOnline()
-      // Expected: After step 10 device C is on [/sign-in] once it connects again, where
+      // Expected: After step 10 device C is on [screen:user.sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:device-limit-elsewhere]
       await expectPathname(deviceC.page, CONTRACT_ROUTES['user.sign-in'], BACK_ONLINE_MS)
       await expect(signInNotice(deviceC.page, 'device-limit-elsewhere')).toBeVisible()

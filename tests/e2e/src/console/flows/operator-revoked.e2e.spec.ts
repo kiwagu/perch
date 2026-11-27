@@ -29,7 +29,7 @@ test.describe('Take the operator role away while the console is open', { tag: '@
       name: generate.name(),
     }
 
-    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
+    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [screen:user.profile]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
       await signUpOperator(page, {
         ...generate.account(),
         email: data.operatorEmail,
@@ -39,7 +39,7 @@ test.describe('Take the operator role away while the console is open', { tag: '@
     })
 
     const deviceB =
-      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await freshDevice.open()
 
         await signUp(b, {
@@ -57,7 +57,7 @@ test.describe('Take the operator role away while the console is open', { tag: '@
       })
 
     const id =
-      await test.step("3. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
+      await test.step("3. On device A, open [screen:console.users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
         await openUsers(page)
 
         const opened = await openAccount(page, data.email)
@@ -80,10 +80,10 @@ test.describe('Take the operator role away while the console is open', { tag: '@
     await test.step('5. On device A, click [console.account.sessions.revoke-button] and confirm with [app-shell.confirmation.confirm-button]', async () => {
       await page.getByTestId('console.account.sessions.revoke-button').click()
       await page.getByTestId('app-shell.confirmation.confirm-button').click()
-      // Expected: After step 5 the address is still [/console/account] with its search on device
+      // Expected: After step 5 the address is still [screen:console.account] with its search on device
       //   A, [not-found.page.heading] shows in place of the card, no [console.account.section]
       //   shows, [app-shell.nav] shows no [app-shell.nav.console-link], and device B stays on
-      //   [/me], signed in
+      //   [screen:user.profile], signed in
       await expect(page.getByTestId('not-found.page.heading')).toBeVisible()
       await expect(page.getByTestId('console.account.section')).toHaveCount(0)
       await expectAddress(page, CONTRACT_ROUTES['console.account'], { id })

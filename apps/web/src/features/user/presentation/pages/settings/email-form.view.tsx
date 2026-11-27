@@ -109,7 +109,6 @@ export function EmailFormView(props: EmailFormViewProps) {
                 value={props.values.email}
                 onChange={(event) => props.onChange({ ...props.values, email: event.target.value })}
                 autoComplete="email"
-                required
                 aria-invalid={concerns === 'email' ? true : undefined}
                 aria-describedby={concerns === 'email' ? ids.error : undefined}
                 data-testid="user.settings.email.email-input"
@@ -125,7 +124,6 @@ export function EmailFormView(props: EmailFormViewProps) {
                   props.onChange({ ...props.values, password: event.target.value })
                 }
                 autoComplete="current-password"
-                required
                 aria-invalid={concerns === 'password' ? true : undefined}
                 aria-describedby={concerns === 'password' ? ids.error : undefined}
                 showLabel={t('user.password.show')}

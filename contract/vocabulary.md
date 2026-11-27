@@ -307,20 +307,20 @@ screen name of its own.
 | Screen | Meaning |
 |---|---|
 | `app-shell` | the frame around every screen, with the navigation, the language, the status and the notices |
-| `user.sign-in` | the page that signs an account in or creates one (`/sign-in`) |
-| `user.verify-email` | the page the link of a verification mail opens, which verifies the email and signs the account in (`/verify-email`) |
-| `user.forgot-password` | the page that asks for a mail whose link sets a new password (`/forgot-password`) |
-| `user.reset-password` | the page the link of a password reset mail opens, which sets a new password (`/reset-password`) |
-| `user.confirm-email` | the page the link of an email confirmation mail opens, which changes the account's email (`/confirm-email`) |
-| `user.profile` | the signed-in account's own profile (`/me`) |
-| `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an admin (`/org`) |
-| `device` | the devices of the signed-in account (`/devices`) |
-| `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | where the signed-in account sets how it looks and speaks, guards and changes how it signs in, and asks to be deleted (`/settings`) |
-| `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press (`/delete-account`) |
-| `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it (`/invitation`) |
-| `console.users` | the accounts of the platform, for an operator: a page at a time, found by a part of their name or email (`/console/users`) |
-| `console.account` | one account of the platform, for an operator: what it is, its organisations, and the actions on it (`/console/account`) |
+| `user.sign-in` | the page that signs an account in or creates one |
+| `user.verify-email` | the page the link of a verification mail opens, which verifies the email and signs the account in |
+| `user.forgot-password` | the page that asks for a mail whose link sets a new password |
+| `user.reset-password` | the page the link of a password reset mail opens, which sets a new password |
+| `user.confirm-email` | the page the link of an email confirmation mail opens, which changes the account's email |
+| `user.profile` | the signed-in account's own profile |
+| `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an admin |
+| `device` | the devices of the signed-in account |
+| `not-found` | what an address no other route takes opens |
+| `user.settings` | where the signed-in account sets how it looks and speaks, guards and changes how it signs in, and asks to be deleted |
+| `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press |
+| `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it |
+| `console.users` | the accounts of the platform, for an operator: a page at a time, found by a part of their name or email |
+| `console.account` | one account of the platform, for an operator: what it is, its organisations, and the actions on it |
 
 ## Reserved anchors
 
@@ -333,11 +333,11 @@ included.
 | `app-shell.status` | the readiness line of the app, which carries `data-state` from "App states" and renders no derived anchor |
 | `app-shell.notice-message` | the latest notice for the user, one at a time, which carries `data-code` and renders no derived anchor |
 | `app-shell.nav` | the main navigation, whose links are the five anchors below, declared on their own and not derived |
-| `app-shell.nav.profile-link` | the link to `/me`, which renders no derived anchor |
-| `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
-| `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
-| `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
-| `app-shell.nav.console-link` | the link to `/console/users`, shown to an operator alone, which renders no derived anchor |
+| `app-shell.nav.profile-link` | the link to `user.profile`, which renders no derived anchor |
+| `app-shell.nav.organisation-link` | the link to `organisation`, which renders no derived anchor |
+| `app-shell.nav.devices-link` | the link to `device`, which renders no derived anchor |
+| `app-shell.nav.settings-link` | the link to `user.settings`, which renders no derived anchor |
+| `app-shell.nav.console-link` | the link to `console.users`, shown to an operator alone, which renders no derived anchor |
 | `app-shell.theme-select` | the theme of this device for a guest, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |

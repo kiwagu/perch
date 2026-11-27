@@ -295,7 +295,7 @@ flow:
               - show: console.account.removal.error
               - read: console.account.section
     removed:
-      description: The app has moved to /console/users.
+      description: The app has moved to console.users.
       type: final
 wireframe: |-
   - link "Accounts"

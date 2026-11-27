@@ -8,13 +8,13 @@ data:
 ---
 # See the state of this device's sync in every tab
 
-Where: [/me] in two tabs of device A, after sign-up
+Where: [screen:user.profile] in two tabs of device A, after sign-up
 
 ## Scenario: Both tabs of a browser say the same state of its sync through a dropped connection, the network going and an edit made offline
 
 ### Steps
-1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]
-2. Open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]
+1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]
+2. Open [screen:user.profile] in a second tab and wait for [app-shell.status] to reach [state:ready]
 3. Drop the sync connection while the browser keeps its network, and refuse a new one for now
 4. Let the sync connect again
 5. Take the browser offline

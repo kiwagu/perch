@@ -36,7 +36,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       organisationName: generate.organisationName(),
     }
 
-    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
+    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [screen:user.profile]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
       await signUpOperator(page, {
         ...generate.account(),
         email: data.operatorEmail,
@@ -46,7 +46,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
     })
 
     const { deviceB, databaseOfB } =
-      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up], open [/org], enter the organisation key and the organisation name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up], open [screen:organisation], enter the organisation key and the organisation name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const b = await freshDevices.open()
 
         await signUp(b, {
@@ -71,7 +71,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       })
 
     const deviceC =
-      await test.step('3. On device C, sign up with the other email, the password and the other name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('3. On device C, sign up with the other email, the password and the other name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const c = await freshDevices.open()
 
         await signUp(c, {
@@ -88,12 +88,12 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       await inviteEmail(deviceB, data.otherEmail)
     })
 
-    await test.step("5. On device C, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+    await test.step("5. On device C, open [screen:organisation] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
       await acceptOnOrg(deviceC, data.organisationName)
     })
 
     const id =
-      await test.step("6. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
+      await test.step("6. On device A, open [screen:console.users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
         await openUsers(page)
 
         const opened = await openAccount(page, data.email)
@@ -122,7 +122,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       await page.getByTestId('console.account.removal.remove-button').click()
       await page.getByTestId('app-shell.confirmation.confirm-button').click()
       // Expected: After step 7 [console.account.removal.error] carries [code:last-admin] on device
-      //   A, the card stays, and device B stays on [/org]
+      //   A, the card stays, and device B stays on [screen:organisation]
       await expect(page.getByTestId('console.account.removal.error')).toHaveAttribute(
         'data-code',
         'last-admin',
@@ -139,7 +139,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       )
     })
 
-    await test.step('8. On device A, open [/console/users], enter the operator email into [console.users.search-input], click [console.users.search-button], click [console.users.list.open-link] on its own [console.users.list.account-item], click [console.account.removal.remove-button] and confirm with [app-shell.confirmation.confirm-button]', async () => {
+    await test.step('8. On device A, open [screen:console.users], enter the operator email into [console.users.search-input], click [console.users.search-button], click [console.users.list.open-link] on its own [console.users.list.account-item], click [console.account.removal.remove-button] and confirm with [app-shell.confirmation.confirm-button]', async () => {
       await openUsers(page)
       await openAccount(page, data.operatorEmail)
       await page.getByTestId('console.account.removal.remove-button').click()
@@ -156,7 +156,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       await expect(page.getByTestId('app-shell.nav')).toBeVisible()
     })
 
-    await test.step("9. On device B, reload [/org], click [organisation.members.remove-button] on the other account's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+    await test.step("9. On device B, reload [screen:organisation], click [organisation.members.remove-button] on the other account's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await deviceB.reload()
       await appReady(deviceB)
       await memberItem(deviceB, data.otherEmail)
@@ -168,7 +168,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       await expectMembers(deviceB, [data.email])
     })
 
-    await test.step("10. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button], click [console.users.list.open-link] on the account's [console.users.list.account-item], click [console.account.removal.remove-button] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+    await test.step("10. On device A, open [screen:console.users], enter the email into [console.users.search-input], click [console.users.search-button], click [console.users.list.open-link] on the account's [console.users.list.account-item], click [console.account.removal.remove-button] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await openUsers(page)
       await openAccount(page, data.email)
 
@@ -178,10 +178,10 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       await page.getByTestId('console.account.removal.remove-button').click()
       await page.getByTestId('app-shell.confirmation.confirm-button').click()
       // Expected: After step 10 [app-shell.toast] carries [code:account-removed] on device A,
-      //   whose URL is [/console/users], and [console.users.list] no longer holds the account's
-      //   [console.users.list.account-item]; within 5 seconds device B is on [/sign-in] and its
+      //   whose URL is [screen:console.users], and [console.users.list] no longer holds the account's
+      //   [console.users.list.account-item]; within 5 seconds device B is on [screen:user.sign-in] and its
       //   browser keeps no local database of the account;
-      //   [notice:accounts.remove.account-deleted] reaches the email; on device C, [/org] shows no
+      //   [notice:accounts.remove.account-deleted] reaches the email; on device C, [screen:organisation] shows no
       //   membership of the organisation, which went with the account
       await Promise.all([
         (async () => {

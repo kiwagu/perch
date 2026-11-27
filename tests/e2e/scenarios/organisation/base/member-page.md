@@ -11,16 +11,16 @@ data:
 ---
 # Open the organisation page as a member
 
-Where: [/org] on device A (user A, admin) and [/org] on device B (user B, another browser)
+Where: [screen:organisation] on device A (user A, admin) and [screen:organisation] on device B (user B, another browser)
 
 ## Scenario: An admin invites an unknown email and an account alike; the account accepts on its organisation page and sees the organisation as a member, without its members or the invitations
 
 ### Steps
-1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
-2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]
+2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 3. On device A, enter the unknown email into [organisation.invite.email-input] and click [organisation.invite.submit-button]
 4. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]
-5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]
+5. On device B, open [screen:organisation] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]
 
 ### Expected result
 - After step 3 device A shows [app-shell.toast] carrying [code:invited] and the unknown email in [organisation.sent.list], and [organisation.members.list] holds only user A's [organisation.members.item]

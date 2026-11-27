@@ -25,7 +25,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     }
     const onPhone = testInfo.project.name === 'mobile'
 
-    await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
 
@@ -53,7 +53,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 4 [user.sign-in.mail-message] carries [code:check-your-mail],
       //   [user.sign-in.resend-button] shows, no [user.sign-in.password-confirmation-input] or
-      //   [user.sign-in.name-input] shows, the URL stays [/sign-in], and [mail:sign-up] reaches the
+      //   [user.sign-in.name-input] shows, the URL stays [screen:user.sign-in], and [mail:sign-up] reaches the
       //   email (step 5 waits for it)
       await expect(checkYourMail(page)).toBeVisible()
       await expect(page.getByTestId('user.sign-in.resend-button')).toBeVisible()
@@ -63,7 +63,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     })
 
     await test.step('5. Open the link of [mail:sign-up]', async () => {
-      // The mail to the email, held to its declaration: the link opens [/verify-email] with its
+      // The mail to the email, held to its declaration: the link opens [screen:user.verify-email] with its
       // token, in the language of the sign-up.
       await openDeclaredMail(page, 'sign-up', {
         params: { email: data.email, locale: 'en' },
@@ -72,8 +72,8 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     })
 
     // Expected:
-    // - After step 5 the link opens [/verify-email], then [app-shell.notice-message] carries
-    //   [code:welcome], the URL is [/me] and [user.profile.heading] shows the entered name
+    // - After step 5 the link opens [screen:user.verify-email], then [app-shell.notice-message] carries
+    //   [code:welcome], the URL is [screen:user.profile] and [user.profile.heading] shows the entered name
     await expect(notice(page, 'welcome')).toBeVisible()
     await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)

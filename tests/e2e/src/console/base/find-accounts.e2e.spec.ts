@@ -48,7 +48,7 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
         .map((user) => user.email)
         .reverse()
 
-    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
+    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [screen:user.profile]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
       await signUpOperator(page, {
         ...generate.account(),
         email: data.operatorEmail,
@@ -68,10 +68,10 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       }
     })
 
-    await test.step('3. On device A, open [/console/users], enter the email prefix into [console.users.search-input] and click [console.users.search-button]', async () => {
+    await test.step('3. On device A, open [screen:console.users], enter the email prefix into [console.users.search-input] and click [console.users.search-button]', async () => {
       await openUsers(page)
       await searchAccounts(page, data.emailPrefix)
-      // Expected: After step 3 the URL is [/console/users] with the email prefix as its search,
+      // Expected: After step 3 the URL is [screen:console.users] with the email prefix as its search,
       //   [console.users.list] is in [state:ready] and holds eleven
       //   [console.users.list.account-item], the newest first, user 11's at the top, each with its
       //   [console.users.list.email-cell], its [console.users.list.name-cell] showing the name, no

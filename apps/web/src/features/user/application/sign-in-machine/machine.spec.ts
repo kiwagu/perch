@@ -583,7 +583,7 @@ describe('the forgot-link', () => {
     fields: { 'user.sign-in.email-input': email },
   })
 
-  it('moves to /forgot-password carrying the email typed, from the mode sign-in', () => {
+  it('moves to user.forgot-password carrying the email typed, from the mode sign-in', () => {
     const { actor, emitted } = form()
 
     actor.send(forgot('ann@example.test'))
