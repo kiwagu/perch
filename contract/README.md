@@ -176,7 +176,7 @@ The authored files, edited by hand or by a model in the modeling thread:
     sign-in:
       # description, params, changes
       result:
-        - the device is signed in, and the app moves to /me with code welcome
+        - the device is signed in, and the app moves to user.profile with code welcome
         - "with the second factor on: the answer asks for a code and signs no device in"
       codes:
         invalid-credentials: the email or the password is wrong

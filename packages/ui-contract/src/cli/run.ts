@@ -62,7 +62,7 @@
  *     prints the routes of the screen files: the table (path, screen, guard, roles, history,
  *     params, search, file), one example link per binding (each path parameter from its
  *     `examples`, every search key at its default, written as the router writes a link:
- *     `/sample/thg_01hzx9k2`, `/org?view=read&page=1`), where each route is reached from
+ *     `/sample/thg_01hzx9k2`, `/things?view=read&page=1`), where each route is reached from
  *     (links, the flows' `navigate`, the activities' states) and the tree under `__root`;
  *     or all of it as JSON.
  */
