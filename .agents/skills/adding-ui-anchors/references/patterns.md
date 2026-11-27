@@ -394,7 +394,7 @@ return setup({
         target: 'done',
         actions: [
           { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
-          { type: 'navigate', params: { to: '/me' } },
+          { type: 'navigate', params: { to: CONTRACT_ROUTES['user.profile'] } },
         ],
       },
       onError: [

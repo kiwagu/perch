@@ -35,7 +35,7 @@ const scenarioFormat: ReferenceRule = {
       '- `devices`: a letter per browser with the role it acts as by the end of the scenario; every device starts as `guest` until a step signs it in;',
       '- `data`: the test data by name, `generate` or a fixed string; `{}` when there is none.',
     ].join('\n'),
-    'Then the body, with fixed sections in any order: `# <title>`, a line `Where: <text>`, `## Scenario: <sentence>`, `### Steps` with a numbered list and `### Expected result` with a bullet list. An unknown heading, a line outside a section, a missing section or a list item of the wrong shape is a problem, with a line number where the parser knows it (a missing section has none). The whole of `tests/e2e/scenarios/user/base/edit-profile-name.md`:',
+    'Then the body, with fixed sections in any order: `# <title>`, a line `Where: <text>`, `## Scenario: <sentence>`, `### Steps` with a numbered list and `### Expected result` with a bullet list. An unknown heading, a line outside a section, a missing section or a list item of the wrong shape is a problem, with a line number where the parser knows it (a missing section has none). A whole scenario, `tests/e2e/scenarios/user/base/edit-profile-name.md` as it reads with its places named by their screens:',
     [
       '```markdown',
       '---',

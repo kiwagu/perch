@@ -96,6 +96,7 @@ describe('instructionsOf', () => {
     )
   })
   it('says a field takes typing in every state that renders it, a request running included', () => {
+    expect(instructions.screenMap).toContain('a text field that is not read-only takes typing')
     expect(instructions.screenMap).toContain(
       'a state that does not handle its typing does not judge it, and does not disable it',
     )

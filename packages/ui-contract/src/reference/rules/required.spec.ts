@@ -28,6 +28,25 @@ describe('the rule of a field that must be filled', () => {
   it('names no other rule, as the manifest carries only the rules it names itself', () => {
     expect(textOf('required-field')).not.toContain('see the rule')
   })
+  it('joins the lists of the checks and of what a rename carries', () => {
+    const texts = REFERENCE_RULES.map(({ text }) => text)
+
+    expect(
+      texts.some((text) =>
+        text.includes(
+          '`required` (`true`) is on an `input` or a `textarea` that holds input alone',
+        ),
+      ),
+    ).toBe(true)
+    expect(
+      texts.some((text) => text.includes('error fields, input, colour, filling, questions')),
+    ).toBe(true)
+  })
+  it('says a state never disables a text field that is not read-only', () => {
+    expect(textOf('renders')).toContain(
+      'a text field that is not read-only takes typing in every state that renders it',
+    )
+  })
   it('leaves required out of what the kit is said to take from the field facts', () => {
     const kit = textOf('emitted-modules').split('The kit finds')[1] ?? ''
 
