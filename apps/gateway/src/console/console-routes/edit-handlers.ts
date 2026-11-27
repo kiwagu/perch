@@ -40,7 +40,7 @@ const newEmailShape = z.email().max(CONTRACT_VALUES.email.maxLength)
  * - email (`{ email }`): the account's own change of its email, without its password: a new email
  *   that is no email (in lower case and trimmed, at most the `email` value's length) answers 400
  *   `email-invalid` before anything is taken; then one of the operator's address's mails and one of
- *   the account's three changes in a quarter of an hour are taken (`RequestLimits.emailChangeMail`,
+ *   the account's changes within their window are taken (`RequestLimits.emailChangeMail`,
  *   429 `rate-limited`); in the account's turn, the account's own email, or one another account
  *   holds, answers 409 `email-taken`, nothing changed and nothing sent; any other ends the
  *   account's pending change, keeps the new one and starts the mail to the new email with its link

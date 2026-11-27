@@ -40,7 +40,7 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [state:busy] is not a state of the vocabulary',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:c] is not a choice value of the vocabulary',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:kx] is not a choice value of the vocabulary',
-      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: not an anchor, a route, a code, a state, a value, a mail or a notice: "Save"',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: not an anchor, a screen, a route, a code, a state, a value, a mail or a notice: "Save"',
       'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:lost] is not a code of the vocabulary',
     ])
   })
@@ -206,6 +206,34 @@ describe('scenariosProblems', () => {
     ]
 
     expect(printed(contract)).toEqual([])
+  })
+  it('resolves a place named by a screen that has a binding', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).where = '[screen:sample]'
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('wants a named place to be a screen with a binding', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).where = '[screen:gone] then [screen:app-shell]'
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: where: [screen:gone] is not a screen of the contract',
+      'tests/e2e/scenarios/sample/base/thing.md:1: where: [screen:app-shell] names a screen with no binding, which no address opens',
+    ])
+  })
+  it('reads past a named place to the anchor before it', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).expected = [
+      '[sample.save-button] on [screen:sample] carries [code:devices-read-failed]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: sample.save-button never carries code devices-read-failed',
+    ])
   })
   it('reads past a route to the anchor before it', () => {
     const contract = sampleContract()

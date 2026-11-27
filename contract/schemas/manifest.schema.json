@@ -1222,6 +1222,11 @@
                   "type": "boolean",
                   "const": true
                 },
+                "required": {
+                  "description": "An `input` or a `textarea` that holds input and must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent. See the rule `required-field`.",
+                  "type": "boolean",
+                  "const": true
+                },
                 "with": {
                   "minItems": 1,
                   "type": "array",
@@ -7062,6 +7067,11 @@
             "type": "boolean",
             "const": true
           },
+          "required": {
+            "description": "The field must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent and the flow shows no new code. See the rule `required-field`.",
+            "type": "boolean",
+            "const": true
+          },
           "value": {
             "description": "On an `input` or a `textarea`, the value the field takes, derived: the loosest of the values of its model binding and of the action parameters that take it. See the rule `declared-values`.",
             "type": "object",
@@ -7478,9 +7488,21 @@
                     "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`."
                   },
                   "language": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`."
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-zA-Z0-9]*$"
+                      },
+                      {
+                        "minItems": 2,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]*$"
+                        }
+                      }
+                    ],
+                    "description": "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient` (never last), or a list of them, the first that has one speaking. See the rule `mail-recipients`."
                   },
                   "link": {
                     "type": "object",
@@ -7572,7 +7594,7 @@
           "description": "The platform actions by name: `platform.<name>` in a binding."
         },
         "invariants": {
-          "description": "The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.",
+          "description": "The invariants by name, each once: its rule with its values written in, the code it refuses with, its values and the actions it limits, derived. See the rule `action-outcomes`.",
           "type": "object",
           "propertyNames": {
             "type": "string",
@@ -7584,12 +7606,80 @@
               "rule": {
                 "type": "string",
                 "minLength": 1,
-                "description": "The rule, said once for every action that names it under the code it refuses with. At most 200 characters."
+                "description": "Derived: the rule as written, each `{name}` of its values written in. See the rule `action-outcomes`."
               },
               "refuses": {
                 "type": "string",
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                 "description": "The code an action refuses with when the rule would break: each action names the invariant under it."
+              },
+              "values": {
+                "description": "The numbers the rule states, by camelCase name: a count or a duration; the rule writes each as `{name}`. See the rule `action-outcomes`.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "A count: a limit, how many."
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "seconds": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "The duration in seconds."
+                            }
+                          },
+                          "required": [
+                            "seconds"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "minutes": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "The duration in minutes."
+                            }
+                          },
+                          "required": [
+                            "minutes"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "hours": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "The duration in hours."
+                            }
+                          },
+                          "required": [
+                            "hours"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "A duration in one unit: `{ minutes: 15 }`."
+                    }
+                  ]
+                }
               },
               "actions": {
                 "type": "array",

@@ -300,17 +300,6 @@ describe('a sign-in whose account asks for a code', () => {
     expect(session.current()?.email).toBe(ann.email)
   })
 
-  it('answers the limit of devices as the outcome the form asks about', async () => {
-    const limited: SignInSession = {
-      ...recordingSession().port,
-      signIn: () => okAsync<SignInResult, DataError>({ kind: 'device-limit' }),
-    }
-
-    expect((await new SignInService(limited).signIn(ann, false))._unsafeUnwrap()).toEqual({
-      kind: 'device-limit',
-    })
-  })
-
   it('asks the code, takes it and says the welcome in the form, signing the account in', async () => {
     await annWithSecondFactor()
 

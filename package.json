@@ -46,7 +46,7 @@
     "refactor:ci": "bun run scripts/find-refactor-candidates.ts --ci",
     "refactor:baseline": "bun run scripts/find-refactor-candidates.ts --update-baseline",
     "readme:check": "bun run scripts/check-readmes.ts",
-    "lint:surql": "bun run packages/modeling/src/lint-surql.ts"
+    "lint:surql": "bun run packages/modeling/src/lint-surql.ts --allow-role identity.role=user"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

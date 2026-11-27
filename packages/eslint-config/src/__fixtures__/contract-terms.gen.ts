@@ -17,3 +17,14 @@ export const CONTRACT_ROUTES = {
   "user.profile": "/me",
   "user.settings": "/settings"
 } as const
+
+/** Every invariant that states numbers, by its name: each count by its name, each duration in milliseconds under its name with `Ms`. */
+export const CONTRACT_INVARIANTS = {
+  "device-limit": {
+    "limit": 10
+  },
+  "failed-sign-ins": {
+    "limit": 10,
+    "windowMs": 900000
+  }
+} as const

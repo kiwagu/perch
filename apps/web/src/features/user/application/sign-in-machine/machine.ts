@@ -5,6 +5,7 @@ import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { failureOf, settled } from '../../../../platform/actor-outcome'
 import type { SignInForm, SignInService } from '../sign-in.service'
 
+import { consentOf } from './consent'
 import {
   CHECK_YOUR_MAIL,
   CODE_ERROR,
@@ -165,7 +166,7 @@ export function createSignInMachine(
             outcome?.kind === 'code-required'
               ? { challenge: outcome.challenge, email: outcome.email }
               : undefined,
-          consentFor: outcome?.kind === 'device-limit' ? outcome.consentFor : undefined,
+          consentFor: consentOf(event),
         }
       }),
       forgetSteps: assign({ step: undefined, consentFor: undefined }),
@@ -209,10 +210,12 @@ export function createSignInMachine(
           input: signInInput,
           onDone: [
             { target: 'code', guard: 'codeRequired', actions: ['keepOutcome', askCode] },
-            { target: 'device-limit', guard: 'atDeviceLimit', actions: [askPastTheLimit] },
             { target: 'done', actions: welcomed },
           ],
-          onError: refusedSignIn,
+          onError: [
+            { target: 'device-limit', guard: 'atDeviceLimit', actions: [askPastTheLimit] },
+            ...refusedSignIn,
+          ],
         },
       },
       ...DEVICE_LIMIT_STATES,

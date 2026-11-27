@@ -4,23 +4,30 @@ import { createActor, toPromise } from 'xstate'
 
 import { signInActors } from './sign-in-actors'
 
+/** What every stubbed step of signing in answers: a code asked, which no actor reads. */
+const ASKED = {
+  kind: 'code-required',
+  challenge: 'challenge-1',
+  email: 'ann@example.test',
+} as const
+
 describe('the actors that sign in', () => {
   const asked: unknown[] = []
   const actors = signInActors({
     signIn: (form, signOutOldest) => {
       asked.push({ form, signOutOldest })
 
-      return okAsync({ kind: 'device-limit' })
+      return okAsync(ASKED)
     },
     confirmSignIn: (step, code, signOutOldest) => {
       asked.push({ step, code, signOutOldest })
 
-      return okAsync({ kind: 'device-limit' })
+      return okAsync(ASKED)
     },
     signInWithPasskey: (signOutOldestFor) => {
       asked.push({ signOutOldestFor })
 
-      return okAsync({ kind: 'device-limit' })
+      return okAsync(ASKED)
     },
   })
 

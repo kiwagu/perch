@@ -32,7 +32,7 @@ const anchorGrammar: ReferenceRule = {
       '<h1 data-testid="user.profile.heading">{profile.name}</h1>  // the attribute',
       '<ConfirmDialog testId="user.profile.sign-out-dialog" />      // a testId prop',
       '<AppShell navigationTestId="app-shell.nav" />                // a prop named <part>TestId',
-      "{ to: '/me', testId: 'app-shell.nav.profile-link' }          // a static testId key",
+      "{ to: CONTRACT_ROUTES['user.profile'], testId: 'app-shell.nav.profile-link' } // a static testId key",
       "const NOTES_ITEM_TEST_ID = 'organisation.notes.item'         // a <NAME>_TEST_ID constant",
       '```',
     ].join('\n'),
@@ -72,6 +72,15 @@ const secretField: ReferenceRule = {
     "`secret: true` on a field: A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field (see the rule `flow-effects`). Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.",
   ].join('\n\n'),
   keys: ['screen.anchors.<name>.secret', 'manifest.screens.anchors.<name>.secret'],
+}
+
+const requiredField: ReferenceRule = {
+  id: 'required-field',
+  title: 'A field that must be filled',
+  text: [
+    "`required: true` on an `input` or a `textarea` that holds input: the field must be filled before its form's press is taken. The emitted field facts carry it (`FIELD_FACTS`), and the field's element carries `required`. In a form the browser validates (no `noValidate`), a press of the form's submit while the field is empty is stopped by the browser, which says so on the field: the press sends no event to the flow and nothing is sent, so no transition of the state on that press runs and the flow shows no new code (what the page already showed stays), whatever such a transition would do with an empty value (an empty confirmation never shows `passwords-differ`; an empty password never reaches the platform's `invalid-credentials`). A button that runs the form's action without submitting it (`type=\"button\"`) asks the browser to check the form first (`reportValidity`) and sends its event only when the check passes, so it is stopped the same way. What passes the browser, a text of spaces, reaches the flow and the action as any value does. A field without the mark is not said to be optional: a view may still write `required` on it, and then the browser stops the press the same way.",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.required', 'manifest.screens.anchors.<name>.required'],
 }
 
 const attributes: ReferenceRule = {
@@ -165,7 +174,7 @@ const anchorBinding: ReferenceRule = {
     "`{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section.",
     "Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter.",
     '`{ route: /path }`: the path of a binding of some screen.',
-    "`{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL.",
+    "`{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into the address of `user.forgot-password` (`?email=...`) fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL.",
     'A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which.',
     '`contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.',
   ].join('\n\n'),
@@ -193,6 +202,7 @@ export const ANCHOR_RULES: readonly ReferenceRule[] = [
   derivedParts,
   visibilityButton,
   secretField,
+  requiredField,
   attributes,
   anchorBinding,
   entriesOfAList,

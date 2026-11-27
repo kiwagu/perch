@@ -24,11 +24,19 @@ import { kebabNameSchema, screenNameSchema } from '../../names.schema'
 export const ACCOUNT = 'account'
 
 /**
- * The account a mail goes to, as the source of its language: the account whose email the mail's
- * `to` names, and the signed-in account when no account has that email. A mail's language alone,
- * never a notice's, and a reserved word on an action that sends a mail (`check/mails.ts`).
+ * The account a mail goes to, as a source of its language: the account whose email the mail's
+ * `to` names, when an account has that email. In a list of sources the next one speaks when none
+ * has it, so it is never the last source of a mail's language. A mail's language alone, never a
+ * notice's, and a reserved word on an action that sends a mail (`check/mails.ts`).
  */
 export const RECIPIENT = 'recipient'
+
+/**
+ * The organisation the action runs in, as a source of a mail's language: its default language
+ * when its settings name one, else the app's built-in one, so it always has a language. A mail's
+ * language alone, and a reserved word on an action that sends a mail (`check/mails.ts`).
+ */
+export const ORGANISATION = 'organisation'
 
 const nameSchema = z.string().regex(/^[a-z][a-zA-Z0-9]*$/)
 
@@ -41,9 +49,19 @@ export const platformMailSchema = z
     to: nameSchema.describe(
       'The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`.',
     ),
-    language: nameSchema.describe(
-      "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`.",
-    ),
+    language: z
+      .union([
+        nameSchema,
+        z
+          .array(nameSchema)
+          .min(2)
+          .refine((sources) => new Set(sources).size === sources.length, {
+            message: 'a source is named once',
+          }),
+      ])
+      .describe(
+        "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient` (never last), or a list of them, the first that has one speaking. See the rule `mail-recipients`.",
+      ),
     link: z
       .strictObject({
         screen: screenNameSchema.describe('The screen the link opens, at the path of its route.'),
@@ -56,6 +74,10 @@ export const platformMailSchema = z
   .describe('The mail the action sends.')
 
 export type PlatformMail = z.infer<typeof platformMailSchema>
+
+/** The sources of a mail's language, in order: a source written alone is a list of one. */
+export const languageSources = (language: PlatformMail['language']): readonly string[] =>
+  typeof language === 'string' ? [language] : language
 
 export const platformNoticeSchema = z
   .strictObject({

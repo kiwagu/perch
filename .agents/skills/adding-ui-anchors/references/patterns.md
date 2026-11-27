@@ -89,7 +89,7 @@ which `NavigationLinks` (`shell-view/navigation-links.view.tsx`) renders with
 `data-testid={item.testId}`:
 
 ```tsx
-{ to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
+{ to: CONTRACT_ROUTES['user.profile'], label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
 ```
 
 ## 4. One component, a different anchor at each use
@@ -394,7 +394,7 @@ return setup({
         target: 'done',
         actions: [
           { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
-          { type: 'navigate', params: { to: '/me' } },
+          { type: 'navigate', params: { to: CONTRACT_ROUTES['user.profile'] } },
         ],
       },
       onError: [

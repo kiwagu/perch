@@ -381,6 +381,21 @@ describe('the visibility-button of a password input', () => {
   })
 })
 
+describe('a field that must be filled', () => {
+  it('carries required on the field that writes it alone', () => {
+    const base = fixtureContract()
+
+    Object.assign(base.screens.screens[0]?.anchors['sample.title-input'] ?? {}, { required: true })
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.title-input']?.required).toBe(true)
+    expect(built.ids['sample.save-button']).not.toHaveProperty('required')
+    expect(built.contract.instructions.screenMap).toContain('`required: true`')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})
+
 describe('the notices of a platform action', () => {
   it('carries each notice an action declares, and tells an agent how to read one', () => {
     const base = fixtureContract()
@@ -493,6 +508,39 @@ describe('the value a field takes', () => {
     })
     expect(built.platform.actions['report']?.codes).toEqual(codes)
     expect(base.screens.platform.invariants['device-limit']).not.toHaveProperty('actions')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it("carries an invariant's rule with its values written in, the values beside it", () => {
+    const base = fixtureContract()
+
+    base.screens.platform.invariants = {
+      'device-limit': {
+        rule: '{limit} devices at most, each kept {window}.',
+        refuses: 'device-limit',
+        values: { limit: 10, window: { hours: 1 } },
+      },
+    }
+    base.screens.platform.actions['report'] = {
+      description: 'Reports a thing.',
+      params: {},
+      result: 'the report is in',
+      codes: { 'device-limit': { invariant: 'device-limit' } },
+      changes: [],
+    }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.platform.invariants).toEqual({
+      'device-limit': {
+        rule: '10 devices at most, each kept 1 hour.',
+        refuses: 'device-limit',
+        values: { limit: 10, window: { hours: 1 } },
+        actions: ['report'],
+      },
+    })
+    expect(base.screens.platform.invariants['device-limit']?.rule).toBe(
+      '{limit} devices at most, each kept {window}.',
+    )
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
   it('gives no value to a select, which is no text field', () => {

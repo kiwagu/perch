@@ -166,6 +166,7 @@ describe('diffContracts', () => {
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       stateColours: { added: [], removed: [] },
+      requiredFields: { added: [], removed: [] },
       questions: { added: [], removed: [] },
       leaveQuestions: { added: [], removed: [] },
       ranks: { added: [], removed: [] },
@@ -284,6 +285,28 @@ describe('diffContracts', () => {
     expect(diffContracts(quiet, after).stateColours).toEqual({
       added: [],
       removed: ['sample.title-input shows no state colour'],
+    })
+  })
+  it('lists the fields that start or stop having to be filled', () => {
+    const filled = structuredClone(after)
+
+    Object.assign(filled.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      required: true,
+    })
+
+    const changes = diffContracts(after, filled)
+
+    expect(changes.requiredFields).toEqual({
+      added: ['sample.title-input must be filled'],
+      removed: [],
+    })
+    expect(formatChanges(changes).split('\n')).toEqual([
+      'contract changes: 1 field that must be filled added',
+      'fields that must be filled added: sample.title-input must be filled',
+    ])
+    expect(diffContracts(filled, after).requiredFields).toEqual({
+      added: [],
+      removed: ['sample.title-input must be filled'],
     })
   })
   it('lists the derived parts the anchors both contracts hold start or stop rendering', () => {
@@ -1346,6 +1369,36 @@ describe('diffContracts and the invariants', () => {
       gone: { added: [], removed: ['refuses failed', 'rule: Old rule.'] },
       limit: {
         added: ['rule: Five devices at most at once.'],
+        removed: ['rule: Ten devices at most at once.'],
+      },
+    })
+  })
+  it('lists the rule with its values written in and each value, so a changed value shows', () => {
+    const stated = (limit: number) => ({
+      rule: '{limit} devices at most, each kept {window}.',
+      refuses: 'device-limit',
+      values: { limit, window: { hours: 1 } },
+    })
+
+    expect(
+      diffContracts(withInvariants({ limit: stated(10) }), withInvariants({ limit: stated(12) }))
+        .invariantLines,
+    ).toEqual({
+      limit: {
+        added: ['rule: 12 devices at most, each kept 1 hour.', 'value limit: 12'],
+        removed: ['rule: 10 devices at most, each kept 1 hour.', 'value limit: 10'],
+      },
+    })
+    expect(
+      diffContracts(withInvariants({ limit: LIMIT }), withInvariants({ limit: stated(10) }))
+        .invariantLines,
+    ).toEqual({
+      limit: {
+        added: [
+          'rule: 10 devices at most, each kept 1 hour.',
+          'value limit: 10',
+          'value window: 1 hour',
+        ],
         removed: ['rule: Ten devices at most at once.'],
       },
     })

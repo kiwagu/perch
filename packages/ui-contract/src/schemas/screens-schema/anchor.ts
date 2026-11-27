@@ -192,6 +192,12 @@ export const anchorDefSchema = z
       .describe(
         "A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.",
       ),
+    required: z
+      .literal(true)
+      .optional()
+      .describe(
+        'An `input` or a `textarea` that holds input and must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent. See the rule `required-field`.',
+      ),
     with: withSchema.optional(),
     without: withoutSchema.optional(),
     codes: z

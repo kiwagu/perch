@@ -37,7 +37,7 @@ export const CONSUMER_ROOT = 'tests/e2e/src'
 export const RUNTIME_TEST_ANCHOR = `an anchor built at runtime; write it as a literal, getByTestId('<anchor>') or [data-testid="<anchor>"]`
 
 export interface ConsumedLiteral {
-  readonly kind: Exclude<Reference['kind'], 'route'>
+  readonly kind: Exclude<Reference['kind'], 'route' | 'screen'>
   readonly value: string
   readonly line: number
   /** The anchor a code, a state or a value is asserted on, when the test says which. */

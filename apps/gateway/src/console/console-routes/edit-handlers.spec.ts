@@ -9,6 +9,7 @@ import {
   signedInOn,
   turnsAsked,
 } from '../../auth/auth-handler/__fixtures__/mount'
+import { IDENTITY_EMAIL_CHANGES } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import {
   type ConsoleMount,
@@ -26,8 +27,6 @@ const CAT = 'cat@example.test'
 
 /** The new email an operator gives bob's account. */
 const NEW_EMAIL = 'robert@elsewhere.test'
-
-const MINUTE_MS = 60 * 1000
 
 /** The most characters a name and an email have, as the contract says it. */
 const { maxLength: MAX_NAME } = CONTRACT_VALUES['profile.name']
@@ -226,10 +225,10 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
         retryAfter: null,
       })
       expect(mounted.outbox.sent).toHaveLength(sent)
-      // The account's three changes in a quarter of an hour are all still there.
-      expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
-      expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
-      expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
+      // The account's changes within the window are all still there.
+      for (let n = 0; n < IDENTITY_EMAIL_CHANGES.limit; n += 1) {
+        expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
+      }
     },
   )
 
@@ -269,11 +268,11 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
     },
   )
 
-  it('takes three changes of the account within a quarter of an hour; the fourth answers 429 rate-limited and mails nothing', async () => {
+  it('takes the changes of the account the contract allows within its window; the next answers 429 rate-limited and mails nothing', async () => {
     const mounted = await consoleOnMount()
     const bob = await signedInOn(mounted, BOB, ['desk'])
 
-    for (let n = 0; n < 3; n += 1) {
+    for (let n = 0; n < IDENTITY_EMAIL_CHANGES.limit; n += 1) {
       expect(
         (await mounted.act(bob.identity, 'email', { email: `n${n}@example.test` })).status,
       ).toBe(204)
@@ -288,10 +287,14 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
       ELSEWHERE,
     )
 
-    expect(limited).toEqual({ status: 429, body: { code: 'rate-limited' }, retryAfter: '900' })
+    expect(limited).toEqual({
+      status: 429,
+      body: { code: 'rate-limited' },
+      retryAfter: String(IDENTITY_EMAIL_CHANGES.windowMs / 1000),
+    })
     expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
 
-    await mounted.clock.advance(15 * MINUTE_MS)
+    await mounted.clock.advance(IDENTITY_EMAIL_CHANGES.windowMs)
 
     expect((await mounted.act(bob.identity, 'email', { email: NEW_EMAIL })).status).toBe(204)
   })

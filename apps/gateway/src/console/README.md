@@ -66,7 +66,7 @@ never wait on each other in a circle.
   answers 409 `failed` (the card offers no rename then, so only a race meets it).
 - A change of the email (`edit-handlers.ts`) is the account's own change of its email without its
   password (`auth/README.md`): one of the operator's address's mails and one of the account's
-  three changes in a quarter of an hour; in the account's turn, an email another account holds,
+  changes within their window (`IDENTITY_EMAIL_CHANGES`); in the account's turn, an email another account holds,
   or the account's own, answers 409 `email-taken`, nothing changed and nothing sent; any other
   ends the account's pending change, its own or an operator's, keeps the new one and mails its
   link to the new email. The link's confirmation, in the auth mount, moves the email, marks it
@@ -132,8 +132,8 @@ its allowance 429 `rate-limited` with `Retry-After`; a failure of the gateway an
   - `POST /console/accounts/:id/email` with `{ email }`: 204 once the mail with the change's link is
     on its way to the new email (in lower case, trimmed); 400 `email-invalid` (no email, or past the
     `email` value's length, before any allowance is taken), 409 `email-taken` (another account's
-    email or the account's own), 429 `rate-limited` past the account's three changes in a quarter of
-    an hour.
+    email or the account's own), 429 `rate-limited` past the account's changes within their window
+    (`IDENTITY_EMAIL_CHANGES`, the contract's `email-changes`).
   - `POST /console/accounts/:id/ban` with `{ reason? }` (at most the `ban-reason` value's length
     once trimmed, else 400 `bad-request`): 204 once the account is banned and its sessions ended,
     then its sockets closed with 4004; 409 `own-account` for the operator's own account.

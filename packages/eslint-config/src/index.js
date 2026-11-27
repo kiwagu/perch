@@ -11,8 +11,9 @@
  *   - a folder with an index.ts, or a module, entered only through its index
  *     (workspace/import-through-index),
  *   - raw fields out of views, so every field tracks unsaved input (react/forbid-elements),
- *   - the UI contract's roles and routes named through its emitted constants, never written by
- *     hand (workspace/contract-terms, by `contractTerms`, which reads fixtures too).
+ *   - the UI contract's roles, routes and invariants' numbers named through its emitted
+ *     constants, never written by hand (workspace/contract-terms, by `contractTerms`, which reads
+ *     fixtures too).
  * No rule here may format tokens. A fixture (`__fixtures__/`) is test data, which no rule of the
  * base reads.
  */

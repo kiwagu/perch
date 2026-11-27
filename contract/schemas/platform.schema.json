@@ -352,9 +352,21 @@
                 "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`."
               },
               "language": {
-                "type": "string",
-                "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9]*$"
+                  },
+                  {
+                    "minItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$"
+                    }
+                  }
+                ],
+                "description": "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient` (never last), or a list of them, the first that has one speaking. See the rule `mail-recipients`."
               },
               "link": {
                 "type": "object",
@@ -464,6 +476,74 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
             "description": "The code an action refuses with when the rule would break: each action names the invariant under it."
+          },
+          "values": {
+            "description": "The numbers the rule states, by camelCase name: a count or a duration; the rule writes each as `{name}`. See the rule `action-outcomes`.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9]*$"
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "A count: a limit, how many."
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "seconds": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "The duration in seconds."
+                        }
+                      },
+                      "required": [
+                        "seconds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "minutes": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "The duration in minutes."
+                        }
+                      },
+                      "required": [
+                        "minutes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "hours": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "The duration in hours."
+                        }
+                      },
+                      "required": [
+                        "hours"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "description": "A duration in one unit: `{ minutes: 15 }`."
+                }
+              ]
+            }
           }
         },
         "required": [

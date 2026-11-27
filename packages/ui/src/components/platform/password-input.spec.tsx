@@ -65,10 +65,12 @@ describe('PasswordInput', () => {
 })
 
 describe('a PasswordInput inside a provider of facts', () => {
-  it('takes the limit of its anchor and keeps its own type, shown or hidden', async () => {
+  it('takes the limit and the need to be filled of its anchor and keeps its own type, shown or hidden', async () => {
     render(
       <FieldFactsProvider
-        facts={{ 'x.y.password-input': { maxLength: 35, type: 'email', marksState: false } }}
+        facts={{
+          'x.y.password-input': { maxLength: 35, type: 'email', marksState: false, required: true },
+        }}
       >
         <PasswordInput
           testId="x.y.password-input"
@@ -80,6 +82,7 @@ describe('a PasswordInput inside a provider of facts', () => {
     )
 
     expect(input().maxLength).toBe(35)
+    expect(input().required).toBe(true)
     expect(input().type).toBe('password')
     expect(input().className).not.toContain('border-warning')
 

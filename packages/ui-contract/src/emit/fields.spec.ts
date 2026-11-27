@@ -99,6 +99,22 @@ describe('fieldFactsModuleOf', () => {
     expect(facts['sample.code-input']).toEqual({ maxLength: 254 })
   })
 
+  it('says required only where the field writes it', () => {
+    const { contract } = loaded(SIX)
+    const [screen] = contract.screens.screens.filter(({ id }) => id === 'sample')
+    const title = screen?.anchors['sample.title-input']
+
+    if (title === undefined) {
+      throw new Error('no sample.title-input')
+    }
+
+    Object.assign(title, { required: true })
+
+    const required = Object.entries(factsOf(contract)).filter(([, facts]) => 'required' in facts)
+
+    expect(required).toEqual([['sample.title-input', expect.objectContaining({ required: true })]])
+  })
+
   it('says marksState only where the field writes it', () => {
     const { root, contract } = loaded(SIX)
     const marked = Object.entries(factsOf(contract)).filter(([, facts]) => 'marksState' in facts)

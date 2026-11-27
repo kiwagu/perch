@@ -64,11 +64,13 @@ values:
     examples: [ "123456", abcde-12345 ]
 invariants:
   failed-sign-ins:
-    rule: "Ten wrong passwords or second-factor codes of one email within a quarter of an hour keep its password out: every check of it answers rate-limited until that quarter of an hour has passed."
+    rule: "{limit} wrong passwords or second-factor codes of one email within {window} keep its password out: every check of it answers rate-limited until that window has passed."
     refuses: rate-limited
+    values: { limit: 10, window: { minutes: 15 } }
   device-limit:
-    rule: "An account is signed in on ten devices at most, each counted once while its session lasts; one more signs nothing in, unless signOutOldest then signs out its device seen least recently."
+    rule: "An account is signed in on {limit} devices at most, each counted once while its session lasts; one more signs nothing in, unless signOutOldest then signs out its device seen least recently."
     refuses: device-limit
+    values: { limit: 10 }
   banned-account:
     rule: "An account an operator banned signs no device in until the ban is lifted; the ban is told only once its password, a passkey or its verification link passed, so nobody else learns of it."
     refuses: account-banned
@@ -91,20 +93,25 @@ invariants:
     rule: "The console refuses, before anything changes, to ban, sign out everywhere or remove the operator's own account; its devices page signs it out, its settings delete it."
     refuses: own-account
   address-attempts:
-    rule: "A network address takes twenty attempts at each kind of mailed link within ten minutes, refused or not; the next answers rate-limited."
+    rule: "A network address takes {limit} attempts at each kind of mailed link within {window}, refused or not; the next answers rate-limited."
     refuses: rate-limited
+    values: { limit: 20, window: { minutes: 10 } }
   address-mails:
-    rule: "A network address is charged 200 mail requests a quarter of an hour at most, whatever the email, sign-ups included; one another limit refuses is given back. The next answers rate-limited."
+    rule: "A network address is charged {limit} mail requests within {window} at most, whatever the email, sign-ups included; one another limit refuses is given back. The next answers rate-limited."
     refuses: rate-limited
+    values: { limit: 200, window: { minutes: 15 } }
   credential-checks:
-    rule: "A network address makes twenty credential checks within ten seconds: each of these actions takes one before reading the request's body, whatever it then answers; the next answers rate-limited."
+    rule: "A network address makes {limit} credential checks within {window}: each of these actions takes one before reading the request's body, whatever it then answers; the next answers rate-limited."
     refuses: rate-limited
+    values: { limit: 20, window: { seconds: 10 } }
   email-changes:
-    rule: "An account's email takes three change requests a quarter of an hour, its own or an operator's, each counted once the new email is well formed if address-mails allows; the next answers rate-limited."
+    rule: "An account's email takes {limit} change requests within {window}, its own or an operator's, each counted once the new email is well formed if address-mails allows; the next answers rate-limited."
     refuses: rate-limited
+    values: { limit: 3, window: { minutes: 15 } }
   invitation-attempts:
-    rule: "An account makes thirty invitations in ten minutes, its network address sixty of those the account allows, counted before the email is checked if address-mails allows; the next answers rate-limited."
+    rule: "An account makes {limit} invitations in {window}, a network address {addressLimit} of those, each in its own window, before the email's check if address-mails allows; the next answers rate-limited."
     refuses: rate-limited
+    values: { limit: 30, addressLimit: 60, window: { minutes: 10 } }
 actions:
   sign-up:
     description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
@@ -157,7 +164,7 @@ actions:
       - "such an email was verified by a password reset, by its verification link opened while it was banned, or by an operator's email change confirmed"
       - "with the second factor on: a banned account is refused at this step; else the answer asks for a code (confirm-sign-in), signing nothing in or out; the device limit is judged then"
       - "no second factor, no signOutOldest, one device over the limit: device-limit refuses and the dialog asks whether to sign out the device seen least recently; nothing signs in"
-      - "with signOutOldest: signs this device in and signs out the device seen least recently, only when the account would otherwise be on more than ten devices"
+      - "with signOutOldest: signs this device in and signs out the device seen least recently, only when the account would otherwise be past its limit of devices"
       - "the right password forgets the email's failed sign-ins, even when device-limit then refuses; with the second factor on only the right code does, never the password"
     changes: [ devices.list, accounts.read ]
     codes:
@@ -203,7 +210,7 @@ actions:
       - "the failed sign-ins are judged before the challenge and the code: while they keep a password out, a well-formed request answers rate-limited whatever its challenge and code, and no code is looked at"
       - "a backup code is used up when it signs the device in; one the attempt stops at before the check (the device limit, a ban, an ended code step) stays usable"
       - "once the check has started, a server failure, the code step ending or another change to the account during it can leave a backup code used up, nothing signed in"
-      - "past the limit of devices nothing is signed in, no code is checked or spent, the failed sign-ins stay; the confirmation signs in again from the password, asking a code again"
+      - "past the limit of devices nothing is signed in; the confirmation signs in again from the password, asking a code again"
     changes: [ devices.list, accounts.read ]
     codes:
       invalid-code: "the code is wrong; it counts toward the email's failed sign-ins as a wrong password does"
@@ -211,7 +218,9 @@ actions:
       account-banned: { invariant: banned-account }
       rate-limited: { invariant: [ credential-checks, failed-sign-ins ] }
       other-account: { invariant: one-account-per-browser }
-      device-limit: { invariant: device-limit }
+      device-limit:
+        invariant: device-limit
+        condition: "before the code's check: no code is spent and the failed sign-ins stay; or after a right code, when another device got in meanwhile: that code is spent and the failed sign-ins are forgotten"
       failed: "anything else fails"
   verify-email:
     description: Verifies the email of an account with the token its verification mail carries, and signs this device in to the account the first time.
@@ -638,7 +647,7 @@ actions:
       - admin
     mail:
       to: email
-      language: recipient
+      language: [ recipient, organisation ]
       link: { screen: organisation.invitation, search: token }
   organisations.invitations:
     description: Reads the pending invitations of the current organisation.

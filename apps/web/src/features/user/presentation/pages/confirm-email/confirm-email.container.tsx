@@ -1,8 +1,10 @@
 import { useSearch } from '@tanstack/react-router'
 import { useMemo } from 'react'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
+import { useHeldRoles } from '../../../../../platform/held-roles'
 import { useService } from '../../../../../platform/module'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
@@ -29,6 +31,8 @@ export function ConfirmEmailContainer() {
 /** The screen's flow run as its machine over one token. */
 function TokenConfirmation(props: { readonly token: string }) {
   const session = useService(SESSION)
+  // Each link is for those its route serves, and someone may sign in or out while the page is open.
+  const guest = useHeldRoles().has(CONTRACT_ROLES.guest)
   // The gateway takes a link once, so a second exchange, which React's StrictMode would start in
   // development, would answer as for a link used before: it is kept.
   const confirm = useLinkExchange((token: string) => session.confirmEmail(token))
@@ -46,6 +50,7 @@ function TokenConfirmation(props: { readonly token: string }) {
   return (
     <ConfirmEmailView
       renders={renders}
+      guest={guest}
       message={state.context.message}
       error={state.context.error}
       link={RouterLink}

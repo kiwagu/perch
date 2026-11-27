@@ -51,6 +51,25 @@ describe('actionLines', () => {
       'notice email-changed to account language account',
     ])
   })
+  it('says the sources of a mail language in their order', () => {
+    expect(
+      actionLines({
+        description: 'Invites an email.',
+        params: {},
+        result: 'an invitation',
+        codes: [],
+        changes: [],
+        mail: {
+          to: 'email',
+          language: ['recipient', 'organisation'],
+          link: { screen: 'organisation.invitation', search: 'token' },
+        },
+      }),
+    ).toEqual([
+      'result: an invitation',
+      'mail to email language recipient, organisation link organisation.invitation?token',
+    ])
+  })
   it('says the page sizes of an action that pages, and its default', () => {
     expect(
       actionLines({

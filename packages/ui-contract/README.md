@@ -90,7 +90,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     map or as the older list a contract before version 6 may write, its result as a list or as one
     string; `invariantActions(platform)`
     (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, by
-    name (`contract/REFERENCE.md#rule-action-outcomes`).
+    name; `renderedRule(invariant)` and `renderedValue(value)` (`files/invariant-values.ts`): the
+    rule with each of its `values` written in where it says `{name}`, a count as digits and a
+    duration with its unit (`contract/REFERENCE.md#rule-action-outcomes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
     write, as they write them, each a `WrittenDescription` (`file`, `line`, `at`, `kind`, `place`,
     `text`); the `Contract` carries them as `descriptions`, read by `loadContract`
@@ -102,7 +104,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     `authoredFlowSchema`, `draftPatternSchema`, `controlRegionSchema`, `authoredAnchorDefSchema`
     (the source of `contract/schemas/screen.schema.json`), `platformFileSchema`,
     `platformMailSchema` (`PlatformMail`), `platformNoticeSchema` (`PlatformNotice`), `ACCOUNT`,
-    `RECIPIENT`, `flowSchema` with `codeGuardSchema`, `effectSchema`, `branchReadOptOutSchema` and
+    `ORGANISATION`, `RECIPIENT`, `languageSources` (a mail's language as its list of sources),
+    `flowSchema` with `codeGuardSchema`, `effectSchema`, `branchReadOptOutSchema` and
     `transitionSchema` and the types `Flow`, `FlowState`, `FlowParallelState`, `FlowRegion`,
     `FlowRegionState`, `FlowTransition` and `Effect`, `activitySchema` (`Activity`, `ActivityState`,
     `ActivityTransition`), `flatJsonSchema`, `scenarioSchema`, `entityDefinitionSchema` and
@@ -143,6 +146,7 @@ links to as `contract/REFERENCE.md#<slug>`.
       (`contract/REFERENCE.md#rule-check-files`);
     - `invariantsProblems`, `behaviourTextsProblems`, `actionFormsProblems`: each invariant an
       action names exists and refuses with the code it is named under, every invariant is named,
+      each `{name}` of a rule names one of its `values` and each value is named,
       each outcome line, condition and rule keeps the budget, and from version 6
       (`BEHAVIOUR_EDITION`) a `result` of one string keeps it too and an action's codes are a map,
       never a list (`contract/REFERENCE.md#rule-action-outcomes`);
@@ -244,8 +248,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     data, `CONTRACT_VALUES`, every value of the platform and every field of the model as the
     contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
     element of each field carries that the contract decides, by its anchor, and
-    `termsModuleOf(contract)` that of `CONTRACT_ROLES` and `CONTRACT_ROUTES`, every role by its
-    name and every route path by its screen's id, a further binding's by `<id>@<path>`
+    `termsModuleOf(contract)` that of `CONTRACT_ROLES`, `CONTRACT_ROUTES` and
+    `CONTRACT_INVARIANTS`, every role by its name, every route path by its screen's id, a further
+    binding's by `<id>@<path>`, and each invariant's numbers, a duration in milliseconds
     (`routeKeyOf`; `contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
     is the text a package's committed module must equal (see `./testing` below).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
@@ -369,7 +374,7 @@ links to as `contract/REFERENCE.md#<slug>`.
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - `ui-contract emit values|fields|terms --out <file>`, from the root or any folder under it:
   writes the module of plain data `CONTRACT_VALUES`, `FIELD_FACTS` or `CONTRACT_ROLES` with
-  `CONTRACT_ROUTES` into `<file>`, relative to the
+  `CONTRACT_ROUTES` and `CONTRACT_INVARIANTS` into `<file>`, relative to the
   working directory, which the caller always names; prints the problems and exits 1, writing
   nothing, when the contract check finds any. From the root, `bun run contract:emit`
   (`turbo run emit`) runs the `emit` script of every package that keeps one. Not part of
@@ -380,7 +385,7 @@ links to as `contract/REFERENCE.md#<slug>`.
   parts, the codes, the states, the roles and the error fields the anchors both hold gain or
   lose (derived ones included), who each route serves, the source each list reads with its
   params and its paging, the fields that start or
-  stop holding input, the messages that rank their codes with their order, the leaving
+  stop holding input or having to be filled, the messages that rank their codes with their order, the leaving
   actions, how each leave asks, the activities and the
   transitions changed in each, the lines changed in each screen's flow, the platform
   actions with the lines changed in each, its mail among them, the reads each action of the
