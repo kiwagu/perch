@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { match } from 'ts-pattern'
 
 import { useFormats, useT } from '@workspace/i18n'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 
@@ -53,8 +54,8 @@ function failureText(t: Translate, code: ReadCode): string {
 /** The words of the account's role in an organisation. */
 function roleText(t: Translate, role: AccountOrganisation['role']): string {
   return match(role)
-    .with('admin', () => t('console.account.organisations.role.admin'))
-    .with('member', () => t('console.account.organisations.role.member'))
+    .with(CONTRACT_ROLES.admin, () => t('console.account.organisations.role.admin'))
+    .with(CONTRACT_ROLES.member, () => t('console.account.organisations.role.member'))
     .exhaustive()
 }
 
@@ -152,7 +153,7 @@ export function AccountView(props: AccountViewProps) {
     <Card className="mx-auto w-full max-w-2xl">
       <CardHeader className="flex flex-col gap-2">
         <Link
-          to="/console/users"
+          to={CONTRACT_ROUTES['console.users']}
           className={`${TOUCH_TARGET} inline-flex items-center self-start text-sm underline`}
           data-testid="console.account.back-link"
         >

@@ -4,7 +4,7 @@ import { appReady, expect, signUp, test, toast } from '../../support/fixtures'
 import { createOrganisation } from '../../support/organisation'
 
 test.describe('Add the first note', { tag: '@smoke' }, () => {
-  test('An administrator adds the first note of a new organisation and sees it as its own', async ({
+  test('An admin adds the first note of a new organisation and sees it as its own', async ({
     page,
   }) => {
     const data = {

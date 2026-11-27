@@ -49,6 +49,11 @@ export const CONFIRM_TEXTS: Readonly<Record<string, ConfirmWords>> = {
     body: (t) => t('app.shell.confirm.accounts-revoke-sessions.body'),
     confirm: (t) => t('app.shell.confirm.accounts-revoke-sessions.confirm'),
   },
+  'passkeys-remove': {
+    title: (t) => t('app.shell.confirm.passkeys-remove.title'),
+    body: (t) => t('app.shell.confirm.passkeys-remove.body'),
+    confirm: (t) => t('app.shell.confirm.passkeys-remove.confirm'),
+  },
   'accounts-remove': {
     title: (t) => t('app.shell.confirm.accounts-remove.title'),
     body: (t) => t('app.shell.confirm.accounts-remove.body'),

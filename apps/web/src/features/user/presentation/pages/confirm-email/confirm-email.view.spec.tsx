@@ -2,6 +2,8 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
@@ -15,7 +17,7 @@ import {
 const only = (anchor: ConfirmEmailListed) => (asked: ConfirmEmailListed) => asked === anchor
 
 function renderView(props: Partial<ConfirmEmailViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  renderWithProviders(<ConfirmEmailView renders={() => false} {...props} />, {
+  renderWithProviders(<ConfirmEmailView renders={() => false} guest={false} {...props} />, {
     locale,
     es,
   })
@@ -32,10 +34,10 @@ describe('ConfirmEmailView', () => {
   })
 
   it.each([
-    ['profile', 'user.confirm-email.profile-link', '/me'],
-    ['sign-in', 'user.confirm-email.sign-in-link', '/sign-in'],
-  ] as const)('says the email is the new one, leading to the %s', (_onward, link, to) => {
-    renderView({ message: 'email-changed', renders: only(link) })
+    ['profile', 'user.confirm-email.profile-link', CONTRACT_ROUTES['user.profile'], false],
+    ['sign-in', 'user.confirm-email.sign-in-link', CONTRACT_ROUTES['user.sign-in'], true],
+  ] as const)('says the email is the new one, leading to the %s', (_onward, link, to, guest) => {
+    renderView({ message: 'email-changed', renders: only(link), guest })
 
     expect(screen.getByTestId('user.confirm-email.message').getAttribute('data-code')).toBe(
       'email-changed',
@@ -43,6 +45,21 @@ describe('ConfirmEmailView', () => {
     expect(screen.getByTestId(link).getAttribute('href')).toBe(to)
     expect(screen.queryByTestId('user.confirm-email.status')).toBeNull()
   })
+
+  it.each([
+    ['profile', 'user.confirm-email.profile-link', true],
+    ['sign-in', 'user.confirm-email.sign-in-link', false],
+  ] as const)(
+    'leaves the %s link out for the roles its route does not serve, though the state renders it',
+    (_onward, link, guest) => {
+      renderView({ message: 'email-changed', renders: only(link), guest })
+
+      expect(screen.getByTestId('user.confirm-email.message').getAttribute('data-code')).toBe(
+        'email-changed',
+      )
+      expect(screen.queryByTestId(link)).toBeNull()
+    },
+  )
 
   it('leads nowhere while another account is signed in here', () => {
     renderView({ message: 'email-changed' })

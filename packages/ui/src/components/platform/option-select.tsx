@@ -14,7 +14,10 @@ export interface Option<Value extends string> {
 
 export interface OptionSelectProps<Value extends string> {
   readonly label: string
-  readonly value: Value
+  /** The chosen option; none shows the placeholder, and the anchor carries no value. */
+  readonly value: Value | undefined
+  /** What the trigger shows while no option is chosen. */
+  readonly placeholder?: string
   readonly options: readonly Option<Value>[]
   readonly onChange: (value: Value) => void
   /** The trigger's anchor, carrying the chosen value as `data-value`; each option carries `<testId>.option` with its value as `data-value`. */
@@ -34,7 +37,7 @@ export function OptionSelect<Value extends string>(props: OptionSelectProps<Valu
   return (
     <Select
       items={props.options.map((option) => ({ value: option.value, label: option.label }))}
-      value={props.value}
+      value={props.value ?? null}
       disabled={props.disabled}
       holdsInput={props.holdsInput}
       marksState={props.marksState}
@@ -51,7 +54,7 @@ export function OptionSelect<Value extends string>(props: OptionSelectProps<Valu
         data-value={props.value}
         className="min-h-11 text-base"
       >
-        <SelectValue />
+        <SelectValue placeholder={props.placeholder} />
       </SelectTrigger>
       <SelectContent>
         {props.options.map((option) => (

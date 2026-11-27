@@ -1130,7 +1130,7 @@ describe('a region whose rollback the gateway refuses again', () => {
     ])
   })
 
-  it('reloads the region from the server when an undone delete meets an edit the device had not heard, and keeps syncing', async () => {
+  it("undoes a refused delete without a reload when the device had not heard the record's later edit, and keeps syncing", async () => {
     const { a, b, settle, errors, stub } = await twoMembers()
     const annsNote = noteIdFactory.create()
     const bobsNote = noteIdFactory.create()
@@ -1146,18 +1146,20 @@ describe('a region whose rollback the gateway refuses again', () => {
 
     const head = await headOf(stub, a.region.ref.id)
 
-    // Bob is a member: the gateway refuses his delete of Ann's note, and the undo brings back
-    // the text he last heard, which the gateway refuses as his edit.
+    // Bob is a member: the gateway refuses his delete of Ann's note. The undo attaches the note's
+    // own map again, the one its key names, so it brings back nothing over the text Bob had not
+    // heard: the gateway takes the delete and its undo as no change, and nothing is reloaded.
     noteDelete(b.region.doc, { id: annsNote })
     b.engine.localWrite()
     await settle()
 
-    expect(errors().map((error) => error.code)).toEqual([
-      'data:PUSH_REJECTED',
-      'data:REGION_RELOADED',
-    ])
-    expect(await headOf(stub, a.region.ref.id)).toBe(head)
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+    expect(await headOf(stub, a.region.ref.id)).toBe(head + 1)
     expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello again' })
+    // Bob's next full pass pulls the edit whose fan-out he missed, as it does any missed row.
+    b.engine.visibility('hidden')
+    b.engine.visibility('visible')
+    await settle()
     expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello again' })
     expect((await b.region.outbox(10))._unsafeUnwrap()).toEqual([])
 
@@ -1170,10 +1172,7 @@ describe('a region whose rollback the gateway refuses again', () => {
 
     expect(a.region.recordJson(recordKey('note', bobsNote))).toMatchObject({ text: 'mine' })
     expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello at last' })
-    expect(errors().map((error) => error.code)).toEqual([
-      'data:PUSH_REJECTED',
-      'data:REGION_RELOADED',
-    ])
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
   })
 
   it('reloads from the server a region whose rollback is rejected too, with the one rejection reported', async () => {

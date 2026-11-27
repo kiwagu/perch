@@ -128,6 +128,33 @@ describe('attributionProblems', () => {
     ])
   })
 
+  it('holds the codes of a map to the same rules, each problem at its code', () => {
+    const contract = renaming(
+      3,
+      { ...ATTRIBUTED, note: { ...NOTE, codes: ['rename-rejected', 'gone'] } },
+      [],
+    )
+    const action = contract.screens.platform.actions['things.rename']
+
+    if (action === undefined) {
+      throw new Error('the sample lost things.rename')
+    }
+
+    action.codes = Object.fromEntries(
+      [...ATTRIBUTED_CODES, 'title-invalid', 'name-invalid'].map((code) => [code, `when ${code}`]),
+    )
+
+    expect(attributionProblems(contract)).toEqual([
+      problem(
+        `${AT}.codes["title-invalid"]: "title-invalid" ends like the code of a field ("-invalid") but concerns no parameter: name it after one (\`<parameter>-invalid\`) or list it in the \`codes\` of the one it concerns`,
+      ),
+      problem(
+        `${AT}.codes["name-invalid"]: "name-invalid" is named after the parameter "name", whose value has no pattern, format or enum`,
+      ),
+      problem(`${AT}.params.note.codes[1]: "gone" is no code of the action "things.rename"`),
+    ])
+  })
+
   it('holds a contract before version 3 to none of the four rules', () => {
     const broken = renaming(
       2,

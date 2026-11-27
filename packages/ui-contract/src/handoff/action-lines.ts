@@ -1,15 +1,17 @@
 /**
  * A platform action as lines for the hand-over diff, one per fact it declares: each parameter
  * with its type or the value it refers to, the constraints it writes (`valueWords`) and whether
- * it may be left out, its result, each code its failure shows, each role that may run it, the page
+ * it may be left out, each line of its result (with its position when there are several), each code its failure shows with the invariants it
+ * refuses for and the condition it answers on (quoted, so a text never reads as invariants), each role that may run it, the page
  * sizes it answers with its default when it pages, each read it changes, the mail it
- * sends (who it goes to, the language it speaks, the screen its link opens and the search
+ * sends (who it goes to, the sources of its language in order, the screen its link opens and the search
  * parameter that carries the token) and each notice (its name, who it goes to, its language and
  * the screen of its plain link). The descriptions are left out, as a flow's are; the result
  * stays, as it is what holds once the action succeeds. The diff compares the lines as sets.
  */
 
 import type { Contract } from '../check'
+import { codeEntriesOf, languageSources, outcomesOf, renderedRule, renderedValue } from '../files'
 
 import { valueWords } from './value-words'
 
@@ -36,6 +38,16 @@ function parameterLine(name: string, parameter: PlatformParameter): string {
 export const changesLines = (changes: readonly string[] | undefined): string[] =>
   (changes ?? []).map((read) => `changes ${read}`)
 
+/**
+ * The lines of an action's outcomes: `result: <line>` for one, and for several each with its
+ * position, `result #<n>: <line>`, since the first is the plain success and the diff compares
+ * the lines as sets, so a reorder alone shows.
+ */
+const resultLines = (outcomes: readonly string[]): string[] =>
+  outcomes.length === 1
+    ? outcomes.map((outcome) => `result: ${outcome}`)
+    : outcomes.map((outcome, index) => `result #${index + 1}: ${outcome}`)
+
 /** The lines of a platform action, none for an action one side lacks. */
 export function actionLines(action: PlatformAction | undefined): string[] {
   if (action === undefined) {
@@ -46,8 +58,15 @@ export function actionLines(action: PlatformAction | undefined): string[] {
 
   return [
     ...Object.entries(action.params).map(([name, parameter]) => parameterLine(name, parameter)),
-    `result: ${action.result}`,
-    ...action.codes.map((code) => `code ${code}`),
+    ...resultLines(outcomesOf(action.result)),
+    ...codeEntriesOf(action.codes).map(({ code, condition, invariants }) => {
+      const answers = [
+        ...(invariants.length > 0 ? [`invariant ${invariants.join(', ')}`] : []),
+        ...(condition === undefined ? [] : [JSON.stringify(condition)]),
+      ]
+
+      return answers.length === 0 ? `code ${code}` : `code ${code}: ${answers.join('; ')}`
+    }),
     ...(action.roles ?? []).map((role) => `role ${role}`),
     ...(action.paged === undefined
       ? []
@@ -56,7 +75,7 @@ export function actionLines(action: PlatformAction | undefined): string[] {
     ...(mail === undefined
       ? []
       : [
-          `mail to ${mail.to} language ${mail.language} link ${mail.link.screen}?${mail.link.search}`,
+          `mail to ${mail.to} language ${languageSources(mail.language).join(', ')} link ${mail.link.screen}?${mail.link.search}`,
         ]),
     ...(action.notices ?? []).map(
       ({ name, to, language, link }) =>
@@ -64,3 +83,20 @@ export function actionLines(action: PlatformAction | undefined): string[] {
     ),
   ]
 }
+
+type PlatformInvariant = NonNullable<Contract['screens']['platform']['invariants']>[string]
+
+/**
+ * The lines of an invariant: its rule with its values written in, the code it refuses with and
+ * each value by its name, so a changed number shows on its own line; none for one a side lacks.
+ */
+export const invariantLines = (invariant: PlatformInvariant | undefined): string[] =>
+  invariant === undefined
+    ? []
+    : [
+        `rule: ${renderedRule(invariant)}`,
+        `refuses ${invariant.refuses}`,
+        ...Object.entries(invariant.values ?? {}).map(
+          ([name, value]) => `value ${name}: ${renderedValue(value)}`,
+        ),
+      ]

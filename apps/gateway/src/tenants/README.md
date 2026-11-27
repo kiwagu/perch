@@ -27,7 +27,7 @@ members, the earliest membership first, in the organisation's turn, once the org
 wants is deleted, one at a time, the first failure answering `data:WRITE_FAILED` and the next
 read settling the rest; the row of a membership whose identity is gone is kept and the identity
 is not listed), answers what it refuses
-with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
+with a refusal code (`key-invalid`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change: the composition root
 has the registry tell the identity's devices. A tell reads the memberships and runs every
 listener, waiting for all of them to settle before the change resolves; one that fails, at the
@@ -132,12 +132,24 @@ organisation's invitations not expired, newest first, whatever account has the e
 `forEmail` lists those to the ready organisations an identity does not belong to. Nothing of it
 logs, and no error names a token or an address.
 
+`InvitedLanguage` (`invited-language.ts`, the auth module's `StartingLanguage`) names the language
+an account an invitation creates starts in: the email's pending invitations (not expired, to
+ready organisations, the newest first), then each organisation's own settings row
+(`organisation_settings:ost_<key>` in its database, never another row, read by
+`organisationLocale`, `organisation-locale.ts`) in that order; the first
+that names a default language wins, and none names none. A read that fails names none, logged as
+`sign-up:STARTING_LANGUAGE_UNREADABLE` with the organisation's key, and so does a lookup that
+outlasts the auth port's `STARTING_LANGUAGE_BUDGET_MS` (250 ms) on the gateway's clock
+(`sign-up:STARTING_LANGUAGE_LATE`), whose reads still let each organisation's database go once
+they settle. Nothing is thrown, and no line names the email.
+
 `InvitationMails` (`invitations/`, an `InvitationMailer`) writes and sends the mail of an
 invitation: it starts at once and returns, never awaited, so the request that invited never waits
 for the mail server. It speaks the recipient's language: the one the
 settings of the account with the invited email name, or the one that account signed up in before
-it has settings; an email with no account gets the inviter's, read the same way. A language that
-could not be read sends nothing (`mail:LOCALE_UNREADABLE`) and an account gone between the two
+it has settings; an email with no account gets its organisation's default language
+(`organisationLocale`, the same read), else English, whoever invited it. A language that could
+not be read sends nothing (`mail:LOCALE_UNREADABLE`) and an account gone between the two
 reads sends nothing either (`mail:SEND_FAILED`), never a mail in a guessed language. The mail
 greets no one by name and names no inviter (the recipient may have no account, and the name people
 see lives in the replicated profile, which mails do not read). A mail that did not go out is
@@ -204,7 +216,9 @@ member (200 with the membership; 403 `other-account`, 409 `already-member`, 410
 accept is but for `already-member`).
 
 A body or an identity that does not follow its schema answers 400 (`bad-request`);
-a refusal answers its code, with 400 for `invalid-key`, `invalid-name` and `email-invalid`, 403
+a refusal answers its code, with 400 for `key-invalid`, `name-required`, `name-too-long` and
+`email-invalid` (a creation's key and name are judged by `newOrganisationOf`, before the attempt
+is counted), 403
 for `not-a-member`, `not-admin` and `other-account`, 404 for `no-such-tenant`, `no-such-identity`,
 `no-such-member` and `link-invalid`, 409 for `key-taken`, `already-member`, `self` and
 `last-admin`, and 410 for `link-expired` and `invitation-gone`, except a creation, an
@@ -223,7 +237,10 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   memberships and members and those of the invitations, and the routes that answer them);
   `POST /invitations/read`, `GET /invitations`, `POST /invitations/accept` and
   `POST /invitations/decline` (`invitation-routes/`, through its `index.ts`);
-  `organisation-http.ts` holds the answers both share.
+  `organisation-http.ts` holds the answers both share. The paths each answers
+  (`ORGANISATION_PATHS`, `INVITATION_PATHS`) are listed beside their handlers, for the spec that
+  holds the routes to the platform's actions; both answer a path only through their list
+  (`src/route-path.ts` reads the organisation routes' templates, a key held to the kernel's rule).
 - Services: `Organisations` (`organisations/`, through its `index.ts`; `leaveAll` among its
   commands),
   `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`
@@ -235,9 +252,13 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   `PendingInvitations` (`invitations/`, through its `index.ts`: the store, the token reader, the
   seven-day lifetime and the link to the front's `/invitation` screen), `InvitationMails` and the
   `InvitationMailer` interface it implements (`invitations/mails.ts`, `invitations/mailer.ts`).
+  `InvitedLanguage` (`invited-language.ts`): the starting language of an invited account.
+  `organisationLocale` (`organisation-locale.ts`): an organisation's default language, which both
+  read.
 - `regionDatabases` (`region-databases.ts`): the database of each region, for the region hub.
 - Queries: `surql/` (organisations, memberships, members, invitations, the organisation
-  database's schema, a departing identity's memberships and the removal of a whole organisation).
+  database's schema, a departing identity's memberships, the removal of a whole organisation, and
+  the invitations of an email with an organisation's default language).
 - Built by the composition root, `src/composition/root.ts`; the sync registry hears the
   membership changes.
 
@@ -248,5 +269,6 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   `organisation-routes/limits.spec.ts`, `invitation-routes/routes.spec.ts`,
   `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`,
   `organisations/invitations.spec.ts`, `invitations/token.spec.ts`, `invitations/pending.spec.ts`,
-  `invitations/mails.spec.ts`), each organisation on an embedded in-memory database of its own.
+  `invitations/mails.spec.ts`, `new-organisation.spec.ts`), each organisation on an embedded
+  in-memory database of its own.
 - `bun run test:db` (the smoke) drives the organisation path against a stand.

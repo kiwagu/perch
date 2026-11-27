@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import { ConnectionRegistry } from './connections'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /**
@@ -195,13 +196,13 @@ describe('ConnectionRegistry', () => {
     registry.add(ann, 'device-phone', phone, registry.epoch())
     registry.add(identityIdFactory.create(), 'device-bobs', bobs, registry.epoch())
 
-    const reroled = registry.rerole(ann, 'tenant:acme', 'admin')
+    const reroled = registry.rerole(ann, 'tenant:acme', CONTRACT_ROLES.admin)
     const rerolling = watch(reroled)
 
     // Both connections were reached at once, but the call resolves only once the busy one has.
     await settle()
-    expect(laptop.reroled).toEqual([['tenant:acme', 'admin']])
-    expect(phone.reroled).toEqual([['tenant:acme', 'admin']])
+    expect(laptop.reroled).toEqual([['tenant:acme', CONTRACT_ROLES.admin]])
+    expect(phone.reroled).toEqual([['tenant:acme', CONTRACT_ROLES.admin]])
     expect(rerolling.resolved).toBe(false)
 
     busy.resolve()
@@ -210,7 +211,7 @@ describe('ConnectionRegistry', () => {
     expect(bobs.reroled).toEqual([])
     // An identity without connections has nothing to wait for.
     await expect(
-      registry.rerole(identityIdFactory.create(), 'tenant:acme', 'member'),
+      registry.rerole(identityIdFactory.create(), 'tenant:acme', CONTRACT_ROLES.member),
     ).resolves.toBe(undefined)
   })
 

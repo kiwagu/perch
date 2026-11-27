@@ -10,6 +10,7 @@ import { expect } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import type { AuthMountDeps } from '../../auth/auth-handler'
 import {
@@ -100,7 +101,7 @@ export async function consoleOnMount(options: ConsoleMountOptions = {}) {
   })
   const operatorAccount = await signedInOn(mounted, OPERATOR, [CONSOLE])
 
-  await setRole(mounted, operatorAccount.identity, 'operator')
+  await setRole(mounted, operatorAccount.identity, CONTRACT_ROLES.operator)
 
   const operator = signedInAs(operatorAccount, OPERATOR, CONSOLE)
 

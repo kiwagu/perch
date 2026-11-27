@@ -22,8 +22,10 @@ import { RequestLimits } from '../../../limits/request-limits'
 import { linkToken, type Outbox } from '../../../mail/__fixtures__/outbox'
 import { ConnectionRegistry, type MembershipsListener } from '../../../sync/connections'
 import { specInvitations } from '../../../tenants/__fixtures__/invitations'
+import { invitedTo } from '../../../tenants/__fixtures__/invited-language'
 import { specRetell } from '../../../tenants/__fixtures__/retell'
 import { AccountDeparture } from '../../../tenants/account-departure'
+import { InvitedLanguage } from '../../../tenants/invited-language'
 import { Organisations } from '../../../tenants/organisations'
 import { TenantDatabases } from '../../../tenants/tenant-databases'
 import {
@@ -34,12 +36,24 @@ import {
   openAuth,
   signUpOn,
 } from '../../__fixtures__/auth-instance'
+import identityLocaleStatement from '../../__fixtures__/identity-locale.surql'
 import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
+import { PasskeyRows } from '../../passkey-rows'
+import {
+  noStartingLanguage,
+  STARTING_LANGUAGE_BUDGET_MS,
+  type StartingLanguage,
+} from '../../starting-language.port'
 import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
+import challengeEndStatement from '../../surql/two-factor-challenge-end.surql'
+import challengeOwnerStatement from '../../surql/two-factor-challenge-owner.surql'
+import { TwoFactorRows } from '../../two-factor-rows'
+import { twoFactorChallenges } from '../challenge-cookie'
 import { type AuthMountDeps, authHandler } from '../mount'
+import { passkeyChallenges } from '../passkey-ceremony'
 
 /** The account most specs sign up and verify. */
 export const ANN = 'ann@example.test'
@@ -49,6 +63,19 @@ export const PASSWORD = 'Pass-word-1'
 
 /** The front's origin, which the browser names on every request. */
 export const ORIGIN = 'http://localhost'
+
+let freshAddresses = 0
+
+/**
+ * A client address no request of the spec came from yet, one of 250 in turn: a probe the email's
+ * failed sign-ins should refuse goes out from one, so it meets an address's full credential checks
+ * and only the email's limit can answer it 429, whatever the two limits are.
+ */
+export function freshAddress(): string {
+  freshAddresses += 1
+
+  return `192.0.2.${(freshAddresses % 250) + 2}`
+}
 
 /** A close the mount asked the registry for: the identity, the device and the code. */
 export type Close = readonly [IdentityId, string | undefined, number]
@@ -119,8 +146,8 @@ export const STAND_IN_EMAIL = 'stand-in@example.test'
  * A stand-in for the sessions a verification reads: every token reads as the link of a mail to
  * the stand-in's account (`STAND_IN_ACCOUNT`, which the stand-in's credential reads find holding
  * any email), the token itself being Better Auth's, naming `STAND_IN_EMAIL`; no email has an
- * account, no session is read back, no token holds a session, nothing is signed out, and every
- * sign-in and verification is admitted.
+ * account, no session is read back, no token holds a session, nothing is signed out, every
+ * sign-in is judged and admitted as it is, and every verification admitted.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationOf: async (token) => ({
@@ -134,17 +161,22 @@ export const noSessions: AuthMountDeps['sessions'] = {
   signOut: notHere,
   revokeAll: notHere,
   admit: () => okAsync({ kind: 'admitted' }),
+  judge: () => okAsync('admitted'),
   admitVerified: () => okAsync({ kind: 'admitted' }),
 }
 
 /**
- * Stand-ins for the passwords, account links, mails and an account's deletion, for the specs of
- * the sign-up, the sign-in and the verification over a stand-in for Better Auth: every one of them
- * fails, as none is meant to be asked.
+ * Stand-ins for the passwords, account links, two-factor challenges and factors, passkeys, mails
+ * and an account's deletion, for the specs of the sign-up, the sign-in and the verification over a
+ * stand-in for Better Auth: every one of them fails, as none is meant to be asked.
  */
 export const noAccounts: Pick<
   AuthMountDeps,
   | 'passwords'
+  | 'challenges'
+  | 'twoFactor'
+  | 'passkeys'
+  | 'passkeyChallenges'
   | 'resets'
   | 'emailChanges'
   | 'deletions'
@@ -152,6 +184,7 @@ export const noAccounts: Pick<
   | 'teardown'
   | 'mails'
   | 'profiles'
+  | 'startingLanguage'
 > = {
   passwords: {
     requestReset: notHere,
@@ -166,9 +199,20 @@ export const noAccounts: Pick<
         identity: STAND_IN_ACCOUNT,
         hash: 'stand-in-hash',
         banned: false,
+        secondFactor: false,
         start: undefined,
       }),
   },
+  challenges: {
+    cookieName: () => Promise.reject(new Error('no challenge is read here')),
+    ownerOf: notHere,
+    takesCode: notHere,
+    end: notHere,
+    reclaim: notHere,
+  },
+  twoFactor: { read: notHere },
+  passkeys: { ownerOf: notHere, reclaim: notHere },
+  passkeyChallenges: { cookieName: () => Promise.reject(new Error('no passkey is read here')) },
   resets: { read: notHere },
   emailChanges: {
     ask: notHere,
@@ -188,6 +232,7 @@ export const noAccounts: Pick<
     accountDeleted: () => undefined,
   },
   profiles: { queue: () => undefined },
+  startingLanguage: noStartingLanguage,
 }
 
 /**
@@ -210,6 +255,7 @@ export function mountedOnFakeAuth(
       auth: fake.auth,
       sessions: noSessions,
       ...noAccounts,
+      publicUrl: ORIGIN,
       limits: new RequestLimits({ clock }),
       connections,
       clock,
@@ -244,6 +290,19 @@ export interface RealMountOptions extends OpenAuthOptions {
    * router does.
    */
   readonly handler?: (handle: AuthInstance['handler']) => AuthInstance['handler']
+  /**
+   * Stands between the mount and the starting language of a sign-up, given the real lookup over
+   * the directory and the organisations' databases: a test counts its lookups.
+   */
+  readonly startingLanguage?: (real: StartingLanguage) => StartingLanguage
+  /** What the real lookup reaches the directory through, made from it: a test holds its reads. */
+  readonly languageReads?: (local: LocalDb) => LocalDb
+  /**
+   * The real lookup's budget runs on the gateway's clock, as in the gateway. By default it runs on
+   * a clock of its own that no test moves, so a count of the gateway clock's timers sees the
+   * floors alone.
+   */
+  readonly budgetOnGatewayClock?: boolean
 }
 
 /** The instance each outbox the fixture opened belongs to. */
@@ -286,6 +345,7 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
 
   return {
     organisations,
+    databases,
     departure: {
       blocked: (identity) => departure.blocked(identity),
       leave: (identity, steps) => organisations.leaveAll(identity, steps),
@@ -327,10 +387,19 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   /** The identities whose profile was asked to follow their email, in order. */
   const followed: IdentityId[] = []
   const steps: string[] = []
-  const { organisations, departure } = organisationsOver(
+  const { organisations, departure, databases } = organisationsOver(
     options.organisationsDirectory?.(opened.local) ?? opened.local,
     (code) => failures.push(code),
   )
+  // The lookup the gateway wires, over the directory and the organisations' databases; its lines
+  // join the failures by their codes.
+  const realLanguage = new InvitedLanguage({
+    directory: options.languageReads?.(opened.local) ?? opened.local,
+    databases,
+    clock: options.budgetOnGatewayClock === true ? opened.clock : manualClock(),
+    log: { warn: (fields) => failures.push(fields.code) },
+    budgetMs: STARTING_LANGUAGE_BUDGET_MS,
+  })
   const teardown = new AccountTeardown(opened.local)
   /** What the mount answers with; the console's routes of a spec answer over the same. */
   const deps: AuthMountDeps = {
@@ -360,9 +429,17 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
 
         return options.admission === undefined ? admit() : options.admission(admit)
       },
+      judge: (identity, device) => sessions.judge(identity, device),
       admitVerified: (identity, token) => sessions.admitVerified(identity, token),
     },
     ...accounts,
+    // The challenges and the second factor reach the directory as the instance does: a test holds
+    // their reads by the same hook.
+    challenges: twoFactorChallenges(opened.auth, opened.directory),
+    twoFactor: new TwoFactorRows(opened.directory),
+    passkeys: new PasskeyRows(opened.directory),
+    passkeyChallenges: passkeyChallenges(opened.auth),
+    publicUrl: ORIGIN,
     deletions: accounts.accountDeletions,
     departure: {
       blocked: (identity) => departure.blocked(identity),
@@ -396,6 +473,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     },
     clock: opened.clock,
     accounts: turns,
+    startingLanguage: options.startingLanguage?.(realLanguage) ?? realLanguage,
   }
   const route = authHandler(deps)
   /** Ann's identity, once she signed up. */
@@ -424,6 +502,20 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     organisations,
     teardown,
     steps,
+    /**
+     * The ready organisation `key` invited `email` just now, its default language `locale` (none
+     * when left out).
+     */
+    invitedTo: (invitation: Parameters<typeof invitedTo>[1]) =>
+      invitedTo({ directory: opened.local, databases, clock: opened.clock }, invitation),
+    /** The language stored on the identity of `email`, once it signed up. */
+    localeOf: async (email: string): Promise<unknown> => {
+      const [locale] = await opened.local.db.query<[unknown]>(identityLocaleStatement, {
+        email: email.toLowerCase(),
+      })
+
+      return locale
+    },
   }
 }
 
@@ -448,12 +540,12 @@ export async function annsLink(outbox: Outbox, email = ANN): Promise<string> {
   return linkToken(await outbox.next(email, seen))
 }
 
-/** A sign-up of `email` with `password`, as the web sends it from the front's origin. */
-export function signUpRequest(email: string, password = PASSWORD): Request {
+/** A sign-up of `email` with `password` and `name`, as the web sends it from the front's origin. */
+export function signUpRequest(email: string, password = PASSWORD, name = 'Ann'): Request {
   return new Request('http://gateway.test/auth/sign-up/email', {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: ORIGIN },
-    body: JSON.stringify({ name: 'Ann', email, password, locale: 'en' }),
+    body: JSON.stringify({ name, email, password, locale: 'en' }),
   })
 }
 
@@ -746,6 +838,23 @@ export const isVerifiedAdmission = (text: string): boolean =>
 /** Better Auth's adapter reads a session by its token from its table, as at a session's read. */
 export const isSessionLookup = (text: string): boolean =>
   text.startsWith('SELECT') && text.includes('FROM `device_session`')
+
+/** The gateway's read of the account a two-factor challenge belongs to. */
+export const isChallengeLookup = (text: string): boolean => text === challengeOwnerStatement
+
+/** The gateway's end of a two-factor challenge: its rows deleted. */
+export const isChallengeEnd = (text: string): boolean => text === challengeEndStatement
+
+/** Better Auth's adapter writes a row of `verification`, as a password step writes its challenge. */
+export const isVerificationInsert = (text: string): boolean =>
+  text.startsWith('INSERT') && text.includes('`verification`')
+
+/**
+ * Better Auth's adapter takes a backup code out of an account's codes: its compare-and-set of the
+ * two-factor row, once the code was checked, an update of the one row its subquery selects.
+ */
+export const isBackupCodeSpend = (text: string): boolean =>
+  text.startsWith('UPDATE') && text.includes('`two_factor`') && text.includes('LIMIT 1)')
 
 /** Better Auth's adapter looks an account up by its email in its table. */
 export const isAccountLookup = (text: string): boolean =>

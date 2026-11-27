@@ -80,7 +80,7 @@ export class OrganisationInvitations {
                 organisation: current.name,
                 role: invitation.role,
                 token: invitation.token,
-                inviter: actor,
+                key: current.key,
               })
 
               return this.#view(invitation)

@@ -12,7 +12,7 @@ data:
 
 Where: [/org] of a new organisation, then [organisation.notes.add-button]
 
-## Scenario: An administrator adds the first note of a new organisation and sees it as its own
+## Scenario: An admin adds the first note of a new organisation and sees it as its own
 
 ### Steps
 1. Sign up, open the link of [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]

@@ -1,6 +1,8 @@
 // scenario: app-shell/base/install-reminder
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, test } from '../../support/fixtures'
 
 const THREE_DAYS = 3 * 24 * 60 * 60 * 1000
@@ -28,7 +30,7 @@ test.describe('Be reminded to install the app until it is installed', { tag: '@f
     page,
   }) => {
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       // Expected: After step 1 no [app-shell.install-message] shows
       await expect(reminder(page)).toHaveCount(0)

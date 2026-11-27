@@ -1,7 +1,7 @@
 import { ESLint } from 'eslint'
 import { describe, expect, it } from 'vitest'
 
-import { base, ignores } from './index.js'
+import { base, contractTerms, ignores } from './index.js'
 
 const cwd = new URL('./__fixtures__/project/', import.meta.url).pathname
 const eslint = new ESLint({
@@ -10,8 +10,18 @@ const eslint = new ESLint({
   overrideConfig: base.filter((entry) => entry !== ignores),
 })
 
-async function rulesFiredIn(file) {
-  const [result] = await eslint.lintFiles([file])
+const MODULE = new URL('./__fixtures__/contract-terms.gen.ts', import.meta.url).pathname
+const withTerms = new ESLint({
+  cwd,
+  overrideConfigFile: true,
+  overrideConfig: [
+    ...base.filter((entry) => entry !== ignores),
+    ...contractTerms({ module: MODULE, files: ['**/*.ts'] }),
+  ],
+})
+
+async function rulesFiredIn(file, linter = eslint) {
+  const [result] = await linter.lintFiles([file])
 
   return [...new Set(result.messages.map((message) => message.ruleId ?? message.message))]
 }
@@ -22,6 +32,41 @@ describe('workspace eslint config', () => {
     expect(await rulesFiredIn('feature/domain/invariant.ts')).toEqual([])
     expect(await rulesFiredIn('feature/domain/negative.exception.ts')).toEqual([])
     expect(await rulesFiredIn('barrel.ts')).toEqual([])
+  })
+
+  it('reads no fixture with the rules of the base: a fixture is test data', async () => {
+    const [result] = await eslint.lintFiles(['feature/__fixtures__/roles.ts'])
+
+    expect(result.messages.map(({ ruleId }) => ruleId)).toEqual([null])
+    expect(result.messages[0]?.message).toContain('no matching configuration')
+  })
+
+  it('refuses a role of the contract written by hand, in a fixture too, through contractTerms', async () => {
+    expect(await rulesFiredIn('feature/__fixtures__/roles.ts', withTerms)).toEqual([
+      'workspace/contract-terms',
+    ])
+    expect(await rulesFiredIn('clean.ts', withTerms)).toEqual([])
+    expect(contractTerms({ module: MODULE, files: ['**/*.ts'] })[0]?.ignores).toEqual([
+      '**/*.config.ts',
+    ])
+  })
+
+  it('refuses a route named by its value only where routeValues says, but its ignores', async () => {
+    const byValue = new ESLint({
+      cwd,
+      overrideConfigFile: true,
+      overrideConfig: contractTerms({
+        module: MODULE,
+        files: ['**/*.ts'],
+        routeValues: { files: ['feature/**/*.ts'], ignores: ['feature/adapters/**'] },
+      }),
+    })
+
+    expect(await rulesFiredIn('feature/presentation/route.ts', byValue)).toEqual([
+      'workspace/contract-terms',
+    ])
+    expect(await rulesFiredIn('feature/adapters/gateway.ts', byValue)).toEqual([])
+    expect(await rulesFiredIn('units/route.ts', byValue)).toEqual([])
   })
 
   it('requires a blank line after local variables and before return', async () => {

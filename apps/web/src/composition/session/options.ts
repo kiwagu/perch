@@ -16,6 +16,7 @@ import type {
 import type { ChangeRejected, ChangesReloaded, ProtocolRefused } from '../../platform/events.port'
 import type { AccountSignedUpAs, GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
+import type { PasskeyCeremony } from '../passkey-ceremony'
 import type { KeyValueStorage, SignInId } from '../storage'
 
 /**
@@ -42,6 +43,8 @@ export interface VisibilitySource {
 
 export interface SessionOptions {
   readonly auth: GatewayAuth
+  /** The browser's window that picks a passkey for a sign-in; outside the sign-in lock. */
+  readonly ceremony: PasskeyCeremony
   /**
    * The memberships of the identity a sign-in just signed in, as the gateway lists them
    * (`GET /organisations`), read with the session token it was given and the device it named:

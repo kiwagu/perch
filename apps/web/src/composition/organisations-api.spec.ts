@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory, invitationIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { fakeFetch, noContent, respond, respondText } from './__fixtures__/gateway-fetch'
@@ -8,7 +9,7 @@ import { organisationsApi } from './organisations-api'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 describe('organisationsApi', () => {
@@ -62,7 +63,7 @@ describe('organisationsApi', () => {
   })
 
   it.each([
-    [400, 'invalid-key'],
+    [400, 'key-invalid'],
     [403, 'not-admin'],
     [404, 'no-such-tenant'],
   ])('maps %i %s to data:WRITE_REJECTED with the code as message', async (status, code) => {
@@ -163,7 +164,7 @@ describe('organisationsApi', () => {
 
   it('lists and removes members on the organisation paths, and changes a role by a PATCH answered 204', async () => {
     const ann = identityIdFactory.create()
-    const member = { identity: { id: ann, email: 'ann@example.test' }, role: 'member' }
+    const member = { identity: { id: ann, email: 'ann@example.test' }, role: CONTRACT_ROLES.member }
     const { fetcher, sent } = fakeFetch(
       respond(200, { members: [member] }),
       noContent(),
@@ -176,14 +177,14 @@ describe('organisationsApi', () => {
     })
 
     expect((await api.members('acme'))._unsafeUnwrap()).toEqual([member])
-    expect((await api.setRole('acme', ann, 'admin')).isOk()).toBe(true)
+    expect((await api.setRole('acme', ann, CONTRACT_ROLES.admin)).isOk()).toBe(true)
     expect((await api.remove('acme', ann)).isOk()).toBe(true)
     expect(sent.map((request) => [request.method, request.url])).toEqual([
       ['GET', '/backend/organisations/acme/members'],
       ['PATCH', `/backend/organisations/acme/members/${ann}`],
       ['DELETE', `/backend/organisations/acme/members/${ann}`],
     ])
-    expect(sent[1]?.body).toEqual({ role: 'admin' })
+    expect(sent[1]?.body).toEqual({ role: CONTRACT_ROLES.admin })
     expect(sent.map((request) => request.device)).toEqual(['device-1', 'device-1', 'device-1'])
   })
 
@@ -192,7 +193,7 @@ describe('organisationsApi', () => {
     const invitation = {
       id,
       email: 'ann@example.test',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
       link: 'https://perch.example.test/invitation?token=abc',
     }
     const { fetcher, sent } = fakeFetch(respond(201, { invitation }))
@@ -202,16 +203,16 @@ describe('organisationsApi', () => {
       fetcher,
     })
 
-    expect((await api.invite('acme', 'ann@example.test', 'admin'))._unsafeUnwrap()).toEqual(
-      invitation,
-    )
+    expect(
+      (await api.invite('acme', 'ann@example.test', CONTRACT_ROLES.admin))._unsafeUnwrap(),
+    ).toEqual(invitation)
     expect(sent).toEqual([
       {
         url: '/backend/organisations/acme/invitations',
         method: 'POST',
         authorization: 'Bearer token-1',
         device: 'device-1',
-        body: { email: 'ann@example.test', role: 'admin' },
+        body: { email: 'ann@example.test', role: CONTRACT_ROLES.admin },
       },
     ])
   })
@@ -222,13 +223,13 @@ describe('organisationsApi', () => {
       {
         id: first,
         email: 'bea@example.test',
-        role: 'member',
+        role: CONTRACT_ROLES.member,
         link: 'https://perch.example.test/invitation?token=b',
       },
       {
         id: second,
         email: 'ann@example.test',
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
         link: 'https://perch.example.test/invitation?token=a',
       },
     ]
@@ -255,7 +256,7 @@ describe('organisationsApi', () => {
       fetcher,
     })
 
-    expect((await api.invite('acme', 'ann@example.test', 'member')).isErr()).toBe(true)
+    expect((await api.invite('acme', 'ann@example.test', CONTRACT_ROLES.member)).isErr()).toBe(true)
     expect(sent.map((request) => `${request.method} ${request.url}`)).toEqual([
       'POST /backend/organisations/acme/invitations',
     ])
@@ -279,8 +280,8 @@ describe('organisationsApi', () => {
       })
       const refused =
         call === 'invite'
-          ? await api.invite('acme', 'ann@example.test', 'member')
-          : await api.setRole('acme', identityIdFactory.create(), 'member')
+          ? await api.invite('acme', 'ann@example.test', CONTRACT_ROLES.member)
+          : await api.setRole('acme', identityIdFactory.create(), CONTRACT_ROLES.member)
 
       expect(refused._unsafeUnwrapErr()).toMatchObject({
         code: 'data:WRITE_REJECTED',

@@ -16,9 +16,7 @@ const LAYERS = {
 
 export const SCENARIO_LAYERS: readonly string[] = Object.keys(LAYERS)
 
-const layers = Object.entries(LAYERS)
-  .map(([layer, meaning]) => `\`${layer}\` (${meaning})`)
-  .join(', ')
+const layers = SCENARIO_LAYERS.map((layer) => `\`${layer}\``).join(', ')
 
 export const scenarioSchema = z
   .strictObject({
@@ -26,7 +24,7 @@ export const scenarioSchema = z
       .string()
       .regex(/^[a-z][a-z0-9-]*(\/[a-z][a-z0-9-]*){2,3}$/)
       .describe(
-        `\`<entity>/<layer>/<slug>\` or \`<entity>/<layer>/<area>/<slug>\`, the layer one of ${layers}: the path of the file \`tests/e2e/scenarios/<id>.md\`, and the test \`tests/e2e/src/<id>.e2e.spec.ts\`.`,
+        `\`<entity>/<layer>/<slug>\` or \`<entity>/<layer>/<area>/<slug>\`, the layer one of ${layers}: the path of \`tests/e2e/scenarios/<id>.md\` and of its test. See the rule \`scenario-files\`.`,
       ),
     title: z.string().min(1).describe('What the scenario checks, in a few words.'),
     tags: z.array(z.enum(['smoke', 'full'])).describe('The test tags: `smoke` or `full`.'),

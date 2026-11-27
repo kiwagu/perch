@@ -1,10 +1,11 @@
-import { errAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { LocalDb } from '@workspace/data'
+import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import type { Locale } from '@workspace/i18n/translator'
-import { type IdentityId, idSchemas } from '@workspace/ids'
+import { idSchemas } from '@workspace/ids'
+import { CONTRACT_ROLES, type TenantRole } from '@workspace/kernel'
 import { createLogger } from '@workspace/logger'
 
 import { deviceHeaders, openAuth, signUpOn } from '../../auth/__fixtures__/auth-instance'
@@ -24,6 +25,7 @@ const ANN = 'ann@example.test'
 const BOB = 'bob@example.test'
 const CAROL = 'carol@example.test'
 const TOKEN = 'tok_MARKER_0123'
+const KEY = 'acme'
 const PUBLIC_URL = 'https://localhost:5443'
 
 interface HarnessOptions {
@@ -35,6 +37,11 @@ interface HarnessOptions {
   readonly settingsAnswer?: unknown
   /** Makes every query of the directory throw at once, not reject. */
   readonly throwingAtOnce?: boolean
+  /**
+   * The default language of the invitation's organisation: none unless named; `unreadable` fails
+   * its read, and a promise answers it once settled.
+   */
+  readonly organisationLocale?: Locale | 'unreadable' | Promise<Locale | undefined>
 }
 
 /**
@@ -133,9 +140,27 @@ async function harness(
       ? directory
       : answeringSettings(directory, options.settingsAnswer)
   const read = options.throwingAtOnce === true ? throwingAtOnce(answering) : answering
+  /** The organisations whose default language was asked, by key. */
+  const asked: string[] = []
   const mails = new InvitationMails({
     mail: options.mail ?? opened.outbox,
     directory: read,
+    organisationLocale: (key) => {
+      asked.push(key)
+
+      const named = options.organisationLocale
+
+      if (named instanceof Promise) {
+        return ResultAsync.fromSafePromise<Locale | undefined, DataError>(named)
+      }
+
+      return named === 'unreadable'
+        ? errAsync<Locale | undefined, DataError>({
+            code: 'data:QUERY_FAILED',
+            message: `the settings of ${key} could not be read`,
+          })
+        : okAsync<Locale | undefined, DataError>(named)
+    },
     link: (token) => invitationLink(PUBLIC_URL, token),
     log,
   })
@@ -148,6 +173,7 @@ async function harness(
     ...opened,
     mails,
     identities,
+    asked,
     lines,
     /** The log lines so far, each parsed. */
     logged: (): Array<Record<string, unknown>> =>
@@ -155,13 +181,9 @@ async function harness(
   }
 }
 
-/** Invites `email` to Acme as `role` from `inviter`. */
-const invite = (
-  mails: InvitationMails,
-  inviter: IdentityId,
-  email: string,
-  role: 'member' | 'admin' = 'member',
-) => mails.invite({ email, organisation: 'Acme Robotics', role, token: TOKEN, inviter })
+/** Invites `email` to Acme as `role`. */
+const invite = (mails: InvitationMails, email: string, role: TenantRole = CONTRACT_ROLES.member) =>
+  mails.invite({ email, organisation: 'Acme Robotics', key: KEY, role, token: TOKEN })
 
 /** Waits until the log holds a line, the mail having gone nowhere. */
 async function loggedLine(logged: () => Array<Record<string, unknown>>) {
@@ -175,7 +197,7 @@ describe('InvitationMails', () => {
     const { mails, outbox, identities, local } = await harness('en', 'en')
 
     await local.db.query(settingsLocaleStatement, { identity: identities.bob, locale: 'es' })
-    invite(mails, identities.ann, BOB, 'admin')
+    invite(mails, BOB, CONTRACT_ROLES.admin)
 
     const mail = await outbox.next(BOB, 1)
 
@@ -188,40 +210,51 @@ describe('InvitationMails', () => {
   it("speaks the recipient's sign-up language until its settings name one, whatever the inviter reads", async () => {
     const { mails, outbox, identities } = await harness('en', 'es')
 
-    invite(mails, identities.ann, BOB)
+    invite(mails, BOB)
 
     expect((await outbox.next(BOB, 1)).subject).toBe(
       'Te invitaron a unirte a una organización en Perch',
     )
   })
 
-  it("mails an email without an account in the inviter's settings language", async () => {
-    const { mails, outbox, identities, local } = await harness('en', 'en')
+  it("speaks the account's language over its organisation's default, and asks the organisation nothing", async () => {
+    const { mails, outbox, asked } = await harness('en', 'en', { organisationLocale: 'es' })
 
-    await local.db.query(settingsLocaleStatement, { identity: identities.ann, locale: 'es' })
-    invite(mails, identities.ann, CAROL)
+    invite(mails, BOB)
+
+    expect((await outbox.next(BOB, 1)).text).toContain('Hello,')
+    expect(asked).toEqual([])
+  })
+
+  it("mails an email without an account in its organisation's default language, whatever the inviter reads", async () => {
+    const { mails, outbox, identities, local, asked } = await harness('en', 'en', {
+      organisationLocale: 'es',
+    })
+
+    await local.db.query(settingsLocaleStatement, { identity: identities.ann, locale: 'en' })
+    invite(mails, CAROL)
 
     const mail = await outbox.next(CAROL)
 
     expect(mail.subject).toBe('Te invitaron a unirte a una organización en Perch')
     expect(mail.text).toContain('Hola:')
+    expect(asked).toEqual([KEY])
   })
 
-  it('mails an email without an account in the language the inviter signed up in, as the inviter has no settings yet', async () => {
-    const { mails, outbox, identities } = await harness('es', 'en')
+  it('mails an email without an account in English when its organisation names no default language, whatever the inviter reads', async () => {
+    const { mails, outbox, identities, local } = await harness('es', 'en')
 
-    invite(mails, identities.ann, CAROL)
+    await local.db.query(settingsLocaleStatement, { identity: identities.ann, locale: 'es' })
+    invite(mails, CAROL)
 
-    expect((await outbox.next(CAROL)).subject).toBe(
-      'Te invitaron a unirte a una organización en Perch',
-    )
+    expect((await outbox.next(CAROL)).text).toContain('Hello,')
   })
 
   it('greets no one by name and names no inviter, whether or not the recipient has an account', async () => {
     const { mails, outbox, identities } = await harness('en', 'en')
 
-    invite(mails, identities.ann, BOB)
-    invite(mails, identities.ann, CAROL)
+    invite(mails, BOB)
+    invite(mails, CAROL)
 
     for (const mail of [await outbox.next(BOB, 1), await outbox.next(CAROL)]) {
       expect(mail.text).toContain('Hello,')
@@ -233,7 +266,7 @@ describe('InvitationMails', () => {
   it('links to the invitation screen with the token', async () => {
     const { mails, outbox, identities } = await harness()
 
-    invite(mails, identities.ann, CAROL)
+    invite(mails, CAROL)
 
     const mail = await outbox.next(CAROL)
 
@@ -246,7 +279,7 @@ describe('InvitationMails', () => {
       settingsAnswer: 'fr',
     })
 
-    invite(mails, identities.ann, BOB)
+    invite(mails, BOB)
 
     const lines = await loggedLine(logged)
 
@@ -262,7 +295,7 @@ describe('InvitationMails', () => {
       failing: (text) => text.includes('FROM ONLY settings'),
     })
 
-    invite(mails, identities.ann, BOB)
+    invite(mails, BOB)
 
     const lines = await loggedLine(logged)
 
@@ -277,7 +310,7 @@ describe('InvitationMails', () => {
       failing: (text) => text.includes("FROM ONLY type::record('identity'"),
     })
 
-    invite(mails, identities.ann, BOB)
+    invite(mails, BOB)
 
     const lines = await loggedLine(logged)
 
@@ -287,15 +320,17 @@ describe('InvitationMails', () => {
     expect(outbox.to(BOB)).toHaveLength(1)
   })
 
-  it('sends nothing to an email without an account when the inviter is gone, and logs the code alone', async () => {
-    const { mails, outbox, logged } = await harness()
+  it("sends nothing to an email without an account when its organisation's default language cannot be read, and logs the code alone", async () => {
+    const { mails, outbox, logged } = await harness('en', 'en', {
+      organisationLocale: 'unreadable',
+    })
 
-    invite(mails, idSchemas.identity.schema.parse('idn_0000000000000000.0000000000'), CAROL)
+    invite(mails, CAROL)
 
     const lines = await loggedLine(logged)
 
     expect(lines).toHaveLength(1)
-    expect(lines[0]).toMatchObject({ code: 'mail:SEND_FAILED' })
+    expect(lines[0]).toMatchObject({ code: 'mail:LOCALE_UNREADABLE' })
     expect(JSON.stringify(lines)).not.toContain(CAROL)
     expect(outbox.to(CAROL)).toHaveLength(0)
   })
@@ -305,7 +340,7 @@ describe('InvitationMails', () => {
       failing: (text) => text.includes('FROM ONLY identity'),
     })
 
-    invite(mails, identities.ann, CAROL)
+    invite(mails, CAROL)
 
     const lines = await loggedLine(logged)
 
@@ -320,7 +355,7 @@ describe('InvitationMails', () => {
       throwingAtOnce: true,
     })
 
-    expect(invite(mails, identities.ann, BOB)).toBeUndefined()
+    expect(invite(mails, BOB)).toBeUndefined()
 
     const lines = await loggedLine(logged)
 
@@ -343,7 +378,7 @@ describe('InvitationMails', () => {
       },
     })
 
-    invite(mails, identities.ann, CAROL)
+    invite(mails, CAROL)
 
     const lines = await loggedLine(logged)
 
@@ -358,8 +393,33 @@ describe('InvitationMails', () => {
     const { port, reached } = silentPort()
     const { mails, identities } = await harness('en', 'en', { mail: port })
 
-    expect(invite(mails, identities.ann, CAROL)).toBeUndefined()
+    expect(invite(mails, CAROL)).toBeUndefined()
 
+    await expect.poll(reached).toBe(1)
+  })
+
+  it("holds a closing gateway until an invitation's organisation answered its default language, not until the mail server does", async () => {
+    const { port, reached } = silentPort()
+    let answer: (locale: Locale | undefined) => void = () => undefined
+    const held = new Promise<Locale | undefined>((resolve) => {
+      answer = resolve
+    })
+    const { mails, asked } = await harness('en', 'en', { mail: port, organisationLocale: held })
+    let read = false
+
+    invite(mails, CAROL)
+
+    const reading = mails.languagesRead().then(() => {
+      read = true
+    })
+
+    await expect.poll(() => asked).toEqual([KEY])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(read).toBe(false)
+
+    answer('es')
+    await reading
+    // Read, then handed to a mail server that never answers.
     await expect.poll(reached).toBe(1)
   })
 
@@ -369,7 +429,7 @@ describe('InvitationMails', () => {
 
     await mails.languagesRead()
 
-    invite(mails, identities.ann, CAROL)
+    invite(mails, CAROL)
     await mails.languagesRead()
     await local.close()
 

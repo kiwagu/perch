@@ -27,7 +27,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     (`file:line: message` through `formatProblem`):
     - `parseVocabulary(markdown)`: the closed lists of `contract/vocabulary.md`, one `## `
       section each (`VOCABULARY_SECTIONS`); a vocabulary without its "Composites" section reads
-      as an empty table.
+      as an empty table, and one without its "Roles" section too (the terms file holds them;
+      `writesRoles` says whether the section is there, as in a contract of an older ref).
+    - `loadTerms(root)`: `contract/domain/terms.yaml` (`TERMS_FILE`) through `termsFileSchema`,
+      none when a contract of an older ref has none (the check refuses that); `loadContract`
+      takes the contract's roles from it (`contract/REFERENCE.md#rule-terms`).
     - `loadScreens(root)` and `loadScreensWith(root, model)` (with a model already loaded, as
       the contract check does, which takes back the model with its lengths resolved): every
       `.yaml` file under `contract/domain/screens`, sorted by path, the platform's values, the
@@ -80,6 +84,15 @@ links to as `contract/REFERENCE.md#<slug>`.
   - `attributedCodes(action, platform)` (`files/derive/failures.ts`): per parameter of a platform
     action, the codes that concern it, by the suffixes of `FIELD_CODE_SUFFIXES`
     (`contract/REFERENCE.md#rule-attributed-codes`).
+  - `codeNamesOf(codes)`, `codeEntriesOf(codes)` and `outcomesOf(result)`
+    (`files/action-codes.ts`): a platform action's codes by name, each with its place and its
+    invariants and condition, and its outcome lines, read one way whether it writes the codes as a
+    map or as the older list a contract before version 6 may write, its result as a list or as one
+    string; `invariantActions(platform)`
+    (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, by
+    name; `renderedRule(invariant)` and `renderedValue(value)` (`files/invariant-values.ts`): the
+    rule with each of its `values` written in where it says `{name}`, a count as digits and a
+    duration with its unit (`contract/REFERENCE.md#rule-action-outcomes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
     write, as they write them, each a `WrittenDescription` (`file`, `line`, `at`, `kind`, `place`,
     `text`); the `Contract` carries them as `descriptions`, read by `loadContract`
@@ -91,7 +104,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     `authoredFlowSchema`, `draftPatternSchema`, `controlRegionSchema`, `authoredAnchorDefSchema`
     (the source of `contract/schemas/screen.schema.json`), `platformFileSchema`,
     `platformMailSchema` (`PlatformMail`), `platformNoticeSchema` (`PlatformNotice`), `ACCOUNT`,
-    `RECIPIENT`, `flowSchema` with `codeGuardSchema`, `effectSchema`, `branchReadOptOutSchema` and
+    `ORGANISATION`, `RECIPIENT`, `languageSources` (a mail's language as its list of sources),
+    `flowSchema` with `codeGuardSchema`, `effectSchema`, `branchReadOptOutSchema` and
     `transitionSchema` and the types `Flow`, `FlowState`, `FlowParallelState`, `FlowRegion`,
     `FlowRegionState`, `FlowTransition` and `Effect`, `activitySchema` (`Activity`, `ActivityState`,
     `ActivityTransition`), `flatJsonSchema`, `scenarioSchema`, `entityDefinitionSchema` and
@@ -104,7 +118,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     `model.schema.json` is authored), and `writeSchemas` writes the reference after them.
     `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each description field
     in one text, `DESCRIPTION_BUDGET` its budget, and `descriptionLength(text)` counts a
-    description as the budget does (`contract/REFERENCE.md#rule-check-files`).
+    description as the budget does (`contract/REFERENCE.md#rule-check-files`);
+    `BEHAVIOUR_PURPOSES`, by its `BehaviourKind`, the purpose of an outcome line, a condition and
+    a rule, which keep the same budget (`contract/REFERENCE.md#rule-action-outcomes`).
   - The reference: `renderReference()` is the text of `contract/REFERENCE.md` (`REFERENCE_FILE`,
     generated, never edited): one section per file with each key the schema describes, then
     `REFERENCE_RULES`, the engine's rules that no key states (`ReferenceRule`: a kebab-case `id`,
@@ -128,6 +144,12 @@ links to as `contract/REFERENCE.md#<slug>`.
     - `vocabularyProblems`, `screensProblems`, `descriptionsProblems`: the vocabulary's words,
       the anchors' uniqueness and their facets, the descriptions' budget
       (`contract/REFERENCE.md#rule-check-files`);
+    - `invariantsProblems`, `behaviourTextsProblems`, `actionFormsProblems`: each invariant an
+      action names exists and refuses with the code it is named under, every invariant is named,
+      each `{name}` of a rule names one of its `values` and each value is named,
+      each outcome line, condition and rule keeps the budget, and from version 6
+      (`BEHAVIOUR_EDITION`) a `result` of one string keeps it too and an action's codes are a map,
+      never a list (`contract/REFERENCE.md#rule-action-outcomes`);
     - `bindingsProblems`, `searchProblems`, `routesProblems` with `parseRoutePath(path)` (the
       router's path syntax): model fields, actions and their params, routes and the search
       parameters (`contract/REFERENCE.md#rule-check-bindings`);
@@ -173,11 +195,23 @@ links to as `contract/REFERENCE.md#<slug>`.
     value, and `pairingResolver(contract)` why a value does not pair with its anchor, for the
     scenarios and the consumers check alike (`contract/REFERENCE.md#rule-scenario-brackets`).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and returns
-    its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`) and `colours`
-    (`marksState`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
+    its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
+    (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`), following a name
+    of the file to what it declares (`sources/locals.ts`, in the scope that binds it,
+    `sources/bindings.ts`, `sources/scopes.ts`, every object a value may be in
+    `sources/alternatives.ts`: an anchor a `<NAME>_TEST_ID` constant
+    holds, the props a spread on an element supplies, `sources/spreads.ts`, read per element in
+    `sources/element.ts`, the event a `disabled`
+    asks its machine about, `sources/asked-event.ts`, with what the file's type declarations say of
+    a spread it cannot follow, `sources/declared-type.ts`, whether a function body can run off its
+    end, `sources/reachable-end.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`,
+    refusing in any typed file of the repository a `declare module` that names one, a backslash
+    read as a separator (`sources/augmentation.ts`; only a fixture project outside the web app
+    and the UI kit with a `tsconfig.json` of its own inside its `__fixtures__` folder is left out);
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
-    `codesOf(vocabulary, screens)` (`sources/opt-outs.ts` holds the opt-outs a view writes: the
-    kit takes them from the generated field facts, so a view may leave them out); the
+    `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
+    and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
+    `sources/facets.ts` refuse it, the size select's `holdsInput` included); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,
     `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` and `MARKS_STATE_ANCHOR`
     (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-field-holds-input`).
@@ -213,8 +247,11 @@ links to as `contract/REFERENCE.md#<slug>`.
   - The emitted modules (`emit/`): `valuesModuleOf(contract)` is the text of a module of plain
     data, `CONTRACT_VALUES`, every value of the platform and every field of the model as the
     contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
-    element of each field carries that the contract decides, by its anchor
-    (`contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
+    element of each field carries that the contract decides, by its anchor, and
+    `termsModuleOf(contract)` that of `CONTRACT_ROLES`, `CONTRACT_ROUTES` and
+    `CONTRACT_INVARIANTS`, every role by its name, every route path by its screen's id, a further
+    binding's by `<id>@<path>`, and each invariant's numbers, a duration in milliseconds
+    (`routeKeyOf`; `contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
     is the text a package's committed module must equal (see `./testing` below).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
     `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns
@@ -304,12 +341,12 @@ links to as `contract/REFERENCE.md#<slug>`.
   `bun run contract:check` on both).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
   other, by the rules of the version the contract declares, every written description against
-  its budget, the schema drift, the reference's drift and each link of a guide into the
+  its budget, every field hint of the generated schemas against the same budget, the schema drift, the reference's drift and each link of a guide into the
   reference; prints `file:line: message` per
   problem and exits 1, or a one-line summary, followed for a contract older than the engine by
   `ui-contract: the contract is at version <n>; this engine reads up to <m> (bun run contract:migrate)`;
-  part of `bun run check` and the pre-commit hook). `ui-contract check --current` fails on such a
-  contract instead.
+  part of the pre-commit hook on a branch). `ui-contract check --current`, which `bun run check`
+  and a commit on `main` run, fails on such a contract instead.
 - From the root: `bun run contract:migrate` (`ui-contract migrate [--write]`: each step from the
   version the contract declares to the engine's, `<n> -> <n+1>: <note>`, with the files it
   changes and the work it leaves by hand, `by hand: <work>`; `--write` rewrites those files,
@@ -335,8 +372,9 @@ links to as `contract/REFERENCE.md#<slug>`.
   folder under the root; prints the problems and exits 1 when the contract check finds any
   or the manifest does not match its schema). The web app's build runs it into
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
-- `ui-contract emit values|fields --out <file>`, from the root or any folder under it: writes
-  the module of plain data `CONTRACT_VALUES` or `FIELD_FACTS` into `<file>`, relative to the
+- `ui-contract emit values|fields|terms --out <file>`, from the root or any folder under it:
+  writes the module of plain data `CONTRACT_VALUES`, `FIELD_FACTS` or `CONTRACT_ROLES` with
+  `CONTRACT_ROUTES` and `CONTRACT_INVARIANTS` into `<file>`, relative to the
   working directory, which the caller always names; prints the problems and exits 1, writing
   nothing, when the contract check finds any. From the root, `bun run contract:emit`
   (`turbo run emit`) runs the `emit` script of every package that keeps one. Not part of
@@ -347,7 +385,7 @@ links to as `contract/REFERENCE.md#<slug>`.
   parts, the codes, the states, the roles and the error fields the anchors both hold gain or
   lose (derived ones included), who each route serves, the source each list reads with its
   params and its paging, the fields that start or
-  stop holding input, the messages that rank their codes with their order, the leaving
+  stop holding input or having to be filled, the messages that rank their codes with their order, the leaving
   actions, how each leave asks, the activities and the
   transitions changed in each, the lines changed in each screen's flow, the platform
   actions with the lines changed in each, its mail among them, the reads each action of the
@@ -359,7 +397,10 @@ links to as `contract/REFERENCE.md#<slug>`.
 - From the root: `bun run contract:inflight` (`ui-contract inflight`: the contract of
   `contract/trunk` and of each local `feat/*`, `fix/*`, `chore/*` and `refactor/*` branch, loaded
   with this engine from the refs alone, each printed as OK or with its problems; exits 1 when any
-  has one). Not part of `bun run check`.
+  has one; a branch whose tree is that of its one merge base with `main`, so with nothing `main`
+  lacks, is left out as `<branch>: nothing unlanded, left out` and counted apart in the summary;
+  one with several merge bases, none, or a failing git call is checked). Not part of
+  `bun run check`.
 - From the root: `bun run contract:coverage` (`ui-contract coverage [--write | --check]
   [--json] [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
   model with the anchors bound to them and the transitions of each activity its scenarios

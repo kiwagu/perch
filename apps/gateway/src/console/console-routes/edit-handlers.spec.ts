@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import {
   holdTurn,
@@ -8,6 +9,7 @@ import {
   signedInOn,
   turnsAsked,
 } from '../../auth/auth-handler/__fixtures__/mount'
+import { IDENTITY_EMAIL_CHANGES } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import {
   type ConsoleMount,
@@ -26,7 +28,13 @@ const CAT = 'cat@example.test'
 /** The new email an operator gives bob's account. */
 const NEW_EMAIL = 'robert@elsewhere.test'
 
-const MINUTE_MS = 60 * 1000
+/** The most characters a name and an email have, as the contract says it. */
+const { maxLength: MAX_NAME } = CONTRACT_VALUES['profile.name']
+const { maxLength: MAX_ADDRESS } = CONTRACT_VALUES.email
+
+/** An email of exactly `length` characters. */
+const emailOf = (length: number): string =>
+  `${'r'.repeat(length - '@example.test'.length)}@example.test`
 
 /** Another client address, which nothing the operator asks charges. */
 const ELSEWHERE = '203.0.113.20'
@@ -58,10 +66,10 @@ describe('consoleRoutes: POST /console/accounts/:id/rename', () => {
     expect(mounted.consoleFailures).toEqual([])
   })
 
-  it('takes a name of 80 characters once trimmed', async () => {
+  it('takes a name of the limit once trimmed', async () => {
     const mounted = await consoleOnMount()
     const { bob } = await bobWithProfile(mounted)
-    const name = 'r'.repeat(80)
+    const name = 'r'.repeat(MAX_NAME)
 
     expect((await mounted.act(bob.identity, 'rename', { name: ` ${name} ` })).status).toBe(204)
     expect((await mounted.card(bob.identity))?.name).toBe(name)
@@ -70,7 +78,7 @@ describe('consoleRoutes: POST /console/accounts/:id/rename', () => {
   it.each([
     { name: '', code: 'name-required' },
     { name: '   ', code: 'name-required' },
-    { name: 'r'.repeat(81), code: 'name-too-long' },
+    { name: 'r'.repeat(MAX_NAME + 1), code: 'name-too-long' },
   ])('refuses the name "$name" 400 $code, writing nothing', async ({ name, code }) => {
     const mounted = await consoleOnMount()
     const { bob, device } = await bobWithProfile(mounted)
@@ -200,7 +208,10 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
   it.each([
     { what: 'an empty email', email: '' },
     { what: 'a text that is no email', email: 'robert' },
-    { what: 'an email over 320 characters', email: `${'r'.repeat(310)}@example.test` },
+    {
+      what: 'an email past the longest length',
+      email: emailOf(MAX_ADDRESS + 1),
+    },
   ])(
     "refuses $what 400 email-invalid, mailing nothing and taking none of the account's changes",
     async ({ email }) => {
@@ -214,12 +225,21 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
         retryAfter: null,
       })
       expect(mounted.outbox.sent).toHaveLength(sent)
-      // The account's three changes in a quarter of an hour are all still there.
-      expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
-      expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
-      expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
+      // The account's changes within the window are all still there.
+      for (let n = 0; n < IDENTITY_EMAIL_CHANGES.limit; n += 1) {
+        expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
+      }
     },
   )
+
+  it('takes an email of the longest length and mails it', async () => {
+    const mounted = await consoleOnMount()
+    const bob = await signedInOn(mounted, BOB, ['desk'])
+    const longest = emailOf(MAX_ADDRESS)
+
+    expect((await mounted.act(bob.identity, 'email', { email: longest })).status).toBe(204)
+    expect((await mounted.outbox.next(longest)).subject).toBe('Confirm your new email for Perch')
+  })
 
   it.each([
     { what: 'an email another account holds', email: CAT },
@@ -248,11 +268,11 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
     },
   )
 
-  it('takes three changes of the account within a quarter of an hour; the fourth answers 429 rate-limited and mails nothing', async () => {
+  it('takes the changes of the account the contract allows within its window; the next answers 429 rate-limited and mails nothing', async () => {
     const mounted = await consoleOnMount()
     const bob = await signedInOn(mounted, BOB, ['desk'])
 
-    for (let n = 0; n < 3; n += 1) {
+    for (let n = 0; n < IDENTITY_EMAIL_CHANGES.limit; n += 1) {
       expect(
         (await mounted.act(bob.identity, 'email', { email: `n${n}@example.test` })).status,
       ).toBe(204)
@@ -267,10 +287,14 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
       ELSEWHERE,
     )
 
-    expect(limited).toEqual({ status: 429, body: { code: 'rate-limited' }, retryAfter: '900' })
+    expect(limited).toEqual({
+      status: 429,
+      body: { code: 'rate-limited' },
+      retryAfter: String(IDENTITY_EMAIL_CHANGES.windowMs / 1000),
+    })
     expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
 
-    await mounted.clock.advance(15 * MINUTE_MS)
+    await mounted.clock.advance(IDENTITY_EMAIL_CHANGES.windowMs)
 
     expect((await mounted.act(bob.identity, 'email', { email: NEW_EMAIL })).status).toBe(204)
   })

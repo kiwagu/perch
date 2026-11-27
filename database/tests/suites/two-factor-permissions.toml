@@ -1,0 +1,80 @@
+name = "two-factor-permissions"
+tags = ["permissions", "two_factor"]
+
+# An account's second factor is the gateway's own record: the key's secret and the backup codes,
+# encrypted, and whether a code of the key confirmed it. No record user reads or writes it, its
+# own row included. Root seeds a row as the gateway would.
+
+[[cases]]
+name = "root creates the second factor of alice"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE two_factor:alice SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), secret = 'encrypted-secret', backup_codes = 'encrypted-codes', verified = true;"
+allow = true
+
+[[cases]]
+name = "alice sees no second factor, her own included"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT * FROM two_factor;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot change her own second factor"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE two_factor:alice SET verified = false, backup_codes = 'mine' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot create a second factor"
+kind = "sql_expect"
+actor = "alice"
+sql = "CREATE two_factor:extra SET identity = record::id($auth.id), secret = 'mine', backup_codes = 'mine', verified = true;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot delete her own second factor"
+kind = "sql_expect"
+actor = "alice"
+sql = "DELETE two_factor:alice RETURN BEFORE;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "a second factor without the key's secret is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE two_factor:nosecret SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0]), backup_codes = 'encrypted-codes';"
+allow = false
+error_contains = "secret"
+
+[[cases]]
+name = "the seeded row is unchanged and no other was written"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE [record::id(id), verified, backup_codes] FROM two_factor;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = ["alice", true, "encrypted-codes"]
+
+[[cases.assertions]]
+path = "1"
+exists = false

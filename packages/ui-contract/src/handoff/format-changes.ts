@@ -20,6 +20,7 @@ const LISTS = [
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
   ['stateColours', 'field without a state colour', 'fields without a state colour'],
+  ['requiredFields', 'field that must be filled', 'fields that must be filled'],
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
   ['leaveQuestions', 'question before a leave', 'questions before leaves'],
   ['ranks', 'ranked message', 'ranked messages'],
@@ -81,7 +82,7 @@ const descriptionsOf = (changes: readonly DescriptionChange[]) =>
 /**
  * Each non-empty list (`anchors renamed`, `platform values changed`), then the transitions
  * changed in each activity, the lines changed in each screen's flow, the lines changed in each
- * platform action, the reads each action of the model comes to change or stops changing, and
+ * platform action and each invariant, the reads each action of the model comes to change or stops changing, and
  * last the descriptions changed, each with its length before and after.
  */
 const listsOf = (changes: ContractChanges) => [
@@ -94,6 +95,9 @@ const listsOf = (changes: ContractChanges) => [
   ),
   ...Object.entries(changes.actionLines).flatMap(([name, change]) =>
     linesOf(change, 'platform action line', 'platform action lines', ` in ${name}`),
+  ),
+  ...Object.entries(changes.invariantLines).flatMap(([name, change]) =>
+    linesOf(change, 'invariant line', 'invariant lines', ` in ${name}`),
   ),
   ...Object.entries(changes.modelActionLines).flatMap(([name, change]) =>
     linesOf(change, 'model action line', 'model action lines', ` in ${name}`),

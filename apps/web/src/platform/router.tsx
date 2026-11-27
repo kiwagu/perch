@@ -31,6 +31,7 @@ import {
 } from '@tanstack/react-router'
 import type { FunctionComponent } from 'react'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { admits } from '@workspace/ui-contract/anchors'
 import { z } from '@workspace/zod'
 
@@ -41,15 +42,18 @@ import { type PageCrash, pageCrash } from './page-crash'
 import { NOT_FOUND_PATH, resolvedRoute } from './resolved-route'
 import type { SessionPort } from './session.port'
 
-export const SIGN_IN_PATH = '/sign-in'
+export const SIGN_IN_PATH = CONTRACT_ROUTES['user.sign-in']
 
-export const HOME_PATH = '/me'
+export const HOME_PATH = CONTRACT_ROUTES['user.profile']
 
 /**
  * The pages whose own flow signs this tab in, the sign-in page and the one a verification link
  * opens: each moves on by itself once its sign-in went through, after its welcome.
  */
-const SIGNING_IN_PAGES: ReadonlySet<string> = new Set([SIGN_IN_PATH, '/verify-email'])
+const SIGNING_IN_PAGES: ReadonlySet<string> = new Set([
+  SIGN_IN_PATH,
+  CONTRACT_ROUTES['user.verify-email'],
+])
 
 /**
  * What of the session the router reads: who is signed in, whether this tab signs one in itself

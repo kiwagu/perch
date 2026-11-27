@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { Locale } from '@workspace/i18n'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import en from '../../../../../platform/i18n/app.en.json'
@@ -30,11 +31,10 @@ const shell = (props: Partial<ShellViewProps> = {}) => (
     status="ready"
     renders={READY}
     held={GUEST}
-    activePath="/sign-in"
-    canChooseLocale={true}
+    activePath={CONTRACT_ROUTES['user.sign-in']}
+    can={() => true}
     onLocaleChange={() => {}}
     theme="system"
-    canChooseTheme={true}
     onThemeChange={() => {}}
     {...props}
   >
@@ -90,7 +90,7 @@ describe('ShellView', () => {
   it('shows the messages of the platform once ready, the update and the install above the page', () => {
     renderShell({
       held: ACCOUNT,
-      activePath: '/me',
+      activePath: CONTRACT_ROUTES['user.profile'],
       sync: 'synced',
       update: 'new-version',
       install: 'install-available',
@@ -127,7 +127,7 @@ describe('ShellView', () => {
   })
 
   it('shows a guest no navigation, only the banner and the page', () => {
-    renderShell({ held: GUEST, activePath: '/sign-in' })
+    renderShell({ held: GUEST, activePath: CONTRACT_ROUTES['user.sign-in'] })
 
     expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     expect(screen.queryByRole('navigation')).toBeNull()
@@ -139,14 +139,18 @@ describe('ShellView', () => {
   })
 
   it("shows a signed-in account no navigation where the frame's state renders none", () => {
-    renderShell({ held: ACCOUNT, activePath: '/me', renders: rendering() })
+    renderShell({
+      held: ACCOUNT,
+      activePath: CONTRACT_ROUTES['user.profile'],
+      renders: rendering(),
+    })
 
     expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     expect(screen.queryByRole('link')).toBeNull()
   })
 
   it("marks a signed-in account's navigation, its four links in it, with no language select", () => {
-    renderShell({ held: ACCOUNT, activePath: '/me' })
+    renderShell({ held: ACCOUNT, activePath: CONTRACT_ROUTES['user.profile'] })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
@@ -168,7 +172,10 @@ describe('ShellView', () => {
   })
 
   it("adds the console's link to an operator's navigation, and to nobody else's", () => {
-    renderShell({ held: heldRoles(true, ['admin', 'operator']), activePath: '/me' })
+    renderShell({
+      held: heldRoles(true, [CONTRACT_ROLES.admin, CONTRACT_ROLES.operator]),
+      activePath: CONTRACT_ROUTES['user.profile'],
+    })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
@@ -186,7 +193,7 @@ describe('ShellView', () => {
   })
 
   it('speaks Spanish when the Spanish catalog is chosen', () => {
-    renderShell({ locale: 'es', held: ACCOUNT, activePath: '/me' })
+    renderShell({ locale: 'es', held: ACCOUNT, activePath: CONTRACT_ROUTES['user.profile'] })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
@@ -201,7 +208,6 @@ describe('ShellView', () => {
     renderShell({
       crash: 'screen-crashed',
       renders: rendering('app-shell.nav', 'app-shell.reload-button'),
-      canReload: true,
       onReload: () => {},
     })
 
@@ -227,4 +233,36 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
     expect(screen.queryByTestId('app-shell.update-button')).toBeNull()
   })
+
+  it.each([true, false])(
+    'enables the controls of every part of the frame exactly while the flow takes their events: %s',
+    (takes) => {
+      renderShell({
+        can: () => takes,
+        renders: rendering(
+          'app-shell.nav',
+          'app-shell.reload-button',
+          'app-shell.sign-out-here-button',
+        ),
+        crash: 'screen-crashed',
+        update: 'new-version',
+        install: 'install-available',
+        onSignOutHere: () => {},
+      })
+
+      for (const select of ['app-shell.theme-select', 'app-shell.locale-select']) {
+        expect(screen.getByTestId(select).hasAttribute('data-disabled')).toBe(!takes)
+      }
+
+      for (const button of [
+        'app-shell.reload-button',
+        'app-shell.update-button',
+        'app-shell.install-button',
+        'app-shell.install-later-button',
+        'app-shell.sign-out-here-button',
+      ]) {
+        expect(screen.getByTestId(button).hasAttribute('disabled')).toBe(!takes)
+      }
+    },
+  )
 })

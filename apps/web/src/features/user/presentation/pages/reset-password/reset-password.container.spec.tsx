@@ -21,23 +21,36 @@ type AuthUser = NonNullable<ReturnType<SessionPort['current']>>
 /** What a reset answers. */
 type ResetAnswer = ReturnType<SessionPort['resetPassword']>
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { ResetPasswordContainer } from './reset-password.container'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
+const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
 /**
- * The page at `at` over a session signed in as Ann, whose reset answers as `answer` says and, once
- * it went through, signs this device out as the channel's 4002 does.
+ * The page at `at`, `here` signed in, over a reset of Ann's password that answers as `answer` says
+ * and, once it went through, signs Ann's devices out as the channel's 4002 does; `signIn` changes
+ * who is signed in on this device while the page is open, as another tab would.
  */
-function open(at: string, answer: () => ResetAnswer = () => okAsync(undefined)) {
-  let user: AuthUser | undefined = ann
+function open(
+  at: string,
+  here: AuthUser | undefined,
+  answer: () => ResetAnswer = () => okAsync(undefined),
+) {
+  let user = here
   const listeners = new Set<(next: AuthUser | undefined) => void>()
+  const tell = (next: AuthUser | undefined) => {
+    user = next
+
+    for (const listener of listeners) {
+      listener(next)
+    }
+  }
   const resetPassword = vi.fn((_token: string, _password: string) =>
     answer().andTee(() => {
-      user = undefined
-
-      for (const listener of listeners) {
-        listener(undefined)
+      if (user === ann) {
+        tell(undefined)
       }
     }),
   )
@@ -56,9 +69,9 @@ function open(at: string, answer: () => ResetAnswer = () => okAsync(undefined)) 
     declarations: { Reset: ResetPasswordContainer },
     routes: [
       {
-        path: '/reset-password',
+        path: CONTRACT_ROUTES['user.reset-password'],
         page: 'Reset',
-        roles: ['guest', 'identity'],
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
     ],
@@ -78,8 +91,16 @@ function open(at: string, answer: () => ResetAnswer = () => okAsync(undefined)) 
     </I18nProvider>,
   )
 
-  return { resetPassword, session }
+  const signIn = (next: AuthUser | undefined) => act(() => tell(next))
+
+  return { resetPassword, session, signIn }
 }
+
+/** A reset refused for a link used before. */
+const used = () => errAsync({ code: 'data:LINK_INVALID' as const, message: 'used' })
+
+/** The code an anchor of the page carries. */
+const codeOf = (testId: string) => screen.getByTestId(testId).getAttribute('data-code')
 
 /** Types the new password twice and submits it. */
 async function setTwice(password: string): Promise<void> {
@@ -94,7 +115,10 @@ async function setTwice(password: string): Promise<void> {
 
 describe('ResetPasswordContainer', () => {
   it("sets the password with the address's token, and keeps its message once its own reset signed this device out", async () => {
-    const { resetPassword, session } = open('/reset-password?token=the-token')
+    const { resetPassword, session } = open(
+      `${CONTRACT_ROUTES['user.reset-password']}?token=the-token`,
+      ann,
+    )
 
     await setTwice('Secret-new1')
 
@@ -108,19 +132,45 @@ describe('ResetPasswordContainer', () => {
     expect(screen.getByTestId('user.reset-password.sign-in-link')).toBeTruthy()
   })
 
-  it('takes the form away for a link that does not work, and offers a new one', async () => {
-    open('/reset-password?token=used', () =>
-      errAsync({ code: 'data:LINK_INVALID' as const, message: 'used' }),
-    )
+  it('keeps the sign-in link from another account signed in here, until it signs out', async () => {
+    const { signIn } = open(`${CONTRACT_ROUTES['user.reset-password']}?token=the-token`, bob)
 
     await setTwice('Secret-new1')
 
-    await waitFor(() =>
-      expect(screen.getByTestId('user.reset-password.error').getAttribute('data-code')).toBe(
-        'link-invalid',
-      ),
-    )
+    await waitFor(() => expect(codeOf('user.reset-password.message')).toBe('password-reset'))
+    expect(screen.queryByTestId('user.reset-password.sign-in-link')).toBeNull()
+
+    signIn(undefined)
+
+    expect(await screen.findByTestId('user.reset-password.sign-in-link')).toBeTruthy()
+    expect(codeOf('user.reset-password.message')).toBe('password-reset')
+  })
+
+  it('takes the form away for a link that does not work, and offers a guest a new one', async () => {
+    open(`${CONTRACT_ROUTES['user.reset-password']}?token=used`, undefined, used)
+
+    await setTwice('Secret-new1')
+
+    await waitFor(() => expect(codeOf('user.reset-password.error')).toBe('link-invalid'))
     expect(screen.getByTestId('user.reset-password.forgot-link')).toBeTruthy()
     expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
+  })
+
+  it('offers a new link only while nobody is signed in here', async () => {
+    const { signIn } = open(`${CONTRACT_ROUTES['user.reset-password']}?token=used`, ann, used)
+
+    await setTwice('Secret-new1')
+
+    await waitFor(() => expect(codeOf('user.reset-password.error')).toBe('link-invalid'))
+    expect(screen.queryByTestId('user.reset-password.forgot-link')).toBeNull()
+
+    signIn(undefined)
+
+    expect(await screen.findByTestId('user.reset-password.forgot-link')).toBeTruthy()
+
+    signIn(ann)
+
+    await waitFor(() => expect(screen.queryByTestId('user.reset-password.forgot-link')).toBeNull())
+    expect(codeOf('user.reset-password.error')).toBe('link-invalid')
   })
 })

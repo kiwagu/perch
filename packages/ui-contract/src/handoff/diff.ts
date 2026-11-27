@@ -7,7 +7,7 @@
  * when each anchor shows (its `with` and `without`), who each route serves (its guard and its
  * roles), the search parameters of each route (written or derived: a mail link's token with its
  * key), the platform action each list reads with its params and its paging, the fields that start
- * or stop holding input, the controls that start or stop asking before their flow leaves the
+ * or stop holding input or having to be filled, the controls that start or stop asking before their flow leaves the
  * screen, with the fields the leave loses, the messages that rank their codes, with their order,
  * the actions that leave what the user typed behind and how each leave that would lose it asks, the
  * notices the platform actions declare, the default length the platform declares, the transitions
@@ -23,7 +23,7 @@
 import { type Contract, codesOf } from '../check'
 import type { Activity, Flow, ModelAction } from '../files'
 
-import { actionLines, changesLines } from './action-lines'
+import { actionLines, changesLines, invariantLines } from './action-lines'
 import { branchesOf } from './activities'
 import { anchorChanges, carriedChanges } from './anchor-changes'
 import { byName, type Change, changeOf } from './change'
@@ -56,6 +56,8 @@ export interface ContractChanges {
   inputs: Change
   /** As `<anchor> shows no state colour`, the fields that drop it, on the anchors both contracts hold. */
   stateColours: Change
+  /** As `<anchor> must be filled`, the fields marked `required`, on the anchors both contracts hold. */
+  requiredFields: Change
   /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
   questions: Change
   /**
@@ -113,6 +115,11 @@ export interface ContractChanges {
    */
   actionLines: Record<string, Change>
   /**
+   * Per invariant of the platform either contract holds, by its name, its lines (`rule: <text>` with its values written in,
+   * `refuses <code>` and `value <name>: <value>`), an invariant one side lacks having none.
+   */
+  invariantLines: Record<string, Change>
+  /**
    * Per action of the model either contract holds, by `<entity>.<action>`, the reads its
    * `changes` names, as `changes <read>`, an action one side lacks naming none.
    */
@@ -135,6 +142,20 @@ function actionLineChanges(
 
   return Object.fromEntries(
     names.map((name) => [name, changeOf(actionLines(was[name]), actionLines(is[name]))]),
+  )
+}
+
+/** Per invariant of the platform either contract holds, by its name, the lines added and removed. */
+function invariantLineChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+): ContractChanges['invariantLines'] {
+  const was = before?.screens.platform.invariants ?? {}
+  const is = after?.screens.platform.invariants ?? {}
+  const names = [...new Set([...Object.keys(was), ...Object.keys(is)])].sort(byName)
+
+  return Object.fromEntries(
+    names.map((name) => [name, changeOf(invariantLines(was[name]), invariantLines(is[name]))]),
   )
 }
 
@@ -270,6 +291,9 @@ export function diffContracts(
     stateColours: carriedChanges(before, after, anchors.renamed, (def) =>
       def.marksState === false ? ['shows no state colour'] : [],
     ),
+    requiredFields: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.required === true ? ['must be filled'] : [],
+    ),
     questions: carriedChanges(before, after, anchors.renamed, (def) =>
       def.asks === undefined ? [] : [`asks ${def.asks.code}`],
     ),
@@ -303,6 +327,7 @@ export function diffContracts(
     values: valueChanges(before, after),
     actions: changeOf(Object.keys(actionsOf(before)), Object.keys(actionsOf(after))),
     actionLines: actionLineChanges(before, after),
+    invariantLines: invariantLineChanges(before, after),
     modelActionLines: modelActionLineChanges(before, after),
     descriptions: descriptionChanges(before, after, anchors.renamed),
   }

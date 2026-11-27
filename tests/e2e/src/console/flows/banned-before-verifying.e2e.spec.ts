@@ -1,4 +1,7 @@
 // scenario: console/flows/banned-before-verifying
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
 import {
@@ -71,7 +74,15 @@ test.describe('Ban an account before it verified its email', { tag: '@full' }, (
 
     await test.step('5. On device B, open the link of [mail:sign-up]', async () => {
       // The email's first mail, the sign-up's, which device B left unopened.
-      await openDeclaredMail(deviceB, 'sign-up', { params: { email: data.email, locale: 'en' } }, 0)
+      await openDeclaredMail(
+        deviceB,
+        'sign-up',
+        {
+          params: { email: data.email, locale: 'en' },
+          account: { email: data.email, language: 'en' },
+        },
+        0,
+      )
       // Expected: After step 5 [user.verify-email.error] carries [code:account-banned] on device
       //   B, no [user.verify-email.form] shows, and device B is not signed in: its URL stays
       //   [/verify-email]
@@ -80,13 +91,13 @@ test.describe('Ban an account before it verified its email', { tag: '@full' }, (
         'account-banned',
       )
       await expect(deviceB.getByTestId('user.verify-email.form')).toHaveCount(0)
-      await expectPathname(deviceB, '/verify-email')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.verify-email'])
       // Only a signed-in device shows the navigation.
       await expect(deviceB.getByTestId('app-shell.nav')).toHaveCount(0)
     })
 
     await test.step('6. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
-      await deviceB.goto('/sign-in')
+      await deviceB.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(deviceB)
       await deviceB.getByTestId('user.sign-in.email-input').fill(data.email)
       await deviceB.getByTestId('user.sign-in.password-input').fill(data.password)
@@ -97,7 +108,7 @@ test.describe('Ban an account before it verified its email', { tag: '@full' }, (
         'data-code',
         'account-banned',
       )
-      await expectPathname(deviceB, '/sign-in')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('7. On device A, reload the page', async () => {
@@ -127,7 +138,7 @@ test.describe('Ban an account before it verified its email', { tag: '@full' }, (
       //   [code:welcome] and [user.profile.heading] shows the name: the first sign-in created the
       //   account's profile with the name it signed up with
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.name, {
         timeout: 10_000,
       })

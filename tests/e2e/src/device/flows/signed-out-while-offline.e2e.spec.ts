@@ -1,4 +1,7 @@
 // scenario: device/flows/signed-out-while-offline
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   appReady,
@@ -29,7 +32,7 @@ test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
     await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and open [/devices]', async () => {
       await signUp(page, data)
       await page.getByTestId('app-shell.nav.devices-link').click()
-      await expectPathname(page, '/devices')
+      await expectPathname(page, CONTRACT_ROUTES.device)
     })
 
     const { deviceB, network } =
@@ -65,14 +68,14 @@ test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
       // Expected: After step 4 device B's [device.list.session-item] on device A is in
       //   [state:revoked], and device B is still on [/me]
       await expect(deviceBItem).toHaveAttribute('data-state', 'revoked')
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
     await test.step("5. Bring device B's browser back online", async () => {
       await network.goOnline()
       // Expected: After step 5 device B is on [/sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:signed-out-elsewhere]
-      await expectPathname(deviceB, '/sign-in', BACK_ONLINE_MS)
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], BACK_ONLINE_MS)
       await expect(signInNotice(deviceB, 'signed-out-elsewhere')).toBeVisible()
     })
   })

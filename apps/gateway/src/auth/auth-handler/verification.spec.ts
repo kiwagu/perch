@@ -6,6 +6,7 @@ import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { CREDENTIAL_CHECKS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { sessionStates } from '../__fixtures__/account-ban'
@@ -20,6 +21,7 @@ import {
   ARGON2_WAIT,
   annsLink,
   fakeConnection,
+  freshAddress,
   heldQueries,
   isSessionInsert,
   mountedOnFakeAuth,
@@ -30,9 +32,11 @@ import {
   printedDuring,
   READBACK_FAILURE,
   resendRequest,
+  signUpRequest,
   verifyRequest as verify,
 } from './__fixtures__/mount'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
+import { SIGN_UP_FLOOR_MS } from './sign-up'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -89,6 +93,24 @@ async function seen(answer: Response | undefined) {
 }
 
 describe('authHandler, the verification of an email', () => {
+  it('answers the starting language of an account an organisation invited, which its identity keeps', async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await mounted.invitedTo({ key: 'acme', email: ANN, locale: 'es' })
+    expect(
+      (await pastFloor(mounted.clock, mounted.route(signUpRequest(ANN), FROM), SIGN_UP_FLOOR_MS))
+        ?.status,
+    ).toBe(202)
+
+    const token = linkToken(await mounted.outbox.next(ANN))
+    const answer = await mounted.route(verify(token, 'phone'), FROM)
+    const body = verifiedAnswer.parse(await answer?.json())
+
+    expect(answer?.status).toBe(200)
+    expect(body.user.locale).toBe('es')
+    expect(await mounted.localeOf(ANN)).toBe('es')
+  })
+
   it('signs the device in the first time, its session admitted and its sockets closed, and answers the account', async () => {
     const { route, outbox, closes, sessions } = await mountedOnRealAuth()
     const token = await annsLink(outbox)
@@ -268,23 +290,23 @@ describe('authHandler, the verification of an email', () => {
     expect(handed?.headers.get('origin')).toBe(ORIGIN)
   })
 
-  it("takes one of its address's 20 credential checks per verification: the 21st within 10 s answers 429", async () => {
+  it("takes one of its address's credential checks per verification: the one past them within their window answers 429", async () => {
     const { route, received } = mountedOnFakeAuth(() =>
       Response.json({ code: 'INVALID_TOKEN' }, { status: 401 }),
     )
     const statuses: number[] = []
 
-    for (let n = 0; n < 20; n += 1) {
+    for (let n = 0; n < CREDENTIAL_CHECKS.limit; n += 1) {
       statuses.push((await route(verify('not-a-token', 'phone'), FROM))?.status ?? 0)
     }
 
     const refused = await route(verify('not-a-token', 'phone'), FROM)
 
-    expect(statuses).toEqual(Array.from({ length: 20 }, () => 401))
+    expect(statuses).toEqual(Array.from({ length: CREDENTIAL_CHECKS.limit }, () => 401))
     expect(refused?.status).toBe(429)
     expect(await refused?.json()).toEqual({ code: 'rate-limited' })
-    expect(refused?.headers.get('Retry-After')).toBe('10')
-    expect(received).toHaveLength(20)
+    expect(refused?.headers.get('Retry-After')).toBe(String(CREDENTIAL_CHECKS.windowMs / 1000))
+    expect(received).toHaveLength(CREDENTIAL_CHECKS.limit)
   })
 })
 
@@ -329,9 +351,12 @@ describe('authHandler, the resend of the verification mail', () => {
     const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true }))
     const statuses: number[] = []
 
-    for (let n = 0; n < 4; n += 1) {
-      statuses.push((await route(resendRequest(GHOST), FROM))?.status ?? 0)
+    for (let n = 0; n < 3; n += 1) {
+      statuses.push((await route(resendRequest(GHOST), freshAddress()))?.status ?? 0)
     }
+
+    // The fourth from an address of its own, whose mails are untouched: only the email refuses it.
+    statuses.push((await route(resendRequest(GHOST), freshAddress()))?.status ?? 0)
 
     expect(statuses).toEqual([202, 202, 202, 429])
     expect(received).toHaveLength(3)
@@ -383,6 +408,30 @@ describe('authHandler, the resend of the verification mail', () => {
   })
 })
 
+/**
+ * The answer of `mounted` to `request`, its clock moved past any floor the answer waits on: a
+ * sign-up's refusal waits for the sign-up's floor once its starting language was looked up.
+ */
+async function pastAnyFloor(
+  mounted: ReturnType<typeof mountedOnFakeAuth>,
+  request: Request,
+): Promise<Response | undefined> {
+  let settled = false
+  const answer = mounted.route(request, FROM).finally(() => {
+    settled = true
+  })
+
+  while (!settled) {
+    if (mounted.clock.pending() > 0) {
+      await mounted.clock.advance(SIGN_UP_FLOOR_MS)
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  }
+
+  return answer
+}
+
 describe("authHandler, Better Auth's refusals", () => {
   /** A request of each path the mount serves, each naming Ann. */
   const requests = (): Request[] => [
@@ -414,7 +463,7 @@ describe("authHandler, Better Auth's refusals", () => {
     )
 
     for (const request of requests()) {
-      expect(await seen(await refusal.route(request, FROM))).toEqual({
+      expect(await seen(await pastAnyFloor(refusal, request))).toEqual({
         status: 400,
         headers: [['content-type', 'application/json;charset=utf-8']],
         body: '{"code":"SOME_CODE"}',
@@ -422,7 +471,7 @@ describe("authHandler, Better Auth's refusals", () => {
     }
 
     for (const request of requests()) {
-      expect(await seen(await failure.route(request, FROM))).toEqual({
+      expect(await seen(await pastAnyFloor(failure, request))).toEqual({
         status: 500,
         headers: [['content-type', 'application/json;charset=utf-8']],
         body: '{"code":"internal"}',
@@ -464,7 +513,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
     expect(JSON.stringify(logs)).not.toContain(token.slice(0, 40))
   })
 
-  it('answers a verification whose session cannot be created 500 internal, and logs its code alone', async () => {
+  it('answers a verification whose session the directory did not take 500 internal, and logs its code alone', async () => {
     const failure: { pattern?: RegExp } = {}
     const { route, outbox, logs, closes } = await mountedOnRealAuth({
       directory: (local) =>
@@ -488,7 +537,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
       body: '{"code":"internal"}',
     })
     expect(closes).toEqual([])
-    expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
+    expect(logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKER)
     expect(printed).not.toMatch(MARKER)
     expect(printed).not.toContain(token.slice(0, 40))

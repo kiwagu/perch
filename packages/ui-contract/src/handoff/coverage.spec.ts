@@ -18,6 +18,11 @@ const SCREEN = 'contract/domain/screens/sample/$key.yaml'
 const ACTIVITY = 'contract/domain/activities/thing.yaml'
 const ALPHA = 'apps/web/src/features/alpha/presentation/alpha.view.tsx'
 const KIT = 'packages/ui/src/components/ui/button.tsx'
+const ROOT_SCREEN = 'contract/domain/screens/__root.yaml'
+
+/** A scenario of one step whose `Where` names `where` and nothing else of the contract. */
+const whereOnly = (where: string): string =>
+  `---\ntags:\n  - smoke\ndevices:\n  A: member\ndata: {}\n---\n# Open the thing\n\nWhere: ${where}\n\n## Scenario: A member opens it\n\n### Steps\n1. Open the page\n\n### Expected result\n- It opens\n`
 
 const sample = (sources: Readonly<Record<string, string>> = {}): string =>
   repository({
@@ -115,6 +120,21 @@ describe('measureCoverage', () => {
   })
   it('counts the anchors of each screen and the scenarios that reach it', () => {
     expect(measureCoverage(sample()).screens).toEqual([{ id: 'sample', anchors: 6, scenarios: 1 }])
+  })
+  it('counts a scenario that reaches a screen by naming its place alone', () => {
+    expect(
+      measureCoverage(sample({ [scenarioFile(SCENARIO)]: whereOnly('[screen:sample]') })).screens,
+    ).toEqual([{ id: 'sample', anchors: 6, scenarios: 1 }])
+  })
+  it('counts no scenario for a screen named as a place when no binding opens it', () => {
+    const { screens } = measureCoverage(
+      sample({
+        [ROOT_SCREEN]: readFileSync(join(FIXTURES, 'repository', ROOT_SCREEN), 'utf8'),
+        [scenarioFile(SCENARIO)]: whereOnly('[screen:app-shell]'),
+      }),
+    )
+
+    expect(screens).toContainEqual(expect.objectContaining({ id: 'app-shell', scenarios: 0 }))
   })
   it('lists the composites the platform declares that no screen opts into', () => {
     const platform = readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8')

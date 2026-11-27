@@ -26,18 +26,34 @@ an unfinished start; until then the profile page shows its empty state when the 
 missing), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
-and commands beside it), the sign-in
+and commands beside it), the `TwoFactorService` and the `PasskeysService` over the platform's
+ports of the signed-in account's second factor and passkeys (the first also draws the QR of a key
+it starts, `qr-svg.policy.ts`, whose `uqr` loads at that action and never with the first frame;
+a start whose QR cannot be drawn fails as `failed` and the second factor stays off), the sign-in
 machine in its folder `application/sign-in-machine/` (the flow of
 `contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
 state, sign-up where it renders the fields of a new account, an attempt invokes
-`platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, a sign-in that finds the
-account at its limit of devices (its outcome `device-limit`, the guard `atDeviceLimit`) asks in its
-dialog and, confirmed, invokes `platform.sign-in` again with `signOutOldest`, at sign-up it holds the
+`platform.sign-in`, `platform.sign-in-passkey`, `platform.confirm-sign-in`, `platform.sign-up` or
+`platform.resend-verification`, a sign-in refused at the account's limit of devices (the failure
+`data:DEVICE_LIMIT`, the guard `atDeviceLimit`) asks in its dialog and, confirmed, invokes
+`platform.sign-in` again with `signOutOldest`, a sign-in of an account whose second factor is on
+(its outcome `code-required`, the guard `codeRequired`) asks the code in its dialog and keeps the
+challenge and the email typed until the step ends, a refusal that ends the step (the guard
+`codeStepEnded`) goes back to the form and any other stays in the dialog, a passkey signs in from
+the states that offer its button with no password and no code, and past the limit of devices
+names the account its dialog asked about (`consentFor`), at sign-up it holds the
 password to the rules of a new password (the kernel's `keepsPasswordRules`, the gateway's too)
 and compares the password typed again as either password is typed and on the switch into
-sign-up, it keeps the codes of the form's error and mail message, and the address the last
-sign-up or resend mailed, and emits `show` and `navigate` for the page; `machine.ts` builds it,
-`guards.ts` holds the flow's guards, `events.ts` and `context.ts` what it takes and keeps), the
+sign-up, it keeps the codes of the form's error and mail message and of the code's error, and the
+address the last sign-up or resend mailed, and emits `show` and `navigate` for the page;
+`machine.ts` builds it, its states of the mode sign-up are `sign-up-states.ts`, those of the limit
+of devices `device-limit-states.ts`, those of the code and of the passkey `second-steps.ts`, their
+actors with the password's `sign-in-actors.ts`, `effects.ts` holds the effects the states share,
+`guards.ts` the flow's guards, `outcome.ts` reads what a step answered, `events.ts` and
+`context.ts` what it takes and keeps; the confirmation of the dialog past the limit of devices
+carries nothing: the machine keeps the form an attempt was sent with (`attempt`) while that
+attempt can still ask the confirmation, and signs in again with it, whatever the form's fields
+hold by then, forgetting it once the attempt ends), the
 verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
 the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
@@ -101,7 +117,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   already started; a page mounted anew (a later visit, a revisit after a sign-out or after a
   failed exchange) asks afresh, and another token in the address of the open page starts another
   exchange with its own machine (the part of the page that runs it is keyed by the token). `/me` (guard `authenticated`)
-  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the account's
+  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`, a lazy page
+  (`LazyPage`: its code loads apart from the first frame, when the route first opens for a
+  signed-in device, the frame shown meanwhile; `settings-page.spec.ts`): the account's
   theme (stored through `settings.updateTheme`, shown at once through the platform's
   `useDeviceTheme`, which keeps it on this device as the theme it showed last) and the account's
   language (stored through `settings.updateLocale`, spoken at once), each taken only once the
@@ -121,13 +139,33 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   and so it does on `last-admin` above the form, a right password that nothing more can use here
   (the guard `deletionBlocked`); any other refusal (`invalid-credentials` under the field,
   `rate-limited`, `failed` above the form) keeps it as typed; another press sends a fresh link),
+  the account's second factor (`two-factor.section`, whose `data-state` is loading, ready or error
+  as `two-factor.read` answers, with the badge `on-badge` or `off-badge`: off, the password turns
+  it on through `platform.two-factor.enable`, which shows the key as text with its QR beside it and
+  asks a code of the key, `platform.two-factor.confirm`, then shows the ten backup codes once,
+  until they are hidden; on, the password turns it off or renews the codes, which show the same
+  way; the key and the codes live in the machine's context until its region rests; a request that
+  finds the factor changed from another device, `two-factor-changed`, empties what it was sent
+  with and reads the section again) and the account's passkeys (`passkeys.list`, whose
+  `data-state` is loading, ready, empty or error: each by when it was added, the earliest first;
+  added through the browser's ceremony, `platform.passkeys.add`, and removed after the frame's
+  confirmation `passkeys-remove`, `platform.passkeys.remove`, each reading the list again), the
+  page reading the section and the list as it opens and again each time the flow's `read` names
+  them (`section-read.ts`: from the moment a read is asked the section shows `loading`, so no
+  earlier answer is shown as current: the badge and the actions wait for the read, while the
+  password field with its eye is the idle state's and shows whatever the read says, as do the
+  codes and the key, which the flow's state shows; the field starts over, hidden, at each of the
+  flow's `clear`s of it, never at a read),
   its screen's flow run as
-  its machine (`application/settings/settings-machine/`: the theme, language, password, email and
-  deletion regions of one parallel state, `machine.ts` assembling `password-region.ts`,
-  `email-region.ts` and `deletion-region.ts`, held to `contract/domain/screens/settings.yaml` by
-  `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the
-  language changes; its view is `settings.view.tsx` with `password-form.view.tsx`,
-  `email-form.view.tsx` and `deletion-form.view.tsx`.
+  its machine (`application/settings/settings-machine/`: the theme, language, password, email,
+  two-factor, passkey-add, passkey-remove and deletion regions of one parallel state, `machine.ts`
+  assembling `password-region.ts`, `email-region.ts`, `two-factor-region.ts` (its actors in
+  `two-factor-actors.ts`), `passkeys-region.ts` and `deletion-region.ts`, held to
+  `contract/domain/screens/settings.yaml` by `platform/machines.spec.ts`) through
+  `useScreenMachine`, which asks the leave guard before the language changes and the frame's
+  confirmation before a passkey is removed; its view is `settings.view.tsx` with
+  `password-form.view.tsx`, `email-form.view.tsx`, `two-factor-section.view.tsx` (the key and
+  the codes in `two-factor-steps.view.tsx`), `passkeys-list.view.tsx` and `deletion-form.view.tsx`.
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.
@@ -140,7 +178,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 - Components: `presentation/components/page-link/` (`PageLinkProps`, `PlainLink` a view draws
   alone, `RouterLink` its container gives it) and `presentation/components/password-rule-list/`
   (`PasswordRuleList`, the rules of a new password under it, its screen giving the anchors).
-- Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
+- Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`, `TWO_FACTOR_SERVICE`,
+  `PASSKEYS_SERVICE`; `SETTINGS_SERVICE`
   is provided app-wide by the composition root, since the frame reads and stores the settings too,
   and so is `ACCOUNT_START_SERVICE`, since the root runs the starts and the seed client finishes one
   through it.
@@ -150,14 +189,14 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   `user.settings` in `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`,
   `forgot-password.yaml`, `reset-password.yaml`, `confirm-email.yaml`, `delete-account.yaml`,
   `me.yaml` and `settings.yaml`.
-- Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
+- Behaviour: the page runs its screen's flow as its machine (`application/profile-machine/`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the
   frame's guard of unsaved input, the sign-out button asks it first, and both forms are the
   kit's `Form`, whose saved submit leaves the fields with nothing unsaved; the guest pages
   (sign-in, forgot-password, verify-email) follow another tab's sign-in to the profile through
   the router's guard, a sign-in of the page's own going on to its welcome. The name and the bio
-  (at most 2000 characters) each follow the stored value until typed into, then keep what was
+  (within the length of the contract's `profile.bio` field) each follow the stored value until typed into, then keep what was
   typed when another device stores another value, until it is saved (the name stored trimmed)
   or typed back; one Save writes what changed; a refused save is explained under the field its
   code concerns (the error's `fields`); Save and the sign-out button are enabled while the
@@ -180,7 +219,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
   `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the
   submit is disabled until the two agree again; a submit while only a part of it was typed asks for
-  nothing and says the same; the password typed again is never sent;
+  nothing and says the same; the password typed again is never sent; each button, the switch of
+  mode among them, is enabled while the machine's state handles its event, so none is while a
+  sign-in, a sign-up or a resend runs;
   a sign-up creates the account and has its verification mail sent, signing nothing in: the page
   stays on `/sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
   (`user.sign-in.mail-message`, code `check-your-mail`) and offers to send it again
@@ -192,10 +233,31 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   that names it), signs nothing in, keeps the form in the mode sign-in with the email typed and
   offers no resend;
   a sign-in that finds the account signed in on as many devices as it may be at once
-  (`data:DEVICE_LIMIT`, which `SignInService` answers as the outcome `device-limit`) signs nothing
-  in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
+  (the session's outcome `device-limit`, which `SignInService` refuses as `data:DEVICE_LIMIT`, a
+  passkey's naming the account it asked about) signs nothing in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
   `user.sign-in.device-limit.*`) whether to sign in all the same, which signs out the device used
-  least recently, its cancel going back to the form;
+  least recently, its cancel going back to the form; a sign-in of an account whose second factor is
+  on answers `code-required` from the session (`SignInService` answers its outcomes as the session
+  does, and takes the code step in `confirmSignIn`), which asks the code in a dialog
+  (`user.sign-in.code.dialog`, code `code-required`, texts `user.sign-in.code.*`, the field
+  `user.sign-in.code.code-input` in it, the `InputDialog` of the kit: Enter confirms, Escape
+  cancels, the confirmation is held while the flow does not take it) and signs in once a code is
+  taken; a code shorter or longer than the contract's `second-factor-code` allows is refused by
+  the service before the gateway is asked (`sign-in:CODE_INVALID`, the domain rule
+  `second-factor-code.rule.ts`, counting toward nothing); a wrong code (`data:INVALID_CODE`) and
+  such a refusal show under the field
+  (`user.sign-in.code.error`, code `invalid-code`) and the dialog stays for another, any other
+  failure of the step shows in the dialog (`failed`), and a step that is over, or an account that
+  cannot sign in now (`data:CODE_EXPIRED`, `data:ACCOUNT_BANNED`, `data:RATE_LIMITED`,
+  `data:OTHER_ACCOUNT`) goes back to the form with its reason on `user.sign-in.error`, the dialog's
+  cancel the same without one, the container holding what is typed in the code and emptying it as
+  the flow clears it; past the limit of devices the code step asks about it before the code is
+  checked, and its confirmation signs in again from the password, which asks the code again; the button
+  `user.sign-in.passkey-button` ("Sign in with a passkey", in the states sign-in, check-mail and
+  unverified, never at sign-up) signs in with a passkey the browser picks, a window closed or timed out
+  (`data:PASSKEY_CANCELLED`, "No passkey was used") or a passkey no account holds (`data:PASSKEY_UNKNOWN`) showing on
+  `user.sign-in.error` (`passkey-cancelled`, `passkey-unknown`), its limit of devices asking in
+  the same dialog and signing in again for the account it named;
   the account's settings and profile are created where its link is first opened, from the name
   and the language it signed up with and the theme that device shows; the verify page says the link is being checked
   (`user.verify-email.status`), says a link opened again is verified already beside the link to

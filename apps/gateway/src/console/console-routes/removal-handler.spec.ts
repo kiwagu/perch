@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 
 import { deviceHeaders, signUpOn } from '../../auth/__fixtures__/auth-instance'
@@ -115,7 +116,7 @@ describe('consoleRoutes: POST /console/accounts/:id/removal', () => {
         actor: bob.identity,
         key: 'shared',
         identity: cat.identity,
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
       }),
     )
 

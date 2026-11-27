@@ -1,4 +1,5 @@
 import { idSchemas } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import type { AccountCard, ListedAccount } from '../account-directory'
@@ -13,9 +14,6 @@ export const ACCOUNT_PAGE_SIZES = [10, 25, 50] as const
 /** The size of a page of the accounts list when the query names none. */
 export const DEFAULT_ACCOUNT_PAGE_SIZE = 25
 
-/** The longest text the list is searched with, as the users screen's `q` takes it. */
-const MAX_SEARCH = 254
-
 /** A whole number from 1 written in digits alone, as a query carries it. */
 const counting = z
   .string()
@@ -26,7 +24,7 @@ const counting = z
 /** What a list's query carries: each key once, none but these. */
 const listQuery = z
   .object({
-    q: z.string().max(MAX_SEARCH).default(''),
+    q: z.string().max(CONTRACT_VALUES['account-search'].maxLength).default(''),
     page: counting.default(1),
     size: counting.pipe(z.literal(ACCOUNT_PAGE_SIZES)).default(DEFAULT_ACCOUNT_PAGE_SIZE),
   })

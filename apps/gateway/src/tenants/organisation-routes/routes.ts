@@ -17,9 +17,11 @@ import { type Target, targetOf } from './targets'
  *
  * - `GET /organisations`: 200 `{ memberships }`.
  * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin; 10 an
- *   hour per identity and 30 per client address. A caller whose account was deleted while the
- *   creation waited for it answers 401 `unauthorized`, as a token that holds no session does,
- *   and nothing is created.
+ *   hour per identity and 30 per client address, counted once the key and the name keep their
+ *   rules: `key-invalid` (400) for a key the pattern refuses, `name-required` (400) for a name with
+ *   nothing left once trimmed and `name-too-long` (400) past the `organisation-name` value's
+ *   length. A caller whose account was deleted while the creation waited for it answers 401
+ *   `unauthorized`, as a token that holds no session does, and nothing is created.
  * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
  *   `not-admin`).
  * - `PATCH /organisations/:key/members/:identity` `{ role }`: 204, for an admin; `last-admin`
@@ -29,8 +31,8 @@ import { type Target, targetOf } from './targets'
  *   role, link } }`, for an admin, an email with an account and one without answered alike and
  *   neither sooner than `INVITE_FLOOR_MS` after the request began; `email-invalid` (400) for an
  *   email the gateway does not take, `already-member` (409) for a member's. An attempt takes one
- *   of the client address's mails, one of the inviting identity's 30 invites per 10 minutes and
- *   one of the address's 60, counted once the body follows its schema, whatever the answer.
+ *   of the client address's mails, one of the inviting identity's invites (`IDENTITY_INVITES`) and
+ *   one of the address's (`ADDRESS_INVITES`), counted once the body follows its schema, whatever the answer.
  * - `GET /organisations/:key/invitations`: 200 `{ invitations }`, newest first, for an admin.
  * - `DELETE /organisations/:key/invitations/:invitation`: 204, for an admin, also for an
  *   invitation that is gone or belongs to another organisation (which it leaves alone).

@@ -4,6 +4,7 @@ import { profileIdFactory } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import { ADDRESS_LINK_ATTEMPTS, ADDRESS_MAILS } from '../../limits/windows'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import cancelAllowStatement from '../__fixtures__/email-change-cancel-allow.surql'
@@ -17,6 +18,7 @@ import {
   ANN,
   ARGON2_WAIT,
   annsLink,
+  freshAddress,
   heldQueries,
   holdTurn,
   isSessionInsert,
@@ -133,7 +135,8 @@ describe('authHandler, the request for a reset mail', () => {
       await resetLink(mounted, ANN, n === 1 ? ELSEWHERE : FROM)
     }
 
-    const fourth = await mounted.route(resetRequest(ANN.toUpperCase()), FROM)
+    // From an address of its own, whose mails are untouched: only the email's limit refuses it.
+    const fourth = await mounted.route(resetRequest(ANN.toUpperCase()), freshAddress())
 
     expect(fourth?.status).toBe(429)
     expect(await fourth?.json()).toEqual({ code: 'rate-limited' })
@@ -148,7 +151,7 @@ describe('authHandler, the request for a reset mail', () => {
   it("takes one of the address's mails, the budget it shares with sign-ups and resends", async () => {
     const { route } = mountedOnFakeAuth(() => new Response(null, { status: 200 }))
 
-    for (let n = 0; n < 200; n += 1) {
+    for (let n = 0; n < ADDRESS_MAILS.limit; n += 1) {
       expect((await route(resendRequest(`r${n}@example.test`), FROM))?.status).toBe(202)
     }
 
@@ -374,10 +377,10 @@ describe('authHandler, the reset of a password', () => {
     expect(await answer?.json()).toEqual({ code: 'link-invalid' })
   })
 
-  it('takes twenty attempts of an address within ten minutes, refused or not, and answers the next rate-limited', async () => {
+  it("takes an address's attempts the contract allows within its window, refused or not, and answers the next rate-limited", async () => {
     const mounted = await mountedOnRealAuth()
 
-    for (let n = 0; n < 20; n += 1) {
+    for (let n = 0; n < ADDRESS_LINK_ATTEMPTS.limit; n += 1) {
       expect((await mounted.route(reset(`no-such-token-${n}`), FROM))?.status).toBe(401)
     }
 
@@ -386,7 +389,7 @@ describe('authHandler, the reset of a password', () => {
     expect(limited?.status).toBe(429)
     expect(await limited?.json()).toEqual({ code: 'rate-limited' })
     expect((await mounted.route(reset('no-such-token'), ELSEWHERE))?.status).toBe(401)
-    await mounted.clock.advance(10 * MINUTE_MS)
+    await mounted.clock.advance(ADDRESS_LINK_ATTEMPTS.windowMs)
     expect((await mounted.route(reset('no-such-token'), FROM))?.status).toBe(401)
   })
 

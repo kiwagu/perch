@@ -31,6 +31,8 @@ export function fakeSession(): { readonly session: SessionPort } {
     session: {
       signUp: refused,
       signIn: refused,
+      confirmSignIn: refused,
+      signInWithPasskey: refused,
       verifyEmail: refused,
       resendVerification: refused,
       requestPasswordReset: refused,

@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=../schemas/terms.schema.json
+contexts:
+  perch:
+    meaning: "The platform foundation: accounts and how they sign in, devices and their sessions, organisations and their members. A product built on it brings a context of its own."
+terms:
+  account:
+    meaning: "A lasting record of the platform that signs in: one per email in any case, its email changeable; its profile and settings are made when it first starts, and it is signed in on devices."
+    synonyms: [ identity id ]
+    storage: identity
+  profile:
+    meaning: "An account's own details: its name, contact email and biography, one per account, kept in the account's private region and on its devices."
+  organisation:
+    meaning: "Accounts that work together under a key and a name, each through a membership; the organisation's own data lives in a region of its own."
+    synonyms: [ tenant, organization, company, workspace ]
+    storage: tenant
+  membership:
+    meaning: "An account's belonging to an organisation, with its role there: member or admin."
+  organisation-settings:
+    meaning: "What an organisation's admins set for its members: today its default language, which an account its invitation creates starts in; a member's own settings always win."
+    storage: organisation_settings
+  invitation:
+    meaning: "An organisation's offer to an email to join it with a role, sent as a mail's link; it ends when accepted, declined, revoked, expired, replaced by its newer one to that email, or with the organisation."
+  device:
+    meaning: "A browser profile where the app runs, its id kept in the browser's site storage: one account at a time is signed in on it, and its tabs share that account."
+  session:
+    meaning: "One sign-in of an account on a device, its label taken then; ends at a sign-out, a revocation, a newer sign-in there, a password change or reset, the device limit, a ban, expiry or account deletion."
+    synonyms: [ device session ]
+    storage: device_session
+roles:
+  guest:
+    meaning: "Nobody is signed in on the device; for the frame also a device whose saved account is not open: while the app starts, when its start or its data fails, and while it signs out from there."
+    synonyms: [ visitor ]
+  identity:
+    meaning: An account is signed in, with or without organisations.
+  member:
+    meaning: "The signed-in account's role in the current organisation is member; an admin holds admin instead."
+  admin:
+    meaning: The signed-in account administers the current organisation.
+    synonyms: [ administrator ]
+  operator:
+    meaning: "The signed-in account operates the platform: it sees every account from the console and acts on it."

@@ -11,6 +11,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory, membershipIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, type TenantRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
@@ -161,7 +162,7 @@ async function harness() {
     (await organisations.create({ identity: creator.id, key, name }))._unsafeUnwrap()
 
   /** Ann invites `email` into `key` (acme unless named) as `role`. */
-  const invited = async (email: string, role: 'member' | 'admin' = 'member', key = 'acme') =>
+  const invited = async (email: string, role: TenantRole = CONTRACT_ROLES.member, key = 'acme') =>
     (await organisations.invitations.invite({ actor: ann.id, key, email, role }))._unsafeUnwrap()
 
   /** The mail the last invitation started. */
@@ -178,7 +179,7 @@ async function harness() {
   /** `who` (an account of the directory) joins acme through an invitation, as `role`. */
   const joined = async (
     who: { id: IdentityId; email: string },
-    role: 'member' | 'admin' = 'member',
+    role: TenantRole = CONTRACT_ROLES.member,
   ) => {
     const view = await invited(who.email, role)
 
@@ -369,20 +370,31 @@ describe('OrganisationInvitations', () => {
           actor: ann.id,
           key: 'acme',
           email: dan.email,
-          role: 'admin',
+          role: CONTRACT_ROLES.admin,
         })
       )._unsafeUnwrap()
       const { token } = lastMailed()
 
       expect(view.id).toMatch(/^inv_/)
-      expect(view).toEqual({ id: view.id, email: dan.email, role: 'admin', link: specLink(token) })
+      expect(view).toEqual({
+        id: view.id,
+        email: dan.email,
+        role: CONTRACT_ROLES.admin,
+        link: specLink(token),
+      })
       expect(mailed).toEqual([
-        { email: dan.email, organisation: 'Acme', role: 'admin', token, inviter: ann.id },
+        {
+          email: dan.email,
+          organisation: 'Acme',
+          role: CONTRACT_ROLES.admin,
+          token,
+          key: 'acme',
+        },
       ])
       expect(await rows()).toEqual([`acme ${dan.email}`])
       expect((await organisations.invitations.read({ token }))._unsafeUnwrap()).toEqual({
         organisation: { name: 'Acme' },
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
         forYou: false,
       })
     })
@@ -398,10 +410,10 @@ describe('OrganisationInvitations', () => {
       expect(Object.keys(withAccount).sort()).toEqual(Object.keys(without).sort())
       expect(withAccount.id).toMatch(/^inv_/)
       expect(mailed.map((mail) => Object.keys(mail).sort())).toEqual([
-        ['email', 'inviter', 'organisation', 'role', 'token'],
-        ['email', 'inviter', 'organisation', 'role', 'token'],
+        ['email', 'key', 'organisation', 'role', 'token'],
+        ['email', 'key', 'organisation', 'role', 'token'],
       ])
-      expect(mailed.map((mail) => mail.inviter)).toEqual([ann.id, ann.id])
+      expect(mailed.map((mail) => mail.key)).toEqual(['acme', 'acme'])
       expect(
         (await organisations.invitations.pending({ actor: ann.id, key: 'acme' }))
           ._unsafeUnwrap()
@@ -424,7 +436,7 @@ describe('OrganisationInvitations', () => {
               actor: ann.id,
               key: 'acme',
               email,
-              role: 'member',
+              role: CONTRACT_ROLES.member,
             })
           )._unsafeUnwrapErr(),
         ).toEqual(refused('already-member'))
@@ -442,7 +454,12 @@ describe('OrganisationInvitations', () => {
 
       const mails = mailed.length
       const invite = (actor: IdentityId, key: string) =>
-        organisations.invitations.invite({ actor, key, email: dan.email, role: 'member' })
+        organisations.invitations.invite({
+          actor,
+          key,
+          email: dan.email,
+          role: CONTRACT_ROLES.member,
+        })
 
       expect((await invite(bob.id, 'acme'))._unsafeUnwrapErr()).toEqual(refused('not-admin'))
       expect((await invite(cat.id, 'acme'))._unsafeUnwrapErr()).toEqual(refused('not-a-member'))
@@ -457,10 +474,10 @@ describe('OrganisationInvitations', () => {
       const { organisations, ann, dan, founded, invited, lastMailed, rows } = await harness()
 
       await founded()
-      await invited(dan.email, 'member')
+      await invited(dan.email, CONTRACT_ROLES.member)
 
       const first = lastMailed().token
-      const again = await invited(dan.email, 'admin')
+      const again = await invited(dan.email, CONTRACT_ROLES.admin)
       const second = lastMailed().token
 
       expect(second).not.toBe(first)
@@ -470,10 +487,12 @@ describe('OrganisationInvitations', () => {
       )
       expect(
         (await organisations.invitations.read({ token: second }))._unsafeUnwrap(),
-      ).toMatchObject({ role: 'admin' })
+      ).toMatchObject({ role: CONTRACT_ROLES.admin })
       expect(
         (await organisations.invitations.pending({ actor: ann.id, key: 'acme' }))._unsafeUnwrap(),
-      ).toEqual([{ id: again.id, email: dan.email, role: 'admin', link: specLink(second) }])
+      ).toEqual([
+        { id: again.id, email: dan.email, role: CONTRACT_ROLES.admin, link: specLink(second) },
+      ])
     })
   })
 
@@ -484,16 +503,16 @@ describe('OrganisationInvitations', () => {
       await founded()
 
       const first = await invited(dan.email)
-      const second = await invited(bob.email, 'admin')
+      const second = await invited(bob.email, CONTRACT_ROLES.admin)
       const third = await invited(cat.email)
       const link = (index: number) => specLink(mailed[index]?.token ?? '')
 
       expect(
         (await organisations.invitations.pending({ actor: ann.id, key: 'acme' }))._unsafeUnwrap(),
       ).toEqual([
-        { id: third.id, email: cat.email, role: 'member', link: link(2) },
-        { id: second.id, email: bob.email, role: 'admin', link: link(1) },
-        { id: first.id, email: dan.email, role: 'member', link: link(0) },
+        { id: third.id, email: cat.email, role: CONTRACT_ROLES.member, link: link(2) },
+        { id: second.id, email: bob.email, role: CONTRACT_ROLES.admin, link: link(1) },
+        { id: first.id, email: dan.email, role: CONTRACT_ROLES.member, link: link(0) },
       ])
     })
 
@@ -556,7 +575,7 @@ describe('OrganisationInvitations', () => {
           actor: bob.id,
           key: 'beta',
           email: dan.email,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrap()
       const { token } = lastMailed()
@@ -602,17 +621,21 @@ describe('OrganisationInvitations', () => {
       const { organisations, bob, cat, founded, invited, lastMailed } = await harness()
 
       await founded()
-      await invited(bob.email, 'admin')
+      await invited(bob.email, CONTRACT_ROLES.admin)
 
       const { token } = lastMailed()
       const read = async (caller?: { email: string }) =>
         (await organisations.invitations.read({ token, caller }))._unsafeUnwrap()
 
-      expect(await read()).toEqual({ organisation: { name: 'Acme' }, role: 'admin', forYou: false })
+      expect(await read()).toEqual({
+        organisation: { name: 'Acme' },
+        role: CONTRACT_ROLES.admin,
+        forYou: false,
+      })
       expect(JSON.stringify(await read())).not.toContain(bob.email)
       expect(await read({ email: bob.email })).toEqual({
         organisation: { name: 'Acme' },
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
         forYou: true,
       })
       expect((await read({ email: 'BOB@Example.test' })).forYou).toBe(true)
@@ -642,7 +665,7 @@ describe('OrganisationInvitations', () => {
           actor: ann.id,
           key: 'acme',
           email: dan.email,
-          role: 'member',
+          role: CONTRACT_ROLES.member,
         })
       )._unsafeUnwrap()
       expect((await organisations.invitations.read({ token }))._unsafeUnwrapErr()).toEqual(
@@ -684,14 +707,14 @@ describe('OrganisationInvitations', () => {
       await founded('beta', 'Beta')
       await founded('gamma', 'Gamma')
 
-      const toAcme = await invited(bob.email, 'member', 'acme')
-      const toBeta = await invited(bob.email, 'admin', 'beta')
-      const toGamma = await invited(bob.email, 'member', 'gamma')
+      const toAcme = await invited(bob.email, CONTRACT_ROLES.member, 'acme')
+      const toBeta = await invited(bob.email, CONTRACT_ROLES.admin, 'beta')
+      const toGamma = await invited(bob.email, CONTRACT_ROLES.member, 'gamma')
 
       expect((await organisations.invitations.mine({ identity: bob.id }))._unsafeUnwrap()).toEqual([
-        { id: toGamma.id, organisation: { name: 'Gamma' }, role: 'member' },
-        { id: toBeta.id, organisation: { name: 'Beta' }, role: 'admin' },
-        { id: toAcme.id, organisation: { name: 'Acme' }, role: 'member' },
+        { id: toGamma.id, organisation: { name: 'Gamma' }, role: CONTRACT_ROLES.member },
+        { id: toBeta.id, organisation: { name: 'Beta' }, role: CONTRACT_ROLES.admin },
+        { id: toAcme.id, organisation: { name: 'Acme' }, role: CONTRACT_ROLES.member },
       ])
       ;(
         await organisations.invitations.accept({ identity: bob.id, invitation: toBeta.id })
@@ -734,7 +757,7 @@ describe('OrganisationInvitations', () => {
 
         await founded()
 
-        const view = await invited(bob.email, 'admin')
+        const view = await invited(bob.email, CONTRACT_ROLES.admin)
         const invitation = via === 'id' ? view.id : lastMailed().token
         const membership = (
           await organisations.invitations.accept({ identity: bob.id, invitation })
@@ -742,11 +765,11 @@ describe('OrganisationInvitations', () => {
 
         expect(membership).toEqual({
           tenant: { id: membership.tenant.id, key: 'acme', name: 'Acme' },
-          role: 'admin',
+          role: CONTRACT_ROLES.admin,
         })
         expect((await organisations.membershipsOf(bob.id))._unsafeUnwrap()).toEqual([membership])
-        expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-        expect((await memberRolesIn('acme'))[bob.id]).toBe('admin')
+        expect(await rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+        expect((await memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
         expect(heard.at(-1)).toEqual([bob.id, [membership]])
         expect(await rows()).toEqual([])
         expect(
@@ -774,7 +797,7 @@ describe('OrganisationInvitations', () => {
       }
 
       expect(await everything.rolesOf('acme', cat.id)).toEqual([])
-      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
       expect(heard).toHaveLength(told)
     })
@@ -783,10 +806,10 @@ describe('OrganisationInvitations', () => {
       const everything = await harness()
       const { organisations, admission, bob, founded, invited, heard } = everything
       const { tenant } = await founded()
-      const view = await invited(bob.email, 'member')
+      const view = await invited(bob.email, CONTRACT_ROLES.member)
 
       // Bob becomes an admin behind the invitation's back, and his member row is lost.
-      ;(await admission.admit(tenant, bob.id, 'admin'))._unsafeUnwrap()
+      ;(await admission.admit(tenant, bob.id, CONTRACT_ROLES.admin))._unsafeUnwrap()
       await everything.forgetMember('acme', bob.id)
 
       const told = heard.length
@@ -796,7 +819,7 @@ describe('OrganisationInvitations', () => {
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrapErr(),
       ).toEqual(refused('already-member'))
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('admin')
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
       expect(heard).toHaveLength(told)
     })
@@ -805,7 +828,7 @@ describe('OrganisationInvitations', () => {
       const everything = await harness()
       const { organisations, directory, bob, founded, invited, heard } = everything
       const { tenant } = await founded()
-      const view = await invited(bob.email, 'member')
+      const view = await invited(bob.email, CONTRACT_ROLES.member)
       const told = heard.length
 
       // Another gateway process admits bob as an admin once the accept has read that he is none.
@@ -818,7 +841,7 @@ describe('OrganisationInvitations', () => {
               id: membershipIdFactory.create(),
               identity: recordId('identity', bob.id),
               tenant: recordId('tenant', tenant.id),
-              role: 'admin',
+              role: CONTRACT_ROLES.admin,
             })
             .then(() => undefined)
         }
@@ -829,8 +852,8 @@ describe('OrganisationInvitations', () => {
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrapErr(),
       ).toEqual(refused('already-member'))
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['admin'])
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('admin')
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.admin])
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
       expect(heard).toHaveLength(told)
     })
@@ -858,7 +881,7 @@ describe('OrganisationInvitations', () => {
 
       expect((await first).isOk()).toBe(true)
       expect((await second)._unsafeUnwrapErr()).toEqual(refused('invitation-gone'))
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
       expect(heard.filter(([identity]) => identity === bob.id)).toHaveLength(1)
     })
 
@@ -868,14 +891,14 @@ describe('OrganisationInvitations', () => {
 
       await founded()
 
-      const old = await invited(bob.email, 'member')
+      const old = await invited(bob.email, CONTRACT_ROLES.member)
       const held = everything.holdInDirectory(invitationReplaceStatement)
       const queue = everything.watchQueue('ofTenants')
       const again = organisations.invitations.invite({
         actor: ann.id,
         key: 'acme',
         email: bob.email,
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
       })
 
       await held.waiting
@@ -895,7 +918,7 @@ describe('OrganisationInvitations', () => {
         (
           await organisations.invitations.accept({ identity: bob.id, invitation: fresh.id })
         )._unsafeUnwrap(),
-      ).toMatchObject({ role: 'admin' })
+      ).toMatchObject({ role: CONTRACT_ROLES.admin })
     })
 
     it('leaves the link live when the organisation database refuses the member row, and a second ask makes the membership', async () => {
@@ -924,8 +947,8 @@ describe('OrganisationInvitations', () => {
         (
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrap(),
-      ).toMatchObject({ role: 'member' })
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
+      ).toMatchObject({ role: CONTRACT_ROLES.member })
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
       expect(await everything.rows()).toEqual([])
     })
 
@@ -951,7 +974,7 @@ describe('OrganisationInvitations', () => {
       ).toMatchObject({ code: 'data:WRITE_FAILED' })
       expect(await everything.rolesOf('acme', bob.id)).toEqual([])
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('member')
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.member)
       expect(heard).toHaveLength(told)
 
       everything.onDirectoryQuery(undefined)
@@ -960,8 +983,8 @@ describe('OrganisationInvitations', () => {
         (
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrap(),
-      ).toMatchObject({ role: 'member' })
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
+      ).toMatchObject({ role: CONTRACT_ROLES.member })
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
       expect(await everything.rows()).toEqual([])
     })
 
@@ -980,9 +1003,9 @@ describe('OrganisationInvitations', () => {
         (
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrap(),
-      ).toEqual({ tenant: acme.tenant, role: 'member' })
-      expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('member')
+      ).toEqual({ tenant: acme.tenant, role: CONTRACT_ROLES.member })
+      expect(await everything.rolesOf('acme', bob.id)).toEqual([CONTRACT_ROLES.member])
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.member)
       expect(await everything.rows()).toEqual([])
       expect((await organisations.invitations.read({ token }))._unsafeUnwrapErr()).toEqual(
         refused('link-invalid'),
@@ -992,7 +1015,7 @@ describe('OrganisationInvitations', () => {
       everything.letHear(true)
       await retold()
 
-      expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
+      expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
 
       for (const invitation of [view.id, token]) {
         expect(
@@ -1017,17 +1040,17 @@ describe('OrganisationInvitations', () => {
           (
             await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
           )._unsafeUnwrap(),
-        ).toEqual({ tenant: acme.tenant, role: 'member' })
+        ).toEqual({ tenant: acme.tenant, role: CONTRACT_ROLES.member })
         expect(await everything.memberRolesIn('acme')).toEqual({
-          [everything.ann.id]: 'admin',
-          [bob.id]: 'member',
+          [everything.ann.id]: CONTRACT_ROLES.admin,
+          [bob.id]: CONTRACT_ROLES.member,
         })
         expect(await everything.rows()).toEqual([])
         expect(heard).toEqual([])
 
         await retold()
 
-        expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
+        expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]]])
       })
 
       it.each(['rejects', 'throws'] as const)(
@@ -1062,13 +1085,13 @@ describe('OrganisationInvitations', () => {
             (
               await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
             )._unsafeUnwrap(),
-          ).toEqual({ tenant: acme.tenant, role: 'member' })
+          ).toEqual({ tenant: acme.tenant, role: CONTRACT_ROLES.member })
 
-          const told = [bob.id, [{ tenant: acme.tenant, role: 'member' }]] as const
+          const told = [bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]] as const
 
           expect(await everything.memberRolesIn('acme')).toEqual({
-            [everything.ann.id]: 'admin',
-            [bob.id]: 'member',
+            [everything.ann.id]: CONTRACT_ROLES.admin,
+            [bob.id]: CONTRACT_ROLES.member,
           })
           expect(heard).toEqual([told])
           expect(deaf).toEqual([told])
@@ -1106,7 +1129,7 @@ describe('OrganisationInvitations', () => {
       }
 
       expect(await everything.rolesOf('acme', bob.id)).toEqual([])
-      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
     })
 
     it('answers invitation-gone to a link a week past, and makes no membership', async () => {

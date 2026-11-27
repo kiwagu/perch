@@ -13,7 +13,7 @@ import {
 } from '../../support/organisation'
 
 test.describe('Decline an invitation on the organisation page', { tag: '@full' }, () => {
-  test("The invited account declines on its organisation page; the invitation leaves its list and the administrator's, and its link no longer works", async ({
+  test("The invited account declines on its organisation page; the invitation leaves its list and the admin's, and its link no longer works", async ({
     page,
     anotherAccount,
   }) => {

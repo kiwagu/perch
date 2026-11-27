@@ -1,4 +1,7 @@
 // scenario: user/flows/language-across-devices
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, pageLoads, test } from '../../support/fixtures'
 
 test.describe('Keep the language of an account on every device', { tag: '@full' }, () => {
@@ -9,7 +12,7 @@ test.describe('Keep the language of an account on every device', { tag: '@full' 
     const select = page.getByTestId('user.settings.locale-select')
 
     await test.step('1. On device A, open [/settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       // The select takes a choice once the account's settings are on the device.
       await expect(select).toBeEnabled()

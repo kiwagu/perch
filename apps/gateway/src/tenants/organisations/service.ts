@@ -2,10 +2,11 @@ import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
-import { isTenantKey } from '@workspace/kernel'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import { AccountDeparture, type DepartureError, type DepartureSteps } from '../account-departure'
+import { newOrganisationOf } from '../new-organisation'
 import { OrganisationLookup } from '../organisation-lookup'
 import { type OrganisationError, refused } from '../organisation-refusal'
 import type { Member } from '../organisation-rows'
@@ -21,9 +22,6 @@ import type { OrganisationsOptions } from './options'
 import { OrganisationRemoval } from './removal'
 import { OrganisationRoleChange } from './role-change'
 import { MembershipTurns } from './turns'
-
-/** The longest name an organisation may have, in characters. */
-const MAX_NAME = 80
 
 /**
  * The organisations of the application and who belongs to them. The directory holds each
@@ -93,34 +91,35 @@ export class Organisations {
   }
 
   /**
-   * Creates an organisation with `identity` as its admin (`OrganisationCreation`), once its name
-   * is trimmed, and tells the creator's listeners. In the identity's turn the identity is read
-   * again first: one whose account went while the creation waited for its departure (`leaveAll`)
-   * is refused `no-such-identity`, and nothing is provisioned for it.
+   * Creates an organisation with `identity` as its admin (`OrganisationCreation`), once its key and
+   * its name keep their rules (`newOrganisationOf`: refused `key-invalid`, `name-required` or
+   * `name-too-long` otherwise, nothing written), and tells the creator's listeners. In the
+   * identity's turn the identity is read again first: one whose account went while the creation
+   * waited for its departure (`leaveAll`) is refused `no-such-identity`, and nothing is
+   * provisioned for it.
    */
   create(input: {
     identity: IdentityId
     key: string
     name: string
   }): ResultAsync<Membership, OrganisationError> {
-    const { identity, key } = input
-    const name = input.name.trim()
-    const length = [...name].length
+    const { identity } = input
+    const organisation = newOrganisationOf(input)
 
-    if (!isTenantKey(key)) {
-      return errAsync(refused('invalid-key'))
+    if (organisation.isErr()) {
+      return errAsync(refused(organisation.error))
     }
 
-    if (length < 1 || length > MAX_NAME) {
-      return errAsync(refused('invalid-name'))
-    }
+    const { key, name } = organisation.value
 
     return this.#turns.ofIdentity(identity, () =>
       this.#lookup
         .existing(identity)
         .andThen(() => this.#creation.create(identity, key, name))
         .andThen((tenant) =>
-          this.#listeners.tell(identity).map((): Membership => ({ tenant, role: 'admin' })),
+          this.#listeners
+            .tell(identity)
+            .map((): Membership => ({ tenant, role: CONTRACT_ROLES.admin })),
         ),
     )
   }

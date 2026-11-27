@@ -1,0 +1,88 @@
+name = "passkey-permissions"
+tags = ["permissions", "passkey"]
+
+# An account's passkey is the gateway's own record: the credential's id, its public key and its
+# counter. No record user reads or writes it, its own row included. Root seeds a row as the
+# gateway would.
+
+[[cases]]
+name = "root creates a passkey of alice"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE passkey:alice SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), public_key = 'cHVibGljLWtleQ', credential_id = 'credential-alice', counter = 0, device_type = 'singleDevice', backed_up = false, transports = 'internal', created_at = time::now();"
+allow = true
+
+[[cases]]
+name = "alice sees no passkey, her own included"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT * FROM passkey;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot change her own passkey"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE passkey:alice SET counter = 99, public_key = 'bWluZQ' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot create a passkey"
+kind = "sql_expect"
+actor = "alice"
+sql = "CREATE passkey:extra SET identity = record::id($auth.id), public_key = 'bWluZQ', credential_id = 'credential-extra', counter = 0, device_type = 'singleDevice', backed_up = false;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot delete her own passkey"
+kind = "sql_expect"
+actor = "alice"
+sql = "DELETE passkey:alice RETURN BEFORE;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "a passkey without its public key is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE passkey:nokey SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0]), credential_id = 'credential-bob', counter = 0, device_type = 'singleDevice', backed_up = false;"
+allow = false
+error_contains = "public_key"
+
+[[cases]]
+name = "a second passkey of the same credential is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE passkey:again SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0]), public_key = 'cHVibGljLWtleQ', credential_id = 'credential-alice', counter = 0, device_type = 'singleDevice', backed_up = false;"
+allow = false
+error_contains = "passkey_credential"
+
+[[cases]]
+name = "the seeded row is unchanged and no other was written"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE [record::id(id), counter, public_key] FROM passkey;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = ["alice", 0, "cHVibGljLWtleQ"]
+
+[[cases.assertions]]
+path = "1"
+exists = false

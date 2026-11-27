@@ -1,4 +1,7 @@
 // scenario: organisation/flows/invitation-elsewhere
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, signUp, test } from '../../support/fixtures'
 import { openMailLink } from '../../support/mail-contract'
@@ -39,9 +42,14 @@ test.describe("Open an invitation's link elsewhere than in the invited account",
 
         await inviteEmail(page, data.invitedEmail)
 
-        // No account has the invited email: its mail speaks the inviter's language.
+        // No account has the invited email and the organisation sets no default language: its
+        // mail speaks English.
         return expectInvitationMail(
-          { email: data.invitedEmail, inviter: { email: userA.email, language: 'en' } },
+          {
+            email: data.invitedEmail,
+            inviter: { email: userA.email, language: 'en' },
+            organisationLanguage: 'en',
+          },
           seen,
         )
       })
@@ -89,7 +97,7 @@ test.describe("Open an invitation's link elsewhere than in the invited account",
     await test.step('6. On device C, click [organisation.invitation.sign-in-link]', async () => {
       await deviceC.getByTestId('organisation.invitation.sign-in-link').click()
       // Expected: After step 6 the URL is [/sign-in] on device C
-      await expectPathname(deviceC, '/sign-in')
+      await expectPathname(deviceC, CONTRACT_ROUTES['user.sign-in'])
     })
   })
 })

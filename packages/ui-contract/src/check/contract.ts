@@ -27,6 +27,7 @@ import {
   type Problem,
   type Screen,
   type ScreensFile,
+  type Terms,
   TOAST_RULE_ROW,
   type Vocabulary,
   type WrittenDescription,
@@ -50,6 +51,14 @@ export interface Contract {
    * (`readDescriptions`): never one the engine derives or the loader fills in.
    */
   readonly descriptions: readonly WrittenDescription[]
+  /**
+   * The project's language, `contract/domain/terms.yaml`, when the contract writes it: its roles
+   * are then the vocabulary's `roles` (the loader fills them in), and its terms name the synonyms
+   * the texts never use.
+   */
+  readonly terms: Terms | undefined
+  /** The line of each key and item of the terms file. */
+  readonly termsLines: Lines
 }
 
 export interface DeclaredAnchor {
@@ -291,3 +300,15 @@ export function contractValues(contract: Contract): (value: string) => boolean {
 /** The paths of every binding of every screen. */
 export const bindingPaths = (screens: ScreensFile): Set<string> =>
   new Set(screens.screens.flatMap((screen) => screen.bindings.map(({ path }) => path)))
+
+/**
+ * The place a scenario's `[screen:<id>]` names, by the screen's id: the path of the screen's
+ * first binding, the one its file is named by and `CONTRACT_ROUTES` keys by the id. A screen
+ * with no binding has none, as no address opens it.
+ */
+export const screenPlaces = (screens: ScreensFile): ReadonlyMap<string, string> =>
+  new Map(
+    screens.screens.flatMap(({ id, bindings: [first] }) =>
+      first === undefined ? [] : [[id, first.path] as const],
+    ),
+  )

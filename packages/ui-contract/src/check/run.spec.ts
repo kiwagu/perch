@@ -59,7 +59,9 @@ describe('checkContract', () => {
   it('stops at the problems of loading, sorted by file and line', () => {
     rmSync(join(root, MODEL_FILE))
     edit(VOCABULARY_FILE, (text) =>
-      text.replace('## Roles', '## Roles\n\n## Roles').replace('## Kinds', '## Kind list'),
+      text
+        .replace('## Composites', '## Composites\n\n## Composites')
+        .replace('## Kinds', '## Kind list'),
     )
     edit(PLATFORM_FILE, (text) => text.replace('version: 1', 'version: one'))
     edit(scenarioFile(SCENARIO), (text) => text.replace('  A: member', '  a: member'))
@@ -71,7 +73,7 @@ describe('checkContract', () => {
       'contract/domain/platform.yaml:1: version: Invalid input: expected number, received string',
       'contract/vocabulary.md:1: missing section "Kinds"',
       'contract/vocabulary.md:9: unknown section "Kind list"',
-      'contract/vocabulary.md:77: section "Roles" appears twice',
+      'contract/vocabulary.md:84: section "Composites" appears twice',
       'tests/e2e/scenarios/sample/base/thing.md:5: devices.a: Invalid key in record',
     ])
   })
@@ -200,7 +202,7 @@ describe('checkContract', () => {
     edit(MODEL_FILE, (text) => text.replace('"member": { "create"', '"memebr": { "create"'))
 
     expect(printed()).toEqual([
-      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the contract',
     ])
   })
   it('loads the descriptions as the domain files write them', () => {

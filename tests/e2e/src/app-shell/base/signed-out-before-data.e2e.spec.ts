@@ -1,7 +1,11 @@
 // scenario: app-shell/base/signed-out-before-data
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { holdTabEngines } from '../../support/engines'
 import { appReady, expect, expectPathname, signOut, signUp, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 
 test.describe('Sign out in another tab while the data opens', { tag: '@full' }, () => {
   test('A tab whose account another tab signs out while its data opens goes to the sign-in page at once, then follows the account signed in next', async ({
@@ -17,7 +21,7 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
     await test.step('1. On device A, sign up, open the link of [mail:sign-up], click [app-shell.nav.devices-link] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.devices-link').click()
-      await expectPathname(page, '/devices')
+      await expectPathname(page, CONTRACT_ROUTES.device)
       await appReady(page)
     })
 
@@ -25,7 +29,7 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
       await test.step('2. Open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
-        await tab.goto('/me')
+        await tab.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(tab)
 
         return tab
@@ -43,7 +47,7 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
           'data-state',
           'opening-data',
         )
-        await expect(page).toHaveURL(/\/devices$/)
+        await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES.device))
         await expect(
           page.getByTestId('device.list').getByTestId('device.list.session-item'),
         ).toHaveCount(1)
@@ -58,7 +62,7 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
       await signOut(second)
       // Expected: Within 5 seconds of step 4 the first tab is on [/sign-in] and shows
       //   [user.sign-in.form], its database engines still held back
-      await expectPathname(page, '/sign-in', 5_000)
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 5_000)
       await expect(page.getByTestId('user.sign-in.form')).toBeVisible()
     })
 
@@ -70,7 +74,7 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
       engines.release()
       // Expected: After step 6 the first tab is on [/me] and its [user.profile.heading] shows the
       //   other name: it follows the account signed in next once it can open that account's data
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await expect(page.getByTestId('user.profile.heading')).toHaveText(other.name, {
         timeout: 15_000,
       })

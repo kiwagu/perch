@@ -1,6 +1,8 @@
 import type { ResultAsync } from 'neverthrow'
 import { createElement } from 'react'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import type { MailWriteError } from './mail.error'
 import { type RenderedMail, renderMail } from './mail.render'
 import { mailTranslator } from './mail.translator'
@@ -44,7 +46,9 @@ export function renderInvitationMail(
       body: t('mail.invitation.body', {
         organisation: input.organisation,
         role: t(
-          input.role === 'admin' ? 'mail.invitation.role.admin' : 'mail.invitation.role.member',
+          input.role === CONTRACT_ROLES.admin
+            ? 'mail.invitation.role.admin'
+            : 'mail.invitation.role.member',
         ),
       }),
       action: t('mail.invitation.action'),

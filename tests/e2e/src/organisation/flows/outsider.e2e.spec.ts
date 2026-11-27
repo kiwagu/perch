@@ -1,7 +1,11 @@
 // scenario: organisation/flows/outsider
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, signUp, test } from '../../support/fixtures'
 import { createOrganisation } from '../../support/organisation'
+import { atRoute } from '../../support/routes'
 
 test.describe('Keep an organisation invisible to accounts outside it', { tag: '@full' }, () => {
   test('An account that was not invited sees no organisation and no notes', async ({
@@ -72,7 +76,7 @@ test.describe('Keep an organisation invisible to accounts outside it', { tag: '@
     await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
       timeout: 10_000,
     })
-    await expect(page).toHaveURL(/\/org$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES.organisation))
     await expect(page.getByTestId('organisation.page.heading')).toHaveText(data.name)
     await expect(page.getByTestId('organisation.page.current-select')).toHaveCount(0)
     await expect(

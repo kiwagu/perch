@@ -1,4 +1,7 @@
 // scenario: console/flows/email-change-before-verifying
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
 import {
@@ -97,7 +100,7 @@ test.describe('Change the email of an account that never signed in', { tag: '@fu
       // Expected: After step 5 [user.confirm-email.message] carries [code:email-changed] on device
       //   B, beside [user.confirm-email.sign-in-link], and [notice:confirm-email.email-changed]
       //   reaches the email
-      await expectPathname(deviceB, '/confirm-email')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.confirm-email'])
       await expect(deviceB.getByTestId('user.confirm-email.message')).toHaveAttribute(
         'data-code',
         'email-changed',
@@ -113,7 +116,7 @@ test.describe('Change the email of an account that never signed in', { tag: '@fu
 
     await test.step('6. On device B, click [user.confirm-email.sign-in-link], enter the new email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
       await deviceB.getByTestId('user.confirm-email.sign-in-link').click()
-      await expectPathname(deviceB, '/sign-in')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'])
       await deviceB.getByTestId('user.sign-in.email-input').fill(data.newEmail)
       await deviceB.getByTestId('user.sign-in.password-input').fill(data.password)
       await deviceB.getByTestId('user.sign-in.submit-button').click()
@@ -121,7 +124,7 @@ test.describe('Change the email of an account that never signed in', { tag: '@fu
       //   [code:welcome] and [user.profile.heading] shows the name: the first sign-in created the
       //   account's profile with the name it signed up with
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.name, {
         timeout: 10_000,
       })

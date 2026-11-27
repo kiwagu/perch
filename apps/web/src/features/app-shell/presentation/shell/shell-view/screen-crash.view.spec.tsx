@@ -11,9 +11,15 @@ describe('ScreenCrash', () => {
   it('says a screen failed to render, with a reload while the flow takes one', () => {
     const onReload = vi.fn()
     const crash = (props: Partial<ScreenCrashProps>) => (
-      <ScreenCrash crash="screen-crashed" reload={true} onReload={onReload} {...props} />
+      <ScreenCrash
+        crash="screen-crashed"
+        reload={true}
+        can={() => true}
+        onReload={onReload}
+        {...props}
+      />
     )
-    const { rerender } = renderWithProviders(crash({ canReload: true }))
+    const { rerender } = renderWithProviders(crash({ can: () => true }))
     const message = screen.getByTestId('app-shell.crash-message')
 
     expect(message.getAttribute('data-code')).toBe('screen-crashed')
@@ -23,13 +29,13 @@ describe('ScreenCrash', () => {
 
     expect(onReload).toHaveBeenCalledOnce()
 
-    rerender(crash({ canReload: false }))
+    rerender(crash({ can: (event) => event.type !== 'app-shell.reload-button' }))
 
     expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(true)
   })
 
   it("shows no reload where the frame's state renders none", () => {
-    renderWithProviders(<ScreenCrash crash="screen-crashed" reload={false} />)
+    renderWithProviders(<ScreenCrash crash="screen-crashed" reload={false} can={() => true} />)
 
     expect(screen.getByTestId('app-shell.crash-message')).toBeTruthy()
     expect(screen.queryByTestId('app-shell.reload-button')).toBeNull()

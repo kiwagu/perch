@@ -5,6 +5,7 @@ import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 
 import type { SyncStatus } from '../../../../../platform/sync-status.port'
 import { THEMES, type Theme } from '../../../../../platform/theme'
+import type { ShellEvent } from '../../../application/shell-machine'
 
 export interface HeaderActionsProps {
   readonly signedIn: boolean
@@ -12,11 +13,9 @@ export interface HeaderActionsProps {
   readonly sync?: SyncStatus | undefined
   /** The theme this device shows. */
   readonly theme: Theme
-  /** Whether the frame's flow takes a theme choice now: the select is enabled while it does. */
-  readonly canChooseTheme: boolean
+  /** Whether the frame's flow takes `event` now: a select is enabled while it takes its choice. */
+  readonly can: (event: ShellEvent) => boolean
   readonly onThemeChange: (theme: Theme) => void
-  /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
-  readonly canChooseLocale: boolean
   readonly onLocaleChange: (locale: Locale) => void
 }
 
@@ -66,9 +65,8 @@ export function HeaderActions(props: HeaderActionsProps) {
           value={props.theme}
           options={themes}
           onChange={props.onThemeChange}
-          disabled={!props.canChooseTheme}
+          disabled={!props.can({ type: 'app-shell.theme-select', theme: props.theme })}
           testId="app-shell.theme-select"
-          holdsInput={false}
         />
       )}
       {/* A guest chooses the language here; a signed-in account does on its settings screen. */}
@@ -78,9 +76,8 @@ export function HeaderActions(props: HeaderActionsProps) {
           value={locale}
           options={locales}
           onChange={props.onLocaleChange}
-          disabled={!props.canChooseLocale}
+          disabled={!props.can({ type: 'app-shell.locale-select', locale })}
           testId="app-shell.locale-select"
-          holdsInput={false}
         />
       )}
     </>

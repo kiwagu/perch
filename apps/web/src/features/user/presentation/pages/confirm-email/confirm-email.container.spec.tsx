@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
@@ -23,7 +24,10 @@ type AuthUser = NonNullable<ReturnType<SessionPort['current']>>
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
-/** The page at `at`, `here` signed in, over a confirmation that answers as `answer` says. */
+/**
+ * The page at `at`, `here` signed in, over a confirmation that answers as `answer` says; `signIn`
+ * changes who is signed in on this device while the page is open, as another tab would.
+ */
 function open(
   at: string,
   here: AuthUser | undefined,
@@ -32,16 +36,27 @@ function open(
     email: 'ann.new@example.test',
   }),
 ) {
+  let user = here
+  const listeners = new Set<(next: AuthUser | undefined) => void>()
   const confirmEmail = vi.fn((_token: string) => answer)
-  const session: SessionPort = { ...fakeSession().session, current: () => here, confirmEmail }
+  const session: SessionPort = {
+    ...fakeSession().session,
+    current: () => user,
+    subscribe: (listener) => {
+      listeners.add(listener)
+
+      return () => listeners.delete(listener)
+    },
+    confirmEmail,
+  }
   const TestModule = defineModule({
     id: 'test',
     declarations: { Confirm: ConfirmEmailContainer },
     routes: [
       {
-        path: '/confirm-email',
+        path: CONTRACT_ROUTES['user.confirm-email'],
         page: 'Confirm',
-        roles: ['guest', 'identity'],
+        roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
     ],
@@ -61,12 +76,24 @@ function open(
     </I18nProvider>,
   )
 
-  return { confirmEmail }
+  const signIn = (next: AuthUser | undefined) =>
+    act(() => {
+      user = next
+
+      for (const listener of listeners) {
+        listener(next)
+      }
+    })
+
+  return { confirmEmail, signIn }
 }
+
+/** The code the page's message carries. */
+const messageCode = () => screen.getByTestId('user.confirm-email.message').getAttribute('data-code')
 
 describe('ConfirmEmailContainer', () => {
   it('confirms the token of its address once, and leads this account to its profile', async () => {
-    const { confirmEmail } = open('/confirm-email?token=the-token', ann)
+    const { confirmEmail } = open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, ann)
 
     expect(await screen.findByTestId('user.confirm-email.profile-link')).toBeTruthy()
     expect(confirmEmail).toHaveBeenCalledTimes(1)
@@ -74,13 +101,42 @@ describe('ConfirmEmailContainer', () => {
   })
 
   it('leads a guest to the sign-in page', async () => {
-    open('/confirm-email?token=the-token', undefined)
+    open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, undefined)
 
     expect(await screen.findByTestId('user.confirm-email.sign-in-link')).toBeTruthy()
   })
 
+  it('hides the sign-in link once an account signs in here, and shows it again once it signs out', async () => {
+    const { signIn } = open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, undefined)
+
+    expect(await screen.findByTestId('user.confirm-email.sign-in-link')).toBeTruthy()
+
+    signIn(ann)
+
+    await waitFor(() => expect(screen.queryByTestId('user.confirm-email.sign-in-link')).toBeNull())
+    expect(screen.queryByTestId('user.confirm-email.profile-link')).toBeNull()
+    expect(messageCode()).toBe('email-changed')
+
+    signIn(undefined)
+
+    expect(await screen.findByTestId('user.confirm-email.sign-in-link')).toBeTruthy()
+    expect(messageCode()).toBe('email-changed')
+  })
+
+  it('hides the profile link once this device signs out, offering no other', async () => {
+    const { signIn } = open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, ann)
+
+    expect(await screen.findByTestId('user.confirm-email.profile-link')).toBeTruthy()
+
+    signIn(undefined)
+
+    await waitFor(() => expect(screen.queryByTestId('user.confirm-email.profile-link')).toBeNull())
+    expect(screen.queryByTestId('user.confirm-email.sign-in-link')).toBeNull()
+    expect(messageCode()).toBe('email-changed')
+  })
+
   it('leads nowhere while another account is signed in here', async () => {
-    open('/confirm-email?token=the-token', bob)
+    open(`${CONTRACT_ROUTES['user.confirm-email']}?token=the-token`, bob)
 
     expect(
       (await screen.findByTestId('user.confirm-email.message')).getAttribute('data-code'),
@@ -91,7 +147,7 @@ describe('ConfirmEmailContainer', () => {
 
   it('says why a refused link changed nothing', async () => {
     open(
-      '/confirm-email?token=used',
+      `${CONTRACT_ROUTES['user.confirm-email']}?token=used`,
       ann,
       errAsync({ code: 'data:LINK_INVALID' as const, message: 'used' }),
     )

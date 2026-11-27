@@ -7,12 +7,13 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProfileId } from '@workspace/ids'
 import { loadScreens } from '@workspace/ui-contract'
 
-import { renderWithProviders } from '../../../../../test-utils'
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
 import type { ProfileResult } from './profile.model.gen'
-import { type ProfileControl, ProfileView, type ProfileViewProps } from './profile.view'
+import { ProfileView, type ProfileViewProps } from './profile.view'
 
 const ROOT = join(import.meta.dirname, '../../../../../../../..')
 
@@ -46,7 +47,7 @@ function renderView(props: Partial<ProfileViewProps> = {}, locale: 'en' | 'es' =
       {...more}
     />
   )
-  const { rerender } = renderWithProviders(view({}), { locale, es })
+  const { rerender } = renderWithFacts(view({}), { locale, es })
 
   return { ...handlers, rerender: (more: Partial<ProfileViewProps>) => rerender(view(more)) }
 }
@@ -75,6 +76,18 @@ describe('ProfileView', () => {
     expect(screen.getByLabelText(en['user.profile.bio'])).toBe(field('user.profile.bio-textarea'))
   })
 
+  it('gives each field what the contract says of it, the email it only shows included', () => {
+    renderView()
+
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([
+        'user.profile.name-input',
+        'user.profile.bio-textarea',
+        'user.profile.email-input',
+      ]),
+    )
+  })
+
   it('tells what is typed into each field, and Save', () => {
     const { onType, onSave } = renderView()
 
@@ -90,7 +103,7 @@ describe('ProfileView', () => {
 
   it('enables each button while the flow handles it', () => {
     const { onSave, rerender } = renderView({
-      can: (control: ProfileControl) => control === 'user.profile.sign-out-button',
+      can: (event) => event.type === 'user.profile.sign-out-button',
     })
     const save = screen.getByTestId('user.profile.save-button') as HTMLButtonElement
     const signOut = screen.getByTestId('user.profile.sign-out-button') as HTMLButtonElement
@@ -102,7 +115,7 @@ describe('ProfileView', () => {
 
     expect(onSave).not.toHaveBeenCalled()
 
-    rerender({ can: (control: ProfileControl) => control === 'user.profile.save-button' })
+    rerender({ can: (event) => event.type === 'user.profile.save-button' })
 
     expect(save.disabled).toBe(false)
     expect(signOut.disabled).toBe(true)
@@ -127,6 +140,10 @@ describe('ProfileView', () => {
     }
   })
 
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    expectEachCodeMarksItsField('user.profile.error', (code) => renderView({ error: DOMAIN[code] }))
+  })
+
   it('explains each refused save, and shows a failure that concerns no field above Save', () => {
     const { rerender } = renderView({ error: 'profile:NAME_REQUIRED' })
 
@@ -136,7 +153,6 @@ describe('ProfileView', () => {
 
     rerender({ error: 'profile:BIO_TOO_LONG' })
 
-    expect(field('user.profile.bio-textarea').maxLength).toBe(2000)
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.bio-too-long'],
     )
@@ -149,6 +165,9 @@ describe('ProfileView', () => {
     )
     expect(fieldOf('user.profile.error')).toBe(fieldOf('user.profile.save-button'))
     expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBeNull()
+    expect(document.querySelectorAll('[aria-invalid="true"], [data-invalid="true"]')).toHaveLength(
+      0,
+    )
   })
 
   it('says when the profile is still loading or missing', () => {

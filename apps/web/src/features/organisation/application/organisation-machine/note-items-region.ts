@@ -1,4 +1,10 @@
-import { DELETE_REFUSED, forget, NOTE_DELETED, NOTE_REFUSED, NOTE_UPDATED } from './effects'
+import {
+  CLEAR_NOTES_ERROR,
+  DELETE_REFUSED,
+  NOTE_DELETED,
+  NOTE_REFUSED,
+  NOTE_UPDATED,
+} from './effects'
 import { taken } from './events'
 
 /**
@@ -31,7 +37,7 @@ export const NOTE_ITEMS_REGION = {
       invoke: {
         src: 'note.updateNote',
         input: taken('organisation.notes.save-button'),
-        onDone: { target: 'idle', actions: [forget('notes'), NOTE_UPDATED] },
+        onDone: { target: 'idle', actions: [CLEAR_NOTES_ERROR, NOTE_UPDATED] },
         onError: { target: 'editing', actions: [NOTE_REFUSED] },
       },
     },
@@ -39,7 +45,7 @@ export const NOTE_ITEMS_REGION = {
       invoke: {
         src: 'note.deleteNote',
         input: taken('organisation.notes.delete-button'),
-        onDone: { target: 'idle', actions: [forget('notes'), NOTE_DELETED] },
+        onDone: { target: 'idle', actions: [CLEAR_NOTES_ERROR, NOTE_DELETED] },
         onError: { target: 'idle', actions: [DELETE_REFUSED] },
       },
     },

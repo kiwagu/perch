@@ -8,28 +8,35 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
+  hintBudgetProblems,
   loadActivities,
   loadModel,
   loadScenarios,
   loadScreensWith,
+  loadTerms,
   type Problem,
   parseVocabulary,
   readDescriptions,
+  SCHEMA_OUTPUTS,
   schemaDrift,
   sortProblems,
+  type TermEntry,
   VOCABULARY_FILE,
 } from '../files'
 import { referenceDrift, referenceLinkProblems } from '../reference'
 
 import { accessProblems } from './access'
+import { actionFormsProblems } from './action-forms'
 import { activitiesProblems } from './activities'
 import { attributionProblems } from './attribution'
+import { behaviourTextsProblems } from './behaviour-texts'
 import { bindingsProblems } from './bindings'
 import { changesProblems } from './changes'
 import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { descriptionsProblems } from './descriptions'
 import { flowProblems } from './flow'
+import { invariantsProblems } from './invariants'
 import { keyProblems } from './keys'
 import { leavingProblems } from './leaving'
 import { mailsProblems } from './mails'
@@ -40,6 +47,8 @@ import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
 import { screensProblems } from './screens'
 import { searchProblems } from './search'
+import { synonymsProblems } from './synonyms'
+import { termsProblems } from './terms'
 import { toastsProblems } from './toasts'
 import { unsavedInputProblems } from './unsaved-input'
 import { valueProblems } from './values'
@@ -66,6 +75,10 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
  * The contract files, the activities and the scenarios, with the descriptions they write, or what
  * keeps them from loading.
  */
+/** The meaning of each term or role of the terms file, by its name. */
+const meaningsOf = (entries: Readonly<Record<string, TermEntry>>): Record<string, string> =>
+  Object.fromEntries(Object.entries(entries).map(([name, { meaning }]) => [name, meaning]))
+
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
   const { model: written, problems: modelLoad } = loadModel(root)
@@ -73,12 +86,14 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
   const { screens, model, problems: screensLoad } = loadScreensWith(root, written)
   const { activities, lines: activityLines, problems: activitiesLoad } = loadActivities(root)
   const { scenarios, lines: scenarioLines, problems: scenariosLoad } = loadScenarios(root)
+  const { terms, lines: termsLines, problems: termsLoad } = loadTerms(root)
   const problems = [
     ...vocabularyLoad,
     ...screensLoad,
     ...modelLoad,
     ...activitiesLoad,
     ...scenariosLoad,
+    ...termsLoad,
   ]
 
   if (problems.length > 0 || screens === undefined || model === undefined) {
@@ -91,7 +106,9 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
     ? { problems: sortProblems(descriptionsRead) }
     : {
         contract: {
-          vocabulary,
+          // A contract with a terms file keeps its roles there, each with its meaning.
+          vocabulary:
+            terms === undefined ? vocabulary : { ...vocabulary, roles: meaningsOf(terms.roles) },
           screens,
           model,
           activities,
@@ -99,6 +116,8 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
           scenarios,
           scenarioLines,
           descriptions,
+          terms,
+          termsLines,
         },
         problems: [],
       }
@@ -119,6 +138,8 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   unsavedInputProblems,
   valueProblems,
   attributionProblems,
+  actionFormsProblems,
+  invariantsProblems,
   searchProblems,
   keyProblems,
   mailsProblems,
@@ -127,7 +148,10 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   accessProblems,
   pagingProblems,
   scenariosProblems,
+  termsProblems,
+  synonymsProblems,
   descriptionsProblems,
+  behaviourTextsProblems,
   withProblems,
 ]
 
@@ -145,6 +169,7 @@ export function checkContract(root: string): Problem[] {
   return sortProblems([
     ...contractProblems(contract),
     ...schemaDrift(root),
+    ...hintBudgetProblems(SCHEMA_OUTPUTS),
     ...referenceDrift(root),
     ...referenceLinkProblems(root),
   ])

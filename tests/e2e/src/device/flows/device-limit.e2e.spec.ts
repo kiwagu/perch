@@ -1,4 +1,7 @@
 // scenario: device/flows/device-limit
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   deviceLimitDialog,
@@ -58,7 +61,7 @@ test.describe('Sign in past the number of devices an account may be signed in on
       // Expected: After step 5 [user.sign-in.device-limit-dialog] carries [code:device-limit],
       //   and device B is still on [/sign-in]: nothing is signed in yet
       await expect(deviceLimitDialog(deviceB)).toBeVisible()
-      await expectPathname(deviceB, '/sign-in')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('6. Click [user.sign-in.device-limit-dialog.cancel-button]', async () => {
@@ -66,7 +69,7 @@ test.describe('Sign in past the number of devices an account may be signed in on
       // Expected: After step 6 [user.sign-in.device-limit-dialog] is gone and device B is still
       //   on [/sign-in]
       await expect(deviceB.getByTestId('user.sign-in.device-limit-dialog')).toHaveCount(0)
-      await expectPathname(deviceB, '/sign-in')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'])
     })
 
     await test.step('7. Click [user.sign-in.submit-button] again', async () => {
@@ -79,12 +82,12 @@ test.describe('Sign in past the number of devices an account may be signed in on
     await test.step('8. Click [user.sign-in.device-limit-dialog.confirm-button]', async () => {
       await deviceB.getByTestId('user.sign-in.device-limit-dialog.confirm-button').click()
       // Expected: After step 8 device B is on [/me]
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
     await test.step('9. On device B, open [/devices]', async () => {
       await deviceB.getByTestId('app-shell.nav.devices-link').click()
-      await expectPathname(deviceB, '/devices')
+      await expectPathname(deviceB, CONTRACT_ROUTES.device)
       // Expected: After step 9 [device.list] holds eleven [device.list.session-item]: device B's
       //   in [state:current], device C's in [state:revoked], and device A's and the eight others
       //   in neither
@@ -95,7 +98,7 @@ test.describe('Sign in past the number of devices an account may be signed in on
       await deviceC.network.goOnline()
       // Expected: After step 10 device C is on [/sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:device-limit-elsewhere]
-      await expectPathname(deviceC.page, '/sign-in', BACK_ONLINE_MS)
+      await expectPathname(deviceC.page, CONTRACT_ROUTES['user.sign-in'], BACK_ONLINE_MS)
       await expect(signInNotice(deviceC.page, 'device-limit-elsewhere')).toBeVisible()
     })
 

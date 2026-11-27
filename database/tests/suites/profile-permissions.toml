@@ -4,8 +4,8 @@ tags = ["permissions", "profile"]
 # The server contract of the replicated profile table: clients write profiles through
 # their private region, which the gateway checks and stores, so on the server an identity
 # may only read its own row and can neither create, edit nor delete one. Refused writes
-# return no rows; root then confirms that nothing changed. A bio holds at most 2000
-# characters, whoever writes it.
+# return no rows; root then confirms that nothing changed. A bio holds at most the length
+# the contract states (the schema's `$profile_bio_max_length`), whoever writes it.
 
 [[cases]]
 name = "root seeds a profile for alice and for bob"
@@ -74,23 +74,23 @@ path = "0"
 exists = false
 
 [[cases]]
-name = "a bio of 2000 characters is stored"
+name = "a bio of the longest length is stored"
 kind = "sql_expect"
 actor = "root"
-sql = "UPDATE profile:bob SET bio = string::repeat('x', 2000) RETURN VALUE string::len(bio);"
+sql = "UPDATE profile:bob SET bio = string::repeat('x', $profile_bio_max_length) RETURN VALUE string::len(bio) = $profile_bio_max_length;"
 allow = true
 
 [[cases.assertions]]
 path = "0"
-equals = 2000
+equals = true
 
 [[cases]]
-name = "a bio of 2001 characters is refused"
+name = "a bio past the longest length is refused"
 kind = "sql_expect"
 actor = "root"
-sql = "UPDATE profile:bob SET bio = string::repeat('x', 2001);"
+sql = "UPDATE profile:bob SET bio = string::repeat('x', $profile_bio_max_length + 1);"
 allow = false
-error_contains = "string::len($value) <= 2000"
+error_contains = "string::len($value) <= $profile_bio_max_length"
 
 [[cases]]
 name = "only the seeded profiles exist and keep their names"

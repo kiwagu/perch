@@ -68,6 +68,26 @@ export function toSignInAdmission(value: unknown): Result<SignInAdmission, DataE
 }
 
 /**
+ * How the admission of a sign-in would take it, judged before any session of it is written and
+ * writing nothing: let it in as it is (`admitted`), ask it about the limit of devices (`asked`), or
+ * let nothing in, its account banned (`banned`). The admission itself may still judge otherwise, a
+ * device admitted or a ban committed in between.
+ */
+export type SignInJudgment = 'admitted' | 'asked' | 'banned'
+
+/** What the judgment of a sign-in answers. */
+const judgmentAnswer = z.enum(['admitted', 'asked', 'banned'])
+
+/** The judgment of a sign-in as the directory answered it. */
+export function toSignInJudgment(value: unknown): Result<SignInJudgment, DataError> {
+  const answer = judgmentAnswer.safeParse(value)
+
+  return answer.success
+    ? ok(answer.data)
+    : err(dataError('data:QUERY_FAILED', 'the judgment of a sign-in has an unknown shape'))
+}
+
+/**
  * What the admission of the session a first verification signed in did: let it in, its device
  * keeping it as its newest (`admitted`); found its account banned and let nothing in, the session
  * ended `banned` unless the ban had ended it already (`banned`); or found it no longer live, a reset

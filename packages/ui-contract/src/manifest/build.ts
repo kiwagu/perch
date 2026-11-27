@@ -2,8 +2,8 @@
  * The manifest, built only from the contract folder (the vocabulary, the screen files, the
  * platform file, the activities and the model) and the scenario files of
  * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens verbatim
- * with an example link on each binding, the platform section and the activities verbatim,
- * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
+ * with an example link on each binding, the platform section as written with each invariant's
+ * derived actions, the activities verbatim, the scenarios parsed, every declared anchor by name with its screen (with a field's composite
  * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
  * the kind, meaning and values of the part it marks, the composites and the field states of the
  * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the
@@ -32,10 +32,13 @@ import {
   describedOf,
   failuresOf,
   fieldValueOf,
+  invariantActions,
   type Model,
   type ResolvedValue,
+  renderedRule,
   type Screen,
   type ScreensFile,
+  type Terms,
   TOAST_RULE_ROW,
   type Vocabulary,
 } from '../files'
@@ -61,6 +64,8 @@ export interface ManifestInput {
   readonly model: Model
   readonly activities: Activity[]
   readonly scenarios: Scenario[]
+  /** The terms file, when the contract writes one. */
+  readonly terms?: Terms | undefined
   readonly product: Product
   /** When the manifest is built; now by default. */
   readonly now?: Date
@@ -96,6 +101,7 @@ function idsOf(screens: ScreensFile, vocabulary: Vocabulary, model: Model): Mani
           holdsInput,
           marksState,
           secret,
+          required,
           asks,
           leaves,
           composite,
@@ -126,6 +132,7 @@ function idsOf(screens: ScreensFile, vocabulary: Vocabulary, model: Model): Mani
             ...(holdsInput === undefined ? {} : { holdsInput }),
             ...(marksState === undefined ? {} : { marksState }),
             ...(secret === undefined ? {} : { secret }),
+            ...(required === undefined ? {} : { required }),
             ...(asks === undefined ? {} : { asks }),
             ...(leaves === undefined ? {} : { leaves }),
             ...(composite === undefined ? {} : { composite }),
@@ -180,6 +187,30 @@ const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =
       },
     ]),
   )
+
+/**
+ * The platform as the manifest carries it: each invariant with its rule's values written in and
+ * the actions that name it.
+ */
+function platformOf(platform: ScreensFile['platform']): Manifest['platform'] {
+  const { invariants, ...rest } = platform
+
+  if (invariants === undefined) {
+    return rest
+  }
+
+  const actions = invariantActions(platform)
+
+  return {
+    ...rest,
+    invariants: Object.fromEntries(
+      Object.entries(invariants).map(([name, invariant]) => [
+        name,
+        { ...invariant, rule: renderedRule(invariant), actions: [...(actions[name] ?? [])] },
+      ]),
+    ),
+  }
+}
 
 function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['contract'] {
   const { defaults } = screens.platform
@@ -238,6 +269,7 @@ export function buildManifest({
   model,
   activities,
   scenarios,
+  terms,
   product,
   now = new Date(),
 }: ManifestInput): Manifest {
@@ -247,6 +279,7 @@ export function buildManifest({
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
+    ...(terms === undefined ? {} : { terms }),
     screens: screensOf(screens.screens, {
       screens: screens.screens,
       codes: vocabulary.codes,
@@ -254,7 +287,7 @@ export function buildManifest({
     }),
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens, vocabulary, model),
-    platform: screens.platform,
+    platform: platformOf(screens.platform),
     activities,
     scenarios,
     model: model.document,

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import { dataError } from '@workspace/data'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { createForgotPasswordMachine } from './forgot-password.machine'
 import type { SignInError } from './sign-in.service'
@@ -90,7 +91,7 @@ describe('the forgot-password page', () => {
       },
       {
         type: 'navigate',
-        to: '/sign-in',
+        to: CONTRACT_ROUTES['user.sign-in'],
         search: { email: { anchor: EMAIL } },
         fields: { [EMAIL]: 'ann@example.test' },
       },

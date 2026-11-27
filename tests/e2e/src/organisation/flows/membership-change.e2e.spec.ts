@@ -1,4 +1,7 @@
 // scenario: organisation/flows/membership-change
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, pageLoads, signIn, signUp, test } from '../../support/fixtures'
 import { mailbox } from '../../support/mailbox'
@@ -9,6 +12,7 @@ import {
   memberItems,
   openInvitationMail,
 } from '../../support/organisation'
+import { atRoute } from '../../support/routes'
 import { databases, organisationDatabase } from '../../support/storage'
 
 test.describe('Deliver an accepted invitation and a removal to a signed-in device', {
@@ -174,7 +178,7 @@ test.describe('Deliver an accepted invitation and a removal to a signed-in devic
     await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
       timeout: 10_000,
     })
-    await expect(deviceB).toHaveURL(/\/org$/)
+    await expect(deviceB).toHaveURL(atRoute(CONTRACT_ROUTES.organisation))
     await expect(deviceB.getByTestId('organisation.page.status')).toHaveAttribute(
       'data-state',
       'empty',

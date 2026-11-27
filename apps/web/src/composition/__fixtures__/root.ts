@@ -11,10 +11,13 @@ import { accountsApi } from '../accounts-api'
 import { devicesApi } from '../devices-api'
 import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
+import { passkeysApi } from '../passkeys-api'
 import { type AppRootOptions, type BootStep, createAppRoot } from '../root'
 import type { MemoryStorage } from '../storage'
+import { twoFactorApi } from '../two-factor-api'
 
 import { fakeGatewayAuth } from './gateway-auth'
+import { fakeCeremony } from './passkey-ceremony'
 
 /**
  * Boots the app root on test databases and an offline gateway stub, the gateway routes never
@@ -36,6 +39,7 @@ export async function bootRoot(
   const stub = gatewayStub({ local: server, schema: replicaSchema, clock })
   const opened: IdentityId[] = []
   const transports: StubTransport[] = []
+  const ceremony = fakeCeremony()
 
   cleanups.push(async () => {
     await stub.close()
@@ -76,6 +80,21 @@ export async function bootRoot(
         ...deps,
         fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
       }),
+    twoFactorApi: (deps) =>
+      twoFactorApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
+    passkeysApi: (deps) =>
+      passkeysApi(
+        '/backend',
+        {
+          ...deps,
+          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+        },
+        ceremony,
+      ),
+    passkeyCeremony: ceremony,
     transport: (context) => {
       const transport = stub.transport(context.identity)
 
@@ -87,6 +106,7 @@ export async function bootRoot(
     locks: new FakeLocks(),
     hints: () => syncHints(undefined),
     clock,
+    steady: () => clock.now(),
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     servedBuild: { watch: () => () => {} },
