@@ -12,8 +12,7 @@
  * its roles, neither guest nor identity among them. `recipient`, the account whose email the mail
  * goes to, has one only when an account has that email, so the mail goes to a parameter; so has an
  * optional parameter left out. In a list the next source speaks when one has none, so only these may
- * be followed, and a list ends with a source that always has one. The recipient written alone, the
- * older form, falls back on the signed-in account, so only signed-in roles run the action.
+ * be followed, and a mail's language, one source or a list, ends with a source that always has one.
  */
 
 import { GUEST, IDENTITY } from '../anchors'
@@ -70,7 +69,7 @@ function sourceMessages(name: string, action: PlatformAction, mail: PlatformMail
 /**
  * Why the mail of `name` names its language wrongly, each message with the place of the source it
  * concerns; none when it does not. A list's source after one that always has a language is never
- * reached; the recipient written alone falls back on the signed-in account.
+ * reached, and a last source that may have none, alone too, leaves the mail without a language.
  */
 function languageMessages(
   name: string,
@@ -81,24 +80,17 @@ function languageMessages(
     typeof mail.language === 'string'
       ? [{ source: mail.language, at: [] }]
       : mail.language.map((source, index) => ({ source, at: [index] }))
-  const alone =
-    typeof mail.language === 'string' && mail.language === RECIPIENT && mail.to !== ACCOUNT
-      ? action.roles !== undefined && !action.roles.includes(GUEST)
-        ? []
-        : [
-            `"${RECIPIENT}" falls back on the signed-in account's language, so "${name}" lists its roles, guest not among them`,
-          ]
-      : []
-
   const mayHaveNone = (source: string): boolean =>
     source === RECIPIENT ||
     (Object.hasOwn(action.params, source) && action.params[source]?.optional === true)
   const last = sources.at(-1)
   const single = typeof mail.language === 'string'
+  // A recipient of a mail to account is refused as the account itself, which always has one.
   const unended =
     last !== undefined &&
     mayHaveNone(last.source) &&
-    (single ? last.source !== RECIPIENT : mayHaveNone(sources.at(-2)?.source ?? ''))
+    !(last.source === RECIPIENT && mail.to === ACCOUNT) &&
+    (single || mayHaveNone(sources.at(-2)?.source ?? ''))
       ? [
           {
             at: last.at,
@@ -121,7 +113,6 @@ function languageMessages(
         : sourceMessages(name, action, mail, source).map((message) => ({ at, message }))
     }),
     ...unended,
-    ...alone.map((message) => ({ at: [], message })),
   ]
 }
 

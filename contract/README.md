@@ -74,12 +74,13 @@ developer approved; the code takes no architectural decision of its own.
    rename or a removal keeps the old name declared until the code no longer renders it, then
    that commit drops it, with no new stop. Any other contract change found while writing the
    code goes back to step 1 on the trunk and is taken as one more commit, a meta one through
-   `feat/contract-first-pass` and its landing, after which `main` is merged into the trunk and
-   into the feature branch. A business commit written on the feature's branch instead, a
-   feature begun there before the trunk or an amendment the developer allows there, stops
-   here for the developer's OK on its hash, as `.cursor/rules/ui-contract.mdc` says. A fix that
-   brings the code back to what the contract already says, correctly, has no contract diff and
-   no stop.
+   `feat/contract-first-pass` and its landing. The trunk then merges `main` as it sets out to
+   model the change, and the feature branch merges `main` when it starts the take, the merge
+   followed by the take's commit, not when the facet lands. A business commit written on the
+   feature's branch instead, a feature begun there before the trunk or an amendment the
+   developer allows there, stops here for the developer's OK on its hash, as
+   `.cursor/rules/ui-contract.mdc` says. A fix that brings the code back to what the contract
+   already says, correctly, has no contract diff and no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
 5. **The tests.** The test of the scenario uses the anchors, codes, states and values of the
@@ -175,7 +176,7 @@ The authored files, edited by hand or by a model in the modeling thread:
     sign-in:
       # description, params, changes
       result:
-        - the device is signed in, and the app moves to /me with code welcome
+        - the device is signed in, and the app moves to user.profile with code welcome
         - "with the second factor on: the answer asks for a code and signs no device in"
       codes:
         invalid-credentials: the email or the password is wrong
@@ -201,27 +202,23 @@ The authored files, edited by hand or by a model in the modeling thread:
   the mail goes to, read as `account` is, when an account has that email. Every source but
   `recipient` and an optional parameter left out always has a language, so it ends a list, and a
   list ends with one: an invitation's `language: [ recipient, organisation ]` speaks the language
-  of the account it invites, else its organisation's.
-  `recipient` written alone, the older form, falls back on the signed-in account's. `account` is
-  a reserved word there: it names the account the action acts on, the signed-in account for an
-  action on its own account (a change of email, a request to delete it), else, whoever is signed
-  in, the one its parameters name: the email of the resend of a verification or of the request
-  for a password reset, which send nothing to an email with no account, or the token of a link
-  (a password reset, a confirmed email, a deletion). So an action that sends a mail has no
-  parameter named `account`; nor one named `organisation` or `recipient`. The check holds `to`
-  and each source to the action's parameters and those three words, refuses a parameter named
-  `account` on an action that sends a mail or a notice and one named `organisation` or
+  of the account it invites, else its organisation's; `recipient` alone is refused, as it may have
+  none. `account` is a reserved word there: it names the account the action acts on, the signed-in
+  account for an action on its own account (a change of email, a request to delete it), else,
+  whoever is signed in, the one its parameters name: the email of the resend of a verification or
+  of the request for a password reset, which send nothing to an email with no account, or the
+  token of a link (a password reset, a confirmed email, a deletion). So an action that sends a
+  mail has no parameter named `account`; nor one named `organisation` or `recipient`. The check
+  holds `to` and each source to the action's parameters and those three words, refuses a parameter
+  named `account` on an action that sends a mail or a notice and one named `organisation` or
   `recipient` on an action that sends a mail, refuses a source after one that always has a
   language (it is never reached) and a last source that may have none (an optional parameter,
-  alone too), takes `recipient`
-  only for a mail whose `to` is a parameter
-  (written alone, only on an action whose `roles` leave `guest` out, as it falls back on a
-  signed-in account) and `organisation` only on an action whose `roles` leave out `guest` and
-  `identity` (it runs in an organisation; the contract does not say which other roles are held
-  in one), and holds the link to a screen whose every route declares that search parameter.
-  A scenario names the mail by its action, `[mail:sign-up]`, and a
-  test that reads a mail holds it to its declaration: its recipient, the path and the search
-  parameter of its link, and the language of its HTML.
+  `recipient` alone too), takes `recipient` only for a mail whose `to` is a parameter and
+  `organisation` only on an action whose `roles` leave out `guest` and `identity` (it runs in an
+  organisation; the contract does not say which other roles are held in one), and holds the link
+  to a screen whose every route declares that search parameter. A scenario names the mail by its
+  action, `[mail:sign-up]`, and a test that reads a mail holds it to its declaration: its
+  recipient, the path and the search parameter of its link, and the language of its HTML.
 
   A mail that only tells is a notice, and an action declares the ones it sends under
   `notices`, a list. A `mail` carries a token the user acts on; a notice carries none, so
@@ -429,6 +426,7 @@ with its params, a route or a search parameter
 [`roles`](REFERENCE.md#screen-anchors-name-roles), [`own`](REFERENCE.md#screen-anchors-name-own),
 [`holdsInput`](REFERENCE.md#screen-anchors-name-holdsinput),
 [`secret`](REFERENCE.md#screen-anchors-name-secret),
+[`required`](REFERENCE.md#screen-anchors-name-required),
 [`composite`](REFERENCE.md#screen-anchors-name-composite) and
 [`source`](REFERENCE.md#screen-anchors-name-source). An anchor's
 [`description`](REFERENCE.md#screen-anchors-name-description) says what it is for; where the
@@ -695,8 +693,9 @@ e2e tree beside its test (`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.
 `tests/e2e/scenarios/` without `.md`, never written inside the file
 ([the files](REFERENCE.md#rule-scenario-files)). The file is a front matter and fixed
 sections ([the format](REFERENCE.md#rule-scenario-format)), and its brackets reference the
-contract, each one resolved by the check, a code, a state or a value to the anchor the text
-names last before it ([the brackets](REFERENCE.md#rule-scenario-brackets)).
+contract, each one resolved by the check: a place by its screen's id, `[screen:<screen>]`, whose
+path stays written once, in the screen's binding, and a code, a state or a value to the anchor
+the text names last before it ([the brackets](REFERENCE.md#rule-scenario-brackets)).
 
 The test pairs with the scenario by its path and names it on its first line,
 `// scenario: <id>`, with one `test.step` per step; `bun run e2e:scaffold <id>` writes a

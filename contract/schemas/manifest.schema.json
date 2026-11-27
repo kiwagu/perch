@@ -1222,6 +1222,11 @@
                   "type": "boolean",
                   "const": true
                 },
+                "required": {
+                  "description": "An `input` or a `textarea` that holds input and must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent. See the rule `required-field`.",
+                  "type": "boolean",
+                  "const": true
+                },
                 "with": {
                   "minItems": 1,
                   "type": "array",
@@ -7062,6 +7067,11 @@
             "type": "boolean",
             "const": true
           },
+          "required": {
+            "description": "The field must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent and the flow shows no new code. See the rule `required-field`.",
+            "type": "boolean",
+            "const": true
+          },
           "value": {
             "description": "On an `input` or a `textarea`, the value the field takes, derived: the loosest of the values of its model binding and of the action parameters that take it. See the rule `declared-values`.",
             "type": "object",
@@ -7492,7 +7502,7 @@
                         }
                       }
                     ],
-                    "description": "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient`, or a list of them, the first that has a language speaking. See the rule `mail-recipients`."
+                    "description": "Where the mail's language comes from: a language parameter, `account`, `organisation` or `recipient` (never last), or a list of them, the first that has one speaking. See the rule `mail-recipients`."
                   },
                   "link": {
                     "type": "object",

@@ -28,10 +28,18 @@ describe('referencesIn', () => {
       problems: [],
     })
   })
+  it('reads a place named by its screen', () => {
+    expect(referencesIn('Open [screen:user.settings] and wait')).toEqual({
+      references: [{ kind: 'screen', value: 'user.settings', raw: '[screen:user.settings]' }],
+      problems: [],
+    })
+  })
   it('reports a bracket group that is none of them', () => {
     expect(referencesIn('Click [Create]')).toEqual({
       references: [],
-      problems: ['not an anchor, a route, a code, a state, a value, a mail or a notice: "Create"'],
+      problems: [
+        'not an anchor, a screen, a route, a code, a state, a value, a mail or a notice: "Create"',
+      ],
     })
   })
   it('finds nothing in text without brackets', () => {

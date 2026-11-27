@@ -381,6 +381,21 @@ describe('the visibility-button of a password input', () => {
   })
 })
 
+describe('a field that must be filled', () => {
+  it('carries required on the field that writes it alone', () => {
+    const base = fixtureContract()
+
+    Object.assign(base.screens.screens[0]?.anchors['sample.title-input'] ?? {}, { required: true })
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.title-input']?.required).toBe(true)
+    expect(built.ids['sample.save-button']).not.toHaveProperty('required')
+    expect(built.contract.instructions.screenMap).toContain('`required: true`')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})
+
 describe('the notices of a platform action', () => {
   it('carries each notice an action declares, and tells an agent how to read one', () => {
     const base = fixtureContract()

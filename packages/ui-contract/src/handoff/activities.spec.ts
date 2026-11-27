@@ -68,6 +68,14 @@ describe('activityCoverage', () => {
       walkedIn(walking('[/sample/$key]', ['Open [/other] and click [sample.save-button]'])),
     ).toEqual([0])
   })
+  it('moves a device to the path of the binding of a place named by its screen', () => {
+    expect(
+      walkedIn(walking('[/other]', ['Open [screen:sample] and click [sample.save-button]'])),
+    ).toEqual([1])
+    expect(
+      walkedIn(walking('[screen:sample]', ['Open [/other] and click [sample.save-button]'])),
+    ).toEqual([0])
+  })
   it('walks the where, the steps and the expected results in the order of the file', () => {
     const contract = walking('[/sample/$key]', ['Follow [sample.home-link]'])
 

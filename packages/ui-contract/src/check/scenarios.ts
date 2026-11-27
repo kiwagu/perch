@@ -26,6 +26,7 @@ import {
   inFile,
   knownAnchors,
   own,
+  screenPlaces,
   statesOf,
 } from './contract'
 import { unknownNotice } from './notices'
@@ -48,6 +49,8 @@ export function referenceResolver(
 ): (reference: Reference) => string | undefined {
   const known = knownAnchors(contract)
   const paths = bindingPaths(contract.screens)
+  const places = screenPlaces(contract.screens)
+  const screens = new Set(contract.screens.screens.map(({ id }) => id))
   const states = statesOf(contract.vocabulary)
   const codes = codesOf(contract.vocabulary, contract.screens)
   const values = contractValues(contract)
@@ -56,6 +59,12 @@ export function referenceResolver(
     switch (kind) {
       case 'anchor':
         return known(value) ? undefined : `${raw} is not a declared anchor`
+      case 'screen':
+        return places.has(value)
+          ? undefined
+          : screens.has(value)
+            ? `${raw} names a screen with no binding, which no address opens`
+            : `${raw} is not a screen of the contract`
       case 'route':
         return paths.has(value) ? undefined : `${raw} is the path of no binding`
       case 'code':
@@ -79,9 +88,10 @@ const isCarried = (kind: Reference['kind']): kind is Carried =>
 
 /**
  * Each reference of a text with the anchor named last before it in the same text, if any: the
- * anchor a code, a state or a value pairs with. A route is no anchor and is read past; a mail or
- * a notice is no anchor either, and what follows it speaks of the mail or the notice (its
- * language, its link), so it pairs with no anchor until the text names one again.
+ * anchor a code, a state or a value pairs with. A place, named by its screen or by its path, is no
+ * anchor and is read past; a mail or a notice is no anchor either, and what follows it speaks of
+ * the mail or the notice (its language, its link), so it pairs with no anchor until the text
+ * names one again.
  */
 function pairedIn(
   references: readonly Reference[],

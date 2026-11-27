@@ -174,6 +174,28 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].marksState: only a field that holds input shows a state colour',
     ])
   })
+  it('lets only an input or a textarea that holds input be one that must be filled', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').holdsInput = true
+    anchorIn(contract, 'sample.title-input').required = true
+    anchorIn(contract, 'sample.page').required = true
+    anchorIn(contract, 'sample.key-select').holdsInput = true
+    anchorIn(contract, 'sample.key-select').required = true
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].required: only an input or a textarea that holds input must be filled',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.key-select"].required: only an input or a textarea that holds input must be filled',
+    ])
+
+    anchorIn(contract, 'sample.page').required = undefined
+    anchorIn(contract, 'sample.key-select').required = undefined
+    anchorIn(contract, 'sample.title-input').holdsInput = false
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.title-input"].required: only an input or a textarea that holds input must be filled',
+    ])
+  })
   it('takes a visibility-button on a secret input and refuses it on any other kind', () => {
     const contract = sampleContract()
 

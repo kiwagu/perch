@@ -385,7 +385,7 @@ links to as `contract/REFERENCE.md#<slug>`.
   parts, the codes, the states, the roles and the error fields the anchors both hold gain or
   lose (derived ones included), who each route serves, the source each list reads with its
   params and its paging, the fields that start or
-  stop holding input, the messages that rank their codes with their order, the leaving
+  stop holding input or having to be filled, the messages that rank their codes with their order, the leaving
   actions, how each leave asks, the activities and the
   transitions changed in each, the lines changed in each screen's flow, the platform
   actions with the lines changed in each, its mail among them, the reads each action of the

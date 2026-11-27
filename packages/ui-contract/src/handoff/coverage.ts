@@ -13,7 +13,14 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { baseOf } from '../anchors'
-import { type Contract, codesOf, declaredAnchors, loadContract, textsOf } from '../check'
+import {
+  type Contract,
+  codesOf,
+  declaredAnchors,
+  loadContract,
+  screenPlaces,
+  textsOf,
+} from '../check'
 import { formatProblem, type Problem, sortProblems } from '../files'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 import { sourcePaths } from '../sources'
@@ -63,7 +70,10 @@ function moduleOf(path: string): string | undefined {
   return module
 }
 
-/** The screens a scenario reaches: through an anchor it names, or a route of the screen. */
+/**
+ * The screens a scenario reaches: through an anchor it names, a route of the screen, or the screen
+ * named as a place, when a binding opens it (`screenPlaces`).
+ */
 function screensReached(contract: Contract): (scenario: Scenario) => Set<string> {
   const screenOfAnchor = new Map(
     declaredAnchors(contract.screens).map(({ anchor, screen }) => [anchor, screen.id]),
@@ -73,10 +83,15 @@ function screensReached(contract: Contract): (scenario: Scenario) => Set<string>
       screen.bindings.map(({ path }) => [path, screen.id] as const),
     ),
   )
+  const places = screenPlaces(contract.screens)
   const suffixes = Object.keys(contract.vocabulary.suffixes)
   const screenOf = ({ kind, value }: Reference): string | undefined => {
     if (kind === 'route') {
       return screenOfRoute.get(value)
+    }
+
+    if (kind === 'screen') {
+      return places.has(value) ? value : undefined
     }
 
     return kind === 'anchor'

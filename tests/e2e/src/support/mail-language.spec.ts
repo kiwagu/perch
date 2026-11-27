@@ -9,11 +9,13 @@ describe('languageOf', () => {
     expect(languageOf('locale', { params: { locale: 'es' } })).toBe('es')
     expect(languageOf('account', { params: {}, account: ACCOUNT })).toBe('en')
   })
-  it('reads the recipient written alone as the older form: its language, else the account', () => {
+  it('never falls back on the account from a recipient written alone', () => {
     expect(
       languageOf('recipient', { params: {}, account: ACCOUNT, recipient: { language: 'es' } }),
     ).toBe('es')
-    expect(languageOf('recipient', { params: {}, account: ACCOUNT })).toBe('en')
+    expect(() => languageOf('recipient', { params: {}, account: ACCOUNT })).toThrow(
+      'the test gave no value for "recipient"',
+    )
   })
   it('takes the first source of a list the test gave a language for', () => {
     const values = { params: {}, account: ACCOUNT, organisation: { language: 'es' } }

@@ -13,6 +13,7 @@ import {
   kindOf,
   STATEFUL_FIELD_KINDS,
   screenOf,
+  TEXT_FIELD_KINDS,
   VISIBILITY_BASE_KIND,
   VISIBILITY_BUTTON,
   WHOLE_FORM,
@@ -203,6 +204,22 @@ const marksStateProblems = ({ screens }: Contract): Problem[] =>
       : [],
   )
 
+/**
+ * `required: true` says a field must be filled before its form's press is taken: only an `input`
+ * or a `textarea` that holds input is filled by typing and sent by a press.
+ */
+const requiredProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    def.required !== undefined && !(TEXT_FIELD_KINDS.has(def.kind) && def.holdsInput === true)
+      ? [
+          locate(screens)(
+            [...at, 'required'],
+            'only an input or a textarea that holds input must be filled',
+          ),
+        ]
+      : [],
+  )
+
 /** `secret` says a field holds a secret, which never leaves the page; only a field has it. */
 const secretProblems = ({ screens }: Contract): Problem[] =>
   declaredAnchors(screens).flatMap(({ def, at }) =>
@@ -282,6 +299,7 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...fieldsProblems(contract),
   ...holdsInputProblems(contract),
   ...marksStateProblems(contract),
+  ...requiredProblems(contract),
   ...secretProblems(contract),
   ...rankedProblems(contract),
   ...visibilityProblems(contract),

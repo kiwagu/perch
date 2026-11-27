@@ -42,23 +42,12 @@ function languageGiven(source: string, values: MailValues): string | undefined {
 
 /**
  * The language of a mail whose `language` is `language`: the first source of a list the test gave
- * a value for, or the one source written alone; the recipient written alone, the older form, falls
- * back on the account's. A recipient, or a parameter, the test gave no value for has none (no
- * account has the email, the parameter was left out) and the next source speaks; the account and
- * the organisation always have one, so a test that gave none fails, and so does one that gave none
- * for the last source.
+ * a value for, or the one source written alone. A recipient, or a parameter, the test gave no value
+ * for has none (no account has the email, the parameter was left out) and the next source speaks;
+ * the account and the organisation always have one, so a test that gave none fails, and so does
+ * one that gave none for the last source.
  */
 export function languageOf(language: string | readonly string[], values: MailValues): string {
-  if (language === 'recipient') {
-    const value = values.recipient?.language ?? values.account?.language
-
-    if (value === undefined) {
-      throw new Error('the test gave no value for "recipient"')
-    }
-
-    return value
-  }
-
   const sources = typeof language === 'string' ? [language] : language
 
   for (const [index, source] of sources.entries()) {
