@@ -11,7 +11,7 @@ composition root, the session token and this device's id on every call). Layers:
 
 ## Surface
 
-- Route: `/devices` (guard `authenticated`) renders `DevicesPage`.
+- Route: the screen `device` (guard `authenticated`) renders `DevicesPage`.
 - No shapes or commands: the rows come from `GET /devices` (each device's session row id,
   label, when it was last seen and signed out, `current` for this device), a sign-out of
   another device is `DELETE /devices/:id` and "Sign out everywhere" is

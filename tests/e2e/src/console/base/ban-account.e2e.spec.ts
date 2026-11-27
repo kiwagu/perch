@@ -32,7 +32,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
       reason: generate.reason(),
     }
 
-    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
+    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [screen:user.profile]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
       await signUpOperator(page, {
         ...generate.account(),
         email: data.operatorEmail,
@@ -42,7 +42,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
     })
 
     const { deviceB, databaseOfB } =
-      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await freshDevice.open()
 
         await signUp(b, {
@@ -64,7 +64,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
         return { deviceB: b, databaseOfB: name }
       })
 
-    await test.step("3. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
+    await test.step("3. On device A, open [screen:console.users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
       await openUsers(page)
       await openAccount(page, data.email)
     })
@@ -76,7 +76,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
       // Expected: After step 4 [app-shell.toast] carries [code:ban-set] on device A,
       //   [console.account.banned-badge] shows, [console.account.reason-cell] shows the reason,
       //   [console.account.ban.reason-input] is empty, [console.account.ban.unban-button] shows and
-      //   [console.account.ban.ban-button] does not; within 5 seconds device B is on [/sign-in],
+      //   [console.account.ban.ban-button] does not; within 5 seconds device B is on [screen:user.sign-in],
       //   where [user.sign-in.notice-message] carries [code:account-banned] and nothing names the
       //   reason, and its browser keeps no local database of the account
       await Promise.all([
@@ -108,7 +108,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
       await deviceB.getByTestId('user.sign-in.password-input').fill(data.password)
       await deviceB.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 5 [user.sign-in.error] carries [code:account-banned] on device B, and
-      //   the URL stays [/sign-in]
+      //   the URL stays [screen:user.sign-in]
       await expect(deviceB.getByTestId('user.sign-in.error')).toHaveAttribute(
         'data-code',
         'account-banned',
@@ -131,7 +131,7 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
 
     await test.step('7. On device B, click [user.sign-in.submit-button] again', async () => {
       await deviceB.getByTestId('user.sign-in.submit-button').click()
-      // Expected: After step 7 device B is on [/me] and [app-shell.notice-message] carries
+      // Expected: After step 7 device B is on [screen:user.profile] and [app-shell.notice-message] carries
       //   [code:welcome]
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])

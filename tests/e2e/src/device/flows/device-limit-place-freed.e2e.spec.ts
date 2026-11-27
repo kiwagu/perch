@@ -24,23 +24,23 @@ test.describe('Confirm a sign-in past the device limit once a place freed', {
 
     const data = { ...generate.account(), name: generate.name() }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
     })
 
-    await test.step('2. On devices C to K in turn, sign in with the same account and wait for [app-shell.sync-message] to carry [code:synced] on [/me], so the account is signed in on ten devices', async () => {
+    await test.step('2. On devices C to K in turn, sign in with the same account and wait for [app-shell.sync-message] to carry [code:synced] on [screen:user.profile], so the account is signed in on ten devices', async () => {
       await signInDevicesCToK(freshDevices, data)
     })
 
     const deviceB = await freshDevices.open()
 
-    await test.step('3. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
+    await test.step('3. On device B, open [screen:user.sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
       await submitSignIn(deviceB, data)
       // Expected: After step 3 [user.sign-in.device-limit-dialog] carries [code:device-limit]
       await expect(deviceLimitDialog(deviceB)).toBeVisible()
     })
 
-    await test.step("4. On device A, open [/devices], click [device.list.revoke-button] on device C's [device.list.session-item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+    await test.step("4. On device A, open [screen:device], click [device.list.revoke-button] on device C's [device.list.session-item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       // Through the navigation, not a reload: device A stays the device seen least recently.
       await page.getByTestId('app-shell.nav.devices-link').click()
       await expectPathname(page, CONTRACT_ROUTES.device)
@@ -58,11 +58,11 @@ test.describe('Confirm a sign-in past the device limit once a place freed', {
 
     await test.step('5. On device B, click [user.sign-in.device-limit-dialog.confirm-button]', async () => {
       await deviceB.getByTestId('user.sign-in.device-limit-dialog.confirm-button').click()
-      // Expected: After step 5 device B is on [/me]
+      // Expected: After step 5 device B is on [screen:user.profile]
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
-    await test.step('6. On device B, open [/devices]', async () => {
+    await test.step('6. On device B, open [screen:device]', async () => {
       await deviceB.getByTestId('app-shell.nav.devices-link').click()
       await expectPathname(deviceB, CONTRACT_ROUTES.device)
       // Expected: After step 6 [device.list] holds eleven [device.list.session-item]: device B's

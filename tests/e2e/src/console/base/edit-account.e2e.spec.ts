@@ -54,7 +54,7 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
       account: { email: data.email, language: 'en' },
     }
 
-    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
+    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [screen:user.profile]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
       await signUpOperator(page, {
         ...generate.account(),
         email: data.operatorEmail,
@@ -64,7 +64,7 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
     })
 
     const { deviceB, loadsOfB } =
-      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('2. On device B, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await freshDevice.open()
 
         await signUp(b, {
@@ -82,12 +82,12 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
       })
 
     const id =
-      await test.step("3. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
+      await test.step("3. On device A, open [screen:console.users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
         await openUsers(page)
 
         const opened = await openAccount(page, data.email)
 
-        // Expected: After step 3 the URL is [/console/account] with the account's id as its
+        // Expected: After step 3 the URL is [screen:console.account] with the account's id as its
         //   search, [console.account.section] is in [state:ready], [console.account.heading] shows
         //   the name, [console.account.email-cell] shows the email,
         //   [console.account.verified-badge] shows, and neither [console.account.banned-badge] nor
@@ -167,7 +167,7 @@ test.describe('Rename an account and change its email from its card', { tag: '@f
 
     await test.step('8. On device B, click [user.confirm-email.profile-link]', async () => {
       await deviceB.getByTestId('user.confirm-email.profile-link').click()
-      // Expected: After step 8 device B is on [/me] and [user.profile.email-input] holds the new
+      // Expected: After step 8 device B is on [screen:user.profile] and [user.profile.email-input] holds the new
       //   email
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
       await expect(deviceB.getByTestId('user.profile.email-input')).toHaveValue(data.newEmail, {

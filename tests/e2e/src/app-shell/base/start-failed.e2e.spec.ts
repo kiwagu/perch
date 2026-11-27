@@ -6,7 +6,7 @@ test.describe('Open the app when the code of its start does not load', { tag: '@
   test('A start whose code does not load says the app could not start and offers no sign-out, although an account is saved', async ({
     page,
   }) => {
-    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
+    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]', async () => {
       await signUp(page)
       await appReady(page)
     })

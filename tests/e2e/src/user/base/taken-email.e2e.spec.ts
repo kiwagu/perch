@@ -35,7 +35,7 @@ test.describe('Sign up again with an email that has an account', { tag: '@smoke'
       await page.getByTestId('user.sign-in.name-input').fill(data.name)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 2 [user.sign-in.mail-message] carries [code:check-your-mail], as after
-      //   the sign-up of a new email, the URL stays [/sign-in], and no second [mail:sign-up] reaches
+      //   the sign-up of a new email, the URL stays [screen:user.sign-in], and no second [mail:sign-up] reaches
       //   the email
       await expect(checkYourMail(page)).toBeVisible()
 
@@ -62,7 +62,7 @@ test.describe('Sign up again with an email that has an account', { tag: '@smoke'
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible()
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
     })

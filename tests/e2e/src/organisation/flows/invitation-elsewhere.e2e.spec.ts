@@ -23,11 +23,11 @@ test.describe("Open an invitation's link elsewhere than in the invited account",
     }
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', () =>
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', () =>
         anotherAccount.signUp())
 
     const userA =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -96,7 +96,7 @@ test.describe("Open an invitation's link elsewhere than in the invited account",
 
     await test.step('6. On device C, click [organisation.invitation.sign-in-link]', async () => {
       await deviceC.getByTestId('organisation.invitation.sign-in-link').click()
-      // Expected: After step 6 the URL is [/sign-in] on device C
+      // Expected: After step 6 the URL is [screen:user.sign-in] on device C
       await expectPathname(deviceC, CONTRACT_ROUTES['user.sign-in'])
     })
   })

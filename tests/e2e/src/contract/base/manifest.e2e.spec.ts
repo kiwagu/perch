@@ -58,7 +58,7 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
       schema = z.record(z.string(), z.unknown()).parse(await schemaResponse.json())
     })
 
-    await test.step('2. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('2. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
@@ -87,7 +87,7 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
     const onPage = rendered ?? { url: '', anchors: [] }
 
     expect(undeclared(manifest, onPage)).toEqual([])
-    // - After step 3 the helper reports the page's URL, on [/sign-in], with [app-shell.status] in
+    // - After step 3 the helper reports the page's URL, on [screen:user.sign-in], with [app-shell.status] in
     //   [state:ready]
     expect(onPage.url).toBe(page.url())
     expect(new URL(onPage.url).pathname).toBe(CONTRACT_ROUTES['user.sign-in'])

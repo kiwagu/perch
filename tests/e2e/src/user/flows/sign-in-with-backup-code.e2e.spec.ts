@@ -47,7 +47,7 @@ test.describe('Sign in with a backup code of the second factor', { tag: '@full' 
       await submitCredentials(page, data)
       await submitCode(page, first)
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
@@ -57,7 +57,7 @@ test.describe('Sign in with a backup code of the second factor', { tag: '@full' 
       await submitCredentials(page, data)
       await submitCode(page, first)
       // Expected: After step 5 [user.sign-in.code.error] carries [code:invalid-code] and the URL
-      //   is still [/sign-in]: the backup code was used up
+      //   is still [screen:user.sign-in]: the backup code was used up
       await expect(page.getByTestId('user.sign-in.code.error')).toHaveAttribute(
         'data-code',
         'invalid-code',
@@ -68,7 +68,7 @@ test.describe('Sign in with a backup code of the second factor', { tag: '@full' 
     await test.step('6. Enter the second backup code step 3 kept into [user.sign-in.code.code-input] and click [user.sign-in.code.dialog.confirm-button]', async () => {
       await submitCode(page, second)
       // Expected: After step 6 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

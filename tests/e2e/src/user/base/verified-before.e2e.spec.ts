@@ -15,7 +15,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
     const data = { ...generate.account(), name: generate.name() }
 
     const mail =
-      await test.step('1. Sign up with the email, the password and the name, open the link of [mail:sign-up], and wait for [/me]', async () => {
+      await test.step('1. Sign up with the email, the password and the name, open the link of [mail:sign-up], and wait for [screen:user.profile]', async () => {
         await startSignUp(page, data)
 
         const opened = await openDeclaredMail(page, 'sign-up', {
@@ -29,7 +29,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
         return opened
       })
 
-    await test.step('2. Click [user.profile.sign-out-button] and wait for [/sign-in]', async () => {
+    await test.step('2. Click [user.profile.sign-out-button] and wait for [screen:user.sign-in]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     })
@@ -37,7 +37,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
     await test.step('3. Open the link of the same [mail:sign-up] again', async () => {
       await openMailLink(page, mail, 'sign-up')
       // Expected: After step 3 [user.verify-email.message] carries [code:verified-before], the
-      //   URL stays [/verify-email] and [user.verify-email.sign-in-link] shows
+      //   URL stays [screen:user.verify-email] and [user.verify-email.sign-in-link] shows
       await expect(page.getByTestId('user.verify-email.message')).toHaveAttribute(
         'data-code',
         'verified-before',
@@ -48,7 +48,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
 
     await test.step('4. Click [user.verify-email.sign-in-link]', async () => {
       await page.getByTestId('user.verify-email.sign-in-link').click()
-      // Expected: After step 4 the URL is [/sign-in]
+      // Expected: After step 4 the URL is [screen:user.sign-in]
       await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
     })
   })

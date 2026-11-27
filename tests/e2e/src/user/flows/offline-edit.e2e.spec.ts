@@ -16,7 +16,7 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
       newName: generate.newName(),
     }
 
-    await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. On device A, open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
@@ -25,7 +25,7 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
     })
 
     const { deviceB, network } =
-      await test.step('2. On device B, sign in with the same account and wait for [/me]', async () => {
+      await test.step('2. On device B, sign in with the same account and wait for [screen:user.profile]', async () => {
         // The sync socket is routed before device B opens the app, so the test can drop it.
         const network = await SyncNetwork.attach(await secondDevice.open())
         const b = await secondDevice.signIn()

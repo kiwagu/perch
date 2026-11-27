@@ -26,7 +26,7 @@ test.describe('Open a password reset link a second time', { tag: '@full' }, () =
       await signOut(page)
     })
 
-    await test.step('2. Open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
+    await test.step('2. Open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
       await askForReset(page, data.email)
     })
 
@@ -58,7 +58,7 @@ test.describe('Open a password reset link a second time', { tag: '@full' }, () =
 
     await test.step('5. Click [user.reset-password.forgot-link]', async () => {
       await page.getByTestId('user.reset-password.forgot-link').click()
-      // Expected: After step 5 the URL is [/forgot-password]
+      // Expected: After step 5 the URL is [screen:user.forgot-password]
       await expectPathname(page, CONTRACT_ROUTES['user.forgot-password'])
     })
   })

@@ -16,11 +16,11 @@ test.describe('Open a verification link that does not work', { tag: '@smoke' }, 
       account: { email: data.email, language: 'en' },
     }
 
-    await test.step('1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
+    await test.step('1. Open [screen:user.sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
       await startSignUp(page, data)
     })
 
-    await test.step('2. Open [/verify-email] with a made-up token', async () => {
+    await test.step('2. Open [screen:user.verify-email] with a made-up token', async () => {
       await page.goto(`${CONTRACT_ROUTES['user.verify-email']}?token=made.up.token`)
       // Expected: After step 2 [user.verify-email.error] carries [code:link-invalid], with
       //   [user.verify-email.email-input] and [user.verify-email.resend-button]
@@ -47,7 +47,7 @@ test.describe('Open a verification link that does not work', { tag: '@smoke' }, 
     await test.step('4. Open the link of [mail:resend-verification]', async () => {
       await openDeclaredMail(page, 'resend-verification', resent, 1)
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible()
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

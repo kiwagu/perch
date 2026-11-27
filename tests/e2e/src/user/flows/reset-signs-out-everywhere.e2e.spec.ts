@@ -20,7 +20,7 @@ test.describe('Set a new password while another device is signed in', { tag: '@f
       newPassword: generate.newPassword(),
     }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
       // Device A hears that it was signed out over its sync channel.
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
@@ -29,7 +29,7 @@ test.describe('Set a new password while another device is signed in', { tag: '@f
     })
 
     const deviceB =
-      await test.step('2. On device B, open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
+      await test.step('2. On device B, open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
         const b = await freshDevice.open()
 
         await askForReset(b, data.email)
@@ -48,7 +48,7 @@ test.describe('Set a new password while another device is signed in', { tag: '@f
       )
     })
 
-    // Expected: Device A is signed out: its URL is [/sign-in] and [user.sign-in.notice-message]
+    // Expected: Device A is signed out: its URL is [screen:user.sign-in] and [user.sign-in.notice-message]
     //   carries [code:password-changed-elsewhere]
     await expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 10_000)
     await expect(signInNotice(page, 'password-changed-elsewhere')).toBeVisible()

@@ -21,7 +21,7 @@ export type SignInEvent =
   | { readonly type: 'user.sign-in.resend-button'; readonly email: string }
   | {
       readonly type: 'user.sign-in.forgot-link'
-      /** The email as typed, which the move to /forgot-password carries. */
+      /** The email as typed, which the move to `user.forgot-password` carries. */
       readonly fields: { readonly 'user.sign-in.email-input': string }
     }
   | { readonly type: 'user.sign-in.device-limit-dialog.confirm-button' }

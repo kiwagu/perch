@@ -28,7 +28,7 @@ test.describe('See a toast before the data opens', { tag: '@smoke' }, () => {
 
     await test.step('3. Reload the page', async () => {
       await page.reload({ waitUntil: 'commit' })
-      // Expected: After step 3 [app-shell.status] reaches [state:opening-data] on [/settings]
+      // Expected: After step 3 [app-shell.status] reaches [state:opening-data] on [screen:user.settings]
       await expect(status).toHaveAttribute('data-state', 'opening-data')
       await expectPathname(page, CONTRACT_ROUTES['user.settings'])
     })

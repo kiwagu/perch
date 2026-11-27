@@ -25,7 +25,7 @@ test.describe('Invite an email that has no account yet', { tag: '@full' }, () =>
     }
 
     const userA =
-      await test.step('1. On device A, open [/sign-in], choose [value:es] in [app-shell.locale-select], sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('1. On device A, open [screen:user.sign-in], choose [value:es] in [app-shell.locale-select], sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page, undefined, 'es')
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -72,7 +72,7 @@ test.describe('Invite an email that has no account yet', { tag: '@full' }, () =>
     })
 
     const deviceB =
-      await test.step('3. On device B, sign up with the invited email, the password and the name, open the link of [mail:sign-up] and open [/org]', async () => {
+      await test.step('3. On device B, sign up with the invited email, the password and the name, open the link of [mail:sign-up] and open [screen:organisation]', async () => {
         const b = await freshDevices.open()
 
         await signUp(b, {
@@ -125,7 +125,7 @@ test.describe('Invite an email that has no account yet', { tag: '@full' }, () =>
       await expect(deviceB.getByTestId('organisation.received.list')).toHaveCount(0)
     })
 
-    await test.step('5. On device A, reload [/org]', async () => {
+    await test.step('5. On device A, reload [screen:organisation]', async () => {
       const sent = invitationsRead(page, 'sent')
 
       await page.reload()

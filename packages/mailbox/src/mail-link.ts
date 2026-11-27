@@ -19,7 +19,9 @@ export function firstLink(mail: Mail): string {
   return link
 }
 
-/** The `token` search parameter of a verification link, as the front's /verify-email reads it. */
+/**
+ * The `token` search parameter of a verification link, as the front's `user.verify-email` reads it.
+ */
 export function linkToken(link: string): string {
   const url = URL.parse(link)
 

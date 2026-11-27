@@ -40,7 +40,7 @@ test.describe('Set a new password in a second tab while the first waits for the 
       await signOut(page)
     })
 
-    await test.step('2. In a first tab, open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
+    await test.step('2. In a first tab, open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
       await askForReset(page, data.email)
       // Expected: After step 2 [user.forgot-password.message] carries [code:check-your-mail]
       await expect(resetRequested(page)).toBeVisible()
@@ -52,7 +52,7 @@ test.describe('Set a new password in a second tab while the first waits for the 
       await openResetMail(second, data.email, 1)
       await appReady(second)
 
-      // Expected: Within 5 seconds of step 3 the first tab is on [/sign-in],
+      // Expected: Within 5 seconds of step 3 the first tab is on [screen:user.sign-in],
       //   [user.sign-in.email-input] holds the email and [user.sign-in.notice-message] carries
       //   [code:password-reset-elsewhere]
       // The three start as the gateway answers the reset, so one 5-second timeout is one
@@ -90,7 +90,7 @@ test.describe('Set a new password in a second tab while the first waits for the 
       await page.getByTestId('user.sign-in.password-input').fill(data.newPassword)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

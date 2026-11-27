@@ -1,6 +1,6 @@
 /**
- * The account an operator's card shows, as its address names it (`/console/account?id=...`): the
- * identity id of the account, the one its entry in the accounts list carries.
+ * The account an operator's card shows, as the address of `console.account` names it (`?id=...`):
+ * the identity id of the account, the one its entry in the accounts list carries.
  */
 
 import { type IdentityId, idSchemas } from '@workspace/ids'

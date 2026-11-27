@@ -10,7 +10,7 @@ import { appReady, expect, signUp, test } from '../../support/fixtures'
 /** An address no route takes, where the not-found page is the page of its own. */
 const UNKNOWN_ADDRESS = '/no-such-page'
 
-/** Any id of an account, as the search of `/console/account` carries one. */
+/** Any id of an account, as the search of `console.account` carries one. */
 const ANY_ID = 'idn_01jkq5x3y8z2h9m4n6p7r8s9t0'
 
 /**
@@ -45,7 +45,7 @@ test.describe('Open the console without the operator role', { tag: '@smoke' }, (
       name: generate.name(),
     }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, {
         ...generate.account(),
         email: data.email,
@@ -62,10 +62,10 @@ test.describe('Open the console without the operator role', { tag: '@smoke' }, (
       await expect(consoleLink(page)).toHaveCount(0)
     })
 
-    await test.step('2. On device A, open [/console/users]', async () => {
+    await test.step('2. On device A, open [screen:console.users]', async () => {
       await page.goto(CONTRACT_ROUTES['console.users'])
       await appReady(page)
-      // Expected: After step 2 the address is still [/console/users], [not-found.page.heading]
+      // Expected: After step 2 the address is still [screen:console.users], [not-found.page.heading]
       //   shows with [not-found.page.profile-link], no [console.users.list] and no
       //   [console.users.search-form] shows, and the page's title is the not-found page's
       await expect(page.getByTestId('not-found.page.heading')).toBeVisible()
@@ -76,25 +76,25 @@ test.describe('Open the console without the operator role', { tag: '@smoke' }, (
       await expect(page).toHaveTitle(await notFoundTitle(page))
     })
 
-    await test.step('3. On device A, open [/console/account] with any id as its search', async () => {
+    await test.step('3. On device A, open [screen:console.account] with any id as its search', async () => {
       await page.goto(
         `${CONTRACT_ROUTES['console.account']}?${new URLSearchParams({ id: ANY_ID }).toString()}`,
       )
       await appReady(page)
-      // Expected: After step 3 the address is still [/console/account] with its search, and
+      // Expected: After step 3 the address is still [screen:console.account] with its search, and
       //   [not-found.page.heading] shows
       await expect(page.getByTestId('not-found.page.heading')).toBeVisible()
       await expectAddress(page, CONTRACT_ROUTES['console.account'], { id: ANY_ID })
     })
 
-    await test.step('4. On device B, open [/console/users]', async () => {
+    await test.step('4. On device B, open [screen:console.users]', async () => {
       const deviceB = await freshDevice.open()
 
       await deviceB.goto(CONTRACT_ROUTES['console.users'])
       await appReady(deviceB)
-      // Expected: After step 4 the address is still [/console/users] on device B,
+      // Expected: After step 4 the address is still [screen:console.users] on device B,
       //   [not-found.page.heading] shows with [not-found.page.sign-in-link], and device B is not
-      //   sent to [/sign-in]
+      //   sent to [screen:user.sign-in]
       await expect(deviceB.getByTestId('not-found.page.heading')).toBeVisible()
       await expect(deviceB.getByTestId('not-found.page.sign-in-link')).toBeVisible()
       // The page shows at the console's address, so device B was not sent to the sign-in page.

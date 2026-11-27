@@ -23,11 +23,12 @@ export interface InputProps extends React.ComponentProps<'input'> {
 const text = (value: React.ComponentProps<'input'>['value']): string | undefined =>
   value === undefined ? undefined : Array.isArray(value) ? value.join(',') : String(value)
 
-/** An input: what its element does not say, its facts (by its anchor) give: `type` and `maxLength`. */
+/** An input: what its element does not say, its facts (by its anchor) give: `type`, `maxLength` and `required`. */
 function Input({
   className,
   type,
   maxLength,
+  required,
   holdsInput,
   marksState,
   onChange,
@@ -49,6 +50,7 @@ function Input({
     <InputPrimitive
       type={type ?? facts?.type}
       maxLength={maxLength ?? facts?.maxLength}
+      required={required ?? facts?.required}
       data-slot="input"
       data-state={state}
       className={cn(

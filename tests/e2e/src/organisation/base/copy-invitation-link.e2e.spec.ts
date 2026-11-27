@@ -29,11 +29,11 @@ test.describe("Copy an invitation's link", { tag: '@full' }, () => {
     })
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', () =>
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', () =>
         anotherAccount.signUp())
 
     const userA =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -87,7 +87,7 @@ test.describe("Copy an invitation's link", { tag: '@full' }, () => {
       }
 
       await deviceB.getByTestId('organisation.invitation.accept-button').click()
-      // Expected: After step 5 the URL is [/org] on device B, [app-shell.toast] carries
+      // Expected: After step 5 the URL is [screen:organisation] on device B, [app-shell.toast] carries
       //   [code:invitation-accepted] and [organisation.page.role-badge] carries [value:member]
       await Promise.all([
         expect(toast(deviceB, 'invitation-accepted')).toBeVisible(),

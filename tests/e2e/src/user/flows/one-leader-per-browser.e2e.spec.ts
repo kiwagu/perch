@@ -21,14 +21,14 @@ test.describe('Sync from one tab per browser', { tag: '@full' }, () => {
       bio: generate.bio(),
     }
 
-    await test.step('1. On device A, open [/me] in a first tab and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. On device A, open [screen:user.profile] in a first tab and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toBeVisible()
     })
 
     const { leader, follower } =
-      await test.step('2. On device A, open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('2. On device A, open [screen:user.profile] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const second = await page.context().newPage()
 
         await second.goto(CONTRACT_ROUTES['user.profile'])
@@ -56,7 +56,7 @@ test.describe('Sync from one tab per browser', { tag: '@full' }, () => {
       })
 
     const deviceB =
-      await test.step('3. On device B, sign in with the same account and wait for [/me]', async () => {
+      await test.step('3. On device B, sign in with the same account and wait for [screen:user.profile]', async () => {
         const b = await secondDevice.signIn()
 
         await expect(b.getByTestId('user.profile.heading')).toBeVisible({ timeout: 10_000 })

@@ -27,11 +27,11 @@ test.describe('Open an address no page has', { tag: '@smoke' }, () => {
 
     await test.step('2. Click [not-found.page.sign-in-link]', async () => {
       await page.getByTestId('not-found.page.sign-in-link').click()
-      // Expected: After step 2 the URL is [/sign-in]
+      // Expected: After step 2 the URL is [screen:user.sign-in]
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']))
     })
 
-    await test.step('3. Sign up, open the link of [mail:sign-up] and wait for [/me], then open the unknown address again', async () => {
+    await test.step('3. Sign up, open the link of [mail:sign-up] and wait for [screen:user.profile], then open the unknown address again', async () => {
       await signUp(page)
       await page.goto(data.unknownAddress)
       await appReady(page)
@@ -44,7 +44,7 @@ test.describe('Open an address no page has', { tag: '@smoke' }, () => {
 
     await test.step('4. Click [not-found.page.profile-link]', async () => {
       await page.getByTestId('not-found.page.profile-link').click()
-      // Expected: After step 4 the URL is [/me]
+      // Expected: After step 4 the URL is [screen:user.profile]
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
     })
   })

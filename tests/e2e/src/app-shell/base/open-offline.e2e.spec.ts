@@ -28,7 +28,7 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
     const settingsChunk = await precachedScript(page, /^\/assets\/settings\.container-[\w-]+\.js$/)
 
     const account =
-      await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
+      await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]', async () => {
         const signedUp = await signUp(page)
 
         await appReady(page)
@@ -61,7 +61,7 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
 
     await test.step('4. Reload the page', async () => {
       await page.reload()
-      // Expected: After step 4 [app-shell.status] reaches [state:ready] on [/me],
+      // Expected: After step 4 [app-shell.status] reaches [state:ready] on [screen:user.profile],
       //   [user.profile.heading] shows the name the account signed up with, and
       //   [app-shell.sync-message] carries [code:offline]
       await appReady(page)
@@ -74,9 +74,10 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
     })
 
     // Beyond the scenario: the settings open offline from the worker's precache. Online, this
-    // browser context loaded the start page, the sign-in and `/me` alone, never `/settings`: the
-    // page asked for the settings' script for the first time after going offline, and the worker
-    // answered it, so no cache but the worker's precache can have held it for the page.
+    // browser context loaded the start page, the sign-in and `user.profile` alone, never
+    // `user.settings`: the page asked for the settings' script for the first time after going
+    // offline, and the worker answered it, so no cache but the worker's precache can have held it
+    // for the page.
     await test.step('Open the settings offline: their script, never requested before, comes from the worker', async () => {
       expect(
         requested,

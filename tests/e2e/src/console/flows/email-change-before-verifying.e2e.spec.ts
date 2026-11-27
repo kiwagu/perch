@@ -39,7 +39,7 @@ test.describe('Change the email of an account that never signed in', { tag: '@fu
       account: { email: data.email, language: 'en' },
     }
 
-    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [/me]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
+    await test.step("1. On device A, sign up with the operator email, the password and the operator name, open the link of [mail:sign-up] and wait for [screen:user.profile]; then the host's command grants device A's account the operator role, as an operator is appointed, and device A reloads the page", async () => {
       await signUpOperator(page, {
         ...generate.account(),
         email: data.operatorEmail,
@@ -62,7 +62,7 @@ test.describe('Change the email of an account that never signed in', { tag: '@fu
         return b
       })
 
-    await test.step("3. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
+    await test.step("3. On device A, open [screen:console.users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]", async () => {
       await openUsers(page)
       await openAccount(page, data.email)
       // Expected: After step 3 neither [console.account.verified-badge] nor
@@ -120,7 +120,7 @@ test.describe('Change the email of an account that never signed in', { tag: '@fu
       await deviceB.getByTestId('user.sign-in.email-input').fill(data.newEmail)
       await deviceB.getByTestId('user.sign-in.password-input').fill(data.password)
       await deviceB.getByTestId('user.sign-in.submit-button').click()
-      // Expected: After step 6 device B is on [/me], [app-shell.notice-message] carries
+      // Expected: After step 6 device B is on [screen:user.profile], [app-shell.notice-message] carries
       //   [code:welcome] and [user.profile.heading] shows the name: the first sign-in created the
       //   account's profile with the name it signed up with
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })

@@ -15,7 +15,7 @@ test.describe('Ask for a new password for an email that has no account', { tag: 
       email: generate.email(),
     }
 
-    await test.step('1. Open [/forgot-password] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.forgot-password] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.forgot-password'])
       await appReady(page)
     })

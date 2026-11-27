@@ -7,8 +7,9 @@ import { appReady, expect } from './fixtures'
 import { openDeclaredMail } from './mail-contract'
 
 /**
- * Clicks the send button of /forgot-password and waits up to 10 s for the gateway's answer to that
- * request, waited for from before the click; resolves the answer and the moment the test saw it.
+ * Clicks the send button of `user.forgot-password` and waits up to 10 s for the gateway's answer to
+ * that request, waited for from before the click; resolves the answer and the moment the test saw
+ * it.
  */
 export async function sendResetRequest(
   page: Page,
@@ -27,13 +28,13 @@ export async function sendResetRequest(
   return { answer, answeredAt: Date.now() }
 }
 
-/** The message of /forgot-password, once it asks to open the link of the mail. */
+/** The message of `user.forgot-password`, once it asks to open the link of the mail. */
 export const resetRequested = (page: Page) =>
   page.locator('[data-testid="user.forgot-password.message"][data-code="check-your-mail"]')
 
 /**
- * Opens /forgot-password, enters `email` and asks for the mail that sets a new password; waits
- * until the gateway answered and the page asks to open the link of the mail.
+ * Opens `user.forgot-password`, enters `email` and asks for the mail that sets a new password;
+ * waits until the gateway answered and the page asks to open the link of the mail.
  */
 export async function askForReset(page: Page, email: string): Promise<void> {
   await page.goto(CONTRACT_ROUTES['user.forgot-password'])
@@ -56,7 +57,10 @@ export const openResetMail = (page: Page, email: string, seen: number): Promise<
     seen,
   )
 
-/** Enters `password` into the new password of /reset-password and its confirmation, and submits. */
+/**
+ * Enters `password` into the new password of `user.reset-password` and its confirmation, and
+ * submits.
+ */
 export async function enterNewPassword(page: Page, password: string): Promise<void> {
   await page.getByTestId('user.reset-password.password-input').fill(password)
   await page.getByTestId('user.reset-password.password-confirmation-input').fill(password)

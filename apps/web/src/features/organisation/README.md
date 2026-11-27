@@ -13,7 +13,8 @@ on the replica schema are applied on the device before a command runs
 
 ## Surface
 
-- Routes: `/org` (guard `authenticated`) renders `OrganisationPage`; `/invitation?token` (open to
+- Routes: the screen `organisation` (guard `authenticated`) renders `OrganisationPage`; the screen
+  `organisation.invitation` (search `token`, open to
   anyone) renders `InvitationPage`, the page the link of an invitation mail opens.
 - Shape `organisation.shape.surql`: the notes of the current organisation (`note`, tenant
   region), oldest first. Shape `organisation-settings.shape.surql`
@@ -97,8 +98,8 @@ address, through `useScreenMachine`; another token starts afresh, and an address
 link that does not work, which the gateway is not asked about. It reads the link
 (`OrganisationService.readInvitation`) and shows the organisation's name and the role, never the
 email the invitation went to. The account the invitation is for (the gateway's `forYou`) accepts
-(it becomes a member, its organisation current, and the app moves to `/org`) or declines (the app
-moves to `/org`); nobody signed in here is asked to sign in first, with the link to the sign-in
+(it becomes a member, its organisation current, and the app moves to `organisation`) or declines (the app
+moves to `organisation`); nobody signed in here is asked to sign in first, with the link to the sign-in
 page, and another account signed in is told the invitation is not its own, with no button either
 way. A link that does not work (`link-invalid`, `link-expired`, or an invitation gone meanwhile)
 says so with no button; any other refusal of a press says why and leaves the buttons for another.

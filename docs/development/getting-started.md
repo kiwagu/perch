@@ -55,7 +55,7 @@ worktrees, and [infra/dev/README.md](../../infra/dev/README.md) the front and th
    http://127.0.0.1:1080, shows the verification mail; its link signs the device in.
 3. `bun run seed --reset` seeds the demo accounts and the organisation `acme`, with `ann` as its
    administrator and `beto` as a member (the passwords are in [seed/README.md](../../seed/README.md)).
-   Sign in as either one and open `/org` in the app: the organisation's name, your role and its
+   Sign in as either one and open the organisation page (`organisation`) in the app: the organisation's name, your role and its
    shared notes; a note written by one member reaches the other's open page. The e2e scenarios
    of `tests/e2e/scenarios/organisation/flows/` cover the sharing, an outsider, a change of
    membership and who may edit which note across two accounts, and the gateway smoke test

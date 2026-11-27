@@ -193,7 +193,6 @@ export function SignInView(props: SignInViewProps) {
               <Input
                 {...field('email')}
                 autoComplete="email"
-                required
                 data-testid="user.sign-in.email-input"
               />
             </Field>
@@ -202,7 +201,6 @@ export function SignInView(props: SignInViewProps) {
               <PasswordInput
                 {...password('password')}
                 autoComplete={signingUp ? 'new-password' : 'current-password'}
-                required
                 aria-describedby={
                   props.renders('user.sign-in.password-rule-list') ? rulesId : undefined
                 }
@@ -241,7 +239,6 @@ export function SignInView(props: SignInViewProps) {
                 <PasswordInput
                   {...password('confirmation')}
                   autoComplete="new-password"
-                  required
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
                   aria-describedby={concerns === 'confirmation' ? errorIds.confirmation : undefined}
                   showLabel={t('user.password.show')}
@@ -257,7 +254,6 @@ export function SignInView(props: SignInViewProps) {
                 <Input
                   {...field('name')}
                   autoComplete="name"
-                  required
                   aria-invalid={concerns === 'name' ? true : undefined}
                   aria-describedby={concerns === 'name' ? errorIds.name : undefined}
                   data-testid="user.sign-in.name-input"
