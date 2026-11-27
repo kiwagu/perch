@@ -20,6 +20,7 @@ const LISTS = [
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
   ['stateColours', 'field without a state colour', 'fields without a state colour'],
+  ['requiredFields', 'field that must be filled', 'fields that must be filled'],
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
   ['leaveQuestions', 'question before a leave', 'questions before leaves'],
   ['ranks', 'ranked message', 'ranked messages'],

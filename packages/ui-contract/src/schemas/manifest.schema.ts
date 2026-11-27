@@ -233,6 +233,12 @@ const idSchema = z
       .describe(
         'The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.',
       ),
+    required: z
+      .literal(true)
+      .optional()
+      .describe(
+        'The field must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent and no code shows. See the rule `required-field`.',
+      ),
     value: resolvedValueSchema
       .optional()
       .describe(

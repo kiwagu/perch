@@ -426,6 +426,7 @@ with its params, a route or a search parameter
 [`roles`](REFERENCE.md#screen-anchors-name-roles), [`own`](REFERENCE.md#screen-anchors-name-own),
 [`holdsInput`](REFERENCE.md#screen-anchors-name-holdsinput),
 [`secret`](REFERENCE.md#screen-anchors-name-secret),
+[`required`](REFERENCE.md#screen-anchors-name-required),
 [`composite`](REFERENCE.md#screen-anchors-name-composite) and
 [`source`](REFERENCE.md#screen-anchors-name-source). An anchor's
 [`description`](REFERENCE.md#screen-anchors-name-description) says what it is for; where the

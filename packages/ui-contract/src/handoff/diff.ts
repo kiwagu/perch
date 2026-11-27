@@ -7,7 +7,7 @@
  * when each anchor shows (its `with` and `without`), who each route serves (its guard and its
  * roles), the search parameters of each route (written or derived: a mail link's token with its
  * key), the platform action each list reads with its params and its paging, the fields that start
- * or stop holding input, the controls that start or stop asking before their flow leaves the
+ * or stop holding input or having to be filled, the controls that start or stop asking before their flow leaves the
  * screen, with the fields the leave loses, the messages that rank their codes, with their order,
  * the actions that leave what the user typed behind and how each leave that would lose it asks, the
  * notices the platform actions declare, the default length the platform declares, the transitions
@@ -56,6 +56,8 @@ export interface ContractChanges {
   inputs: Change
   /** As `<anchor> shows no state colour`, the fields that drop it, on the anchors both contracts hold. */
   stateColours: Change
+  /** As `<anchor> must be filled`, the fields marked `required`, on the anchors both contracts hold. */
+  requiredFields: Change
   /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
   questions: Change
   /**
@@ -288,6 +290,9 @@ export function diffContracts(
     ),
     stateColours: carriedChanges(before, after, anchors.renamed, (def) =>
       def.marksState === false ? ['shows no state colour'] : [],
+    ),
+    requiredFields: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.required === true ? ['must be filled'] : [],
     ),
     questions: carriedChanges(before, after, anchors.renamed, (def) =>
       def.asks === undefined ? [] : [`asks ${def.asks.code}`],

@@ -704,6 +704,11 @@
             "type": "boolean",
             "const": true
           },
+          "required": {
+            "description": "An `input` or a `textarea` that holds input and must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent. See the rule `required-field`.",
+            "type": "boolean",
+            "const": true
+          },
           "with": {
             "minItems": 1,
             "type": "array",

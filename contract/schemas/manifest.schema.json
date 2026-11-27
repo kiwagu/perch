@@ -1222,6 +1222,11 @@
                   "type": "boolean",
                   "const": true
                 },
+                "required": {
+                  "description": "An `input` or a `textarea` that holds input and must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent. See the rule `required-field`.",
+                  "type": "boolean",
+                  "const": true
+                },
                 "with": {
                   "minItems": 1,
                   "type": "array",
@@ -7059,6 +7064,11 @@
           },
           "secret": {
             "description": "The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.",
+            "type": "boolean",
+            "const": true
+          },
+          "required": {
+            "description": "The field must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent and no code shows. See the rule `required-field`.",
             "type": "boolean",
             "const": true
           },

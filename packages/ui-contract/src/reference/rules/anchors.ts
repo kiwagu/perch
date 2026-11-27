@@ -74,6 +74,15 @@ const secretField: ReferenceRule = {
   keys: ['screen.anchors.<name>.secret', 'manifest.screens.anchors.<name>.secret'],
 }
 
+const requiredField: ReferenceRule = {
+  id: 'required-field',
+  title: 'A field that must be filled',
+  text: [
+    "`required: true` on an `input` or a `textarea` that holds input: the field must be filled before its form's press is taken. The field facts carry it to the kit (see the rule `emitted-modules`), which puts `required` on the field's element, in a form without `noValidate`, so a press of the form's submit while the field is empty is stopped by the browser, which says so on the field: no event of the press reaches the flow, nothing is sent and no code shows, whatever the state's transitions on that press would do with an empty value (an empty confirmation never shows `passwords-differ`; an empty password never reaches the platform's `invalid-credentials`). A button that runs the form's action without submitting it (`type=\"button\"`) asks the browser to check the form first (`reportValidity`) and sends its event only when the check passes, so it is stopped the same way. What passes the browser, a text of spaces, reaches the flow and the action as any value does. A field without it may be pressed empty: its flow and its action judge the empty value (an empty name is sent, and the platform answers `name-required`).",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.required', 'manifest.screens.anchors.<name>.required'],
+}
+
 const attributes: ReferenceRule = {
   id: 'attributes',
   title: 'Attributes: data-id, data-value, data-state, data-code',
@@ -193,6 +202,7 @@ export const ANCHOR_RULES: readonly ReferenceRule[] = [
   derivedParts,
   visibilityButton,
   secretField,
+  requiredField,
   attributes,
   anchorBinding,
   entriesOfAList,
