@@ -21,9 +21,10 @@ export function renderWithFacts(ui: ReactElement, options: RenderOptions = {}): 
 /**
  * Holds each field the container renders that the facts declare, found by its `data-testid`, to
  * what they say: its limit (none when they give none), its type when they give one, no state
- * colour when they opt it out, and `required` when they say it must be filled. It answers the anchors it held, and fails when none was rendered:
- * a container with no declared field proves nothing. A caller whose field renders in a portal
- * passes `document.body`; a spec of the helper itself passes its own `facts`.
+ * colour when they opt it out, and `required` when they say it must be filled. It answers the
+ * anchors it held, and fails when none was rendered: a container with no declared field proves
+ * nothing. A caller whose field renders in a portal passes `document.body`; a spec of the helper
+ * itself passes its own `facts`.
  */
 export function expectFieldFacts(
   container: HTMLElement,
