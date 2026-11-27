@@ -46,7 +46,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       '[data-testid="device.list.session-item"]:not([data-state="current"])',
     )
 
-    await test.step('1. On device A, sign up, open the link of [mail:sign-up] and open [/devices]', async () => {
+    await test.step('1. On device A, sign up, open the link of [mail:sign-up] and open [screen:device]', async () => {
       // The `signedIn` fixture has signed device A up through the sign-in page.
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await page.getByTestId('app-shell.nav.devices-link').click()
@@ -60,7 +60,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
     })
 
     const { deviceB, databaseOfB } =
-      await test.step('2. On device B, sign in with the same account and wait for [/me]', async () => {
+      await test.step('2. On device B, sign in with the same account and wait for [screen:user.profile]', async () => {
         const b = await secondDevice.signIn()
 
         // Device B hears that it was signed out over its sync channel.
@@ -76,7 +76,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
         return { deviceB: b, databaseOfB: name }
       })
 
-    await test.step('3. On device A, reload [/devices]', async () => {
+    await test.step('3. On device A, reload [screen:device]', async () => {
       await page.reload()
       await appReady(page)
       // Expected: After step 3 device A's [device.list] holds two [device.list.session-item]:
@@ -95,7 +95,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
     await test.step("4. On device A, click [device.list.revoke-button] on device B's [device.list.session-item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await deviceBRow.getByTestId('device.list.revoke-button').click()
       await page.getByTestId('app-shell.confirmation.confirm-button').click()
-      // Expected: Within 5 seconds of step 4 device B is on [/sign-in], where
+      // Expected: Within 5 seconds of step 4 device B is on [screen:user.sign-in], where
       //   [user.sign-in.notice-message] carries [code:signed-out-elsewhere], and its browser keeps
       //   no local database of the account; on device A, device B's [device.list.session-item] is
       //   in [state:revoked]
@@ -115,7 +115,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       await expect(deviceBRow.getByTestId('device.list.revoke-button')).toHaveCount(0)
     })
 
-    await test.step('5. On device B, sign in again with the same account and wait for [/me]', async () => {
+    await test.step('5. On device B, sign in again with the same account and wait for [screen:user.profile]', async () => {
       await signIn(deviceB, signedIn)
       // Device B hears that every device was signed out over its sync channel.
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
@@ -126,9 +126,9 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
     await test.step('6. On device A, click [device.everywhere.open-button] and confirm with [device.everywhere.dialog.confirm-button]', async () => {
       await page.getByTestId('device.everywhere.open-button').click()
       await page.getByTestId('device.everywhere.dialog.confirm-button').click()
-      // Expected: After step 6 device A is on [/sign-in], where [user.sign-in.notice-message]
-      //   carries [code:signed-out-elsewhere]; within 5 seconds device B is on [/sign-in] with the
-      //   same notice; a reload of either stays on [/sign-in]
+      // Expected: After step 6 device A is on [screen:user.sign-in], where [user.sign-in.notice-message]
+      //   carries [code:signed-out-elsewhere]; within 5 seconds device B is on [screen:user.sign-in] with the
+      //   same notice; a reload of either stays on [screen:user.sign-in]
       await Promise.all(
         [page, deviceB].map(async (device) => {
           await expect(device).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), {
@@ -147,9 +147,9 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       }
     })
 
-    await test.step('7. On device A, sign in again with the same account and wait for [/me]', async () => {
+    await test.step('7. On device A, sign in again with the same account and wait for [screen:user.profile]', async () => {
       await signIn(page, signedIn)
-      // Expected: After step 7 device A is on [/me] and its sync channel is up: the account signs
+      // Expected: After step 7 device A is on [screen:user.profile] and its sync channel is up: the account signs
       //   in again after signing out everywhere
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {

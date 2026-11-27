@@ -12,7 +12,7 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
     signedIn: _signedIn,
   }) => {
     const database =
-      await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('1. Open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]', async () => {
         await page.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(page)
         await expect(page.getByTestId('user.profile.heading')).toBeVisible()
@@ -50,7 +50,7 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
       await page.goto('about:blank')
     })
 
-    await test.step('3. Open [/me]', async () => {
+    await test.step('3. Open [screen:user.profile]', async () => {
       await page.goto(CONTRACT_ROUTES['user.profile'])
       // Expected: After step 3 [app-shell.status] is in [state:failed]: the page says this device
       //   could not open the data, to reload the page to try again or sign out on this device, and
@@ -67,7 +67,7 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
     })
 
     // Expected:
-    // - Within 15 seconds of step 4 the page is on [/sign-in] and shows [user.sign-in.form]
+    // - Within 15 seconds of step 4 the page is on [screen:user.sign-in] and shows [user.sign-in.form]
     await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     await expect(page.getByTestId('user.sign-in.form')).toBeVisible({ timeout: 15_000 })
     // - Within 15 seconds of step 4 the browser keeps no local database of the account and no

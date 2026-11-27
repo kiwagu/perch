@@ -28,12 +28,12 @@ test.describe('Change the password while another device is signed in', { tag: '@
       newPassword: generate.newPassword(),
     }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
     })
 
     const deviceB =
-      await test.step('2. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], click [user.sign-in.submit-button] and wait for [/me]', async () => {
+      await test.step('2. On device B, open [screen:user.sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], click [user.sign-in.submit-button] and wait for [screen:user.profile]', async () => {
         const b = await freshDevice.open()
 
         await signIn(b, data)
@@ -45,7 +45,7 @@ test.describe('Change the password while another device is signed in', { tag: '@
         return b
       })
 
-    await test.step('3. On device A, open [/settings], enter the password into [user.settings.password.current-password-input], the new password into [user.settings.password.new-password-input] and [user.settings.password.password-confirmation-input], and click [user.settings.password.save-button]', async () => {
+    await test.step('3. On device A, open [screen:user.settings], enter the password into [user.settings.password.current-password-input], the new password into [user.settings.password.new-password-input] and [user.settings.password.password-confirmation-input], and click [user.settings.password.save-button]', async () => {
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await page.getByTestId('user.settings.password.current-password-input').fill(data.password)
@@ -55,12 +55,12 @@ test.describe('Change the password while another device is signed in', { tag: '@
         .fill(data.newPassword)
       await page.getByTestId('user.settings.password.save-button').click()
       // Expected: After step 3 [app-shell.toast] carries [code:password-changed] on device A,
-      //   which stays on [/settings]
+      //   which stays on [screen:user.settings]
       await expect(toast(page, 'password-changed')).toBeVisible()
       await expectPathname(page, CONTRACT_ROUTES['user.settings'])
     })
 
-    // Expected: Device B is signed out: its URL is [/sign-in] and [user.sign-in.notice-message]
+    // Expected: Device B is signed out: its URL is [screen:user.sign-in] and [user.sign-in.notice-message]
     //   carries [code:password-changed-elsewhere]
     await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], 10_000)
     await expect(signInNotice(deviceB, 'password-changed-elsewhere')).toBeVisible()

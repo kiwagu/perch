@@ -29,12 +29,12 @@ test.describe('Change the password while another device is offline', { tag: '@fu
       newPassword: generate.newPassword(),
     }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
     })
 
     const { deviceB, network } =
-      await test.step('2. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], click [user.sign-in.submit-button] and wait for [/me]', async () => {
+      await test.step('2. On device B, open [screen:user.sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], click [user.sign-in.submit-button] and wait for [screen:user.profile]', async () => {
         const b = await freshDevice.open()
         // Device B's sync socket goes through the test from the start, so it can go offline.
         const network = await SyncNetwork.attach(b)
@@ -52,7 +52,7 @@ test.describe('Change the password while another device is offline', { tag: '@fu
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'down')
     })
 
-    await test.step('4. On device A, open [/settings], enter the password into [user.settings.password.current-password-input], the new password into [user.settings.password.new-password-input] and [user.settings.password.password-confirmation-input], and click [user.settings.password.save-button]', async () => {
+    await test.step('4. On device A, open [screen:user.settings], enter the password into [user.settings.password.current-password-input], the new password into [user.settings.password.new-password-input] and [user.settings.password.password-confirmation-input], and click [user.settings.password.save-button]', async () => {
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await page.getByTestId('user.settings.password.current-password-input').fill(data.password)
@@ -62,14 +62,14 @@ test.describe('Change the password while another device is offline', { tag: '@fu
         .fill(data.newPassword)
       await page.getByTestId('user.settings.password.save-button').click()
       // Expected: After step 4 [app-shell.toast] carries [code:password-changed] on device A, and
-      //   device B is still on [/me]
+      //   device B is still on [screen:user.profile]
       await expect(toast(page, 'password-changed')).toBeVisible()
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
     await test.step("5. Bring device B's browser back online", async () => {
       await network.goOnline()
-      // Expected: After step 5 device B is on [/sign-in] once it connects again, where
+      // Expected: After step 5 device B is on [screen:user.sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:password-changed-elsewhere]
       await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], BACK_ONLINE_MS)
       await expect(signInNotice(deviceB, 'password-changed-elsewhere')).toBeVisible()

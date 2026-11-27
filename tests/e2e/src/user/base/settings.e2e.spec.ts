@@ -18,7 +18,7 @@ test.describe('Choose the theme and the language of the account', {
       await signUp(page)
       await page.getByTestId('app-shell.nav.settings-link').click()
       await expect(page.getByTestId('user.settings.heading')).toBeVisible()
-      // Expected: After step 1 the URL is [/settings], [user.settings.theme-select] shows
+      // Expected: After step 1 the URL is [screen:user.settings], [user.settings.theme-select] shows
       //   [value:system] and [user.settings.locale-select] shows [value:en]
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.settings']))
       await expect(theme).toHaveAttribute('data-value', 'system')

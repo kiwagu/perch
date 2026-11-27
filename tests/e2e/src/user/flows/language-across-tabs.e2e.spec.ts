@@ -11,7 +11,7 @@ test.describe('Keep the language of an account in every tab', { tag: '@full' }, 
   }) => {
     const select = page.getByTestId('user.settings.locale-select')
 
-    await test.step('1. In a first tab, open [/settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. In a first tab, open [screen:user.settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       // The select takes a choice once the account's settings are on the device.
@@ -19,7 +19,7 @@ test.describe('Keep the language of an account in every tab', { tag: '@full' }, 
     })
 
     const second =
-      await test.step('2. In a second tab, open [/settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('2. In a second tab, open [screen:user.settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
         await tab.goto(CONTRACT_ROUTES['user.settings'])

@@ -78,7 +78,7 @@ test.describe('Ask for a new verification link for any email', { tag: '@full' },
       await expect(checkYourMail(page)).toBeVisible()
     })
 
-    await test.step('3. Open [/verify-email] with a made-up token', async () => {
+    await test.step('3. Open [screen:user.verify-email] with a made-up token', async () => {
       await page.goto(`${CONTRACT_ROUTES['user.verify-email']}?token=made.up.token`)
       // Expected: After step 3 [user.verify-email.error] carries [code:link-invalid]
       await expect(page.getByTestId('user.verify-email.error')).toHaveAttribute(
@@ -110,7 +110,7 @@ test.describe('Ask for a new verification link for any email', { tag: '@full' },
 
       // Expected: After step 5 and after step 6 the page shows what it showed after step 4:
       //   [user.verify-email.message] carries [code:check-your-mail], no
-      //   [user.verify-email.error] shows, and the URL stays [/verify-email]
+      //   [user.verify-email.error] shows, and the URL stays [screen:user.verify-email]
       await expectResent(page, answer)
       // - No [mail:resend-verification] reaches the unknown email: none within the delivery
       //   window after the answer (bounded non-arrival)

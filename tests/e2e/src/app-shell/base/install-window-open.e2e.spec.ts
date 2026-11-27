@@ -62,7 +62,7 @@ test.describe("Follow the sync while the browser's install window is open", {
     // away.
     const network = await SyncNetwork.attach(page)
 
-    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
+    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]', async () => {
       await signUp(page)
       await appReady(page)
       // Expected: After step 1 [app-shell.sync-message] carries [code:synced]

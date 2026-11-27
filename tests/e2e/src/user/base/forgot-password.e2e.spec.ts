@@ -34,7 +34,7 @@ test.describe('Set a new password through the mail', { tag: '@smoke' }, () => {
     await test.step('2. Enter the email into [user.sign-in.email-input] and click [user.sign-in.forgot-link]', async () => {
       await page.getByTestId('user.sign-in.email-input').fill(data.email)
       await page.getByTestId('user.sign-in.forgot-link').click()
-      // Expected: After step 2 the URL is [/forgot-password] and
+      // Expected: After step 2 the URL is [screen:user.forgot-password] and
       //   [user.forgot-password.email-input] holds the email
       await expectPathname(page, CONTRACT_ROUTES['user.forgot-password'])
       await expect(page.getByTestId('user.forgot-password.email-input')).toHaveValue(data.email)
@@ -51,7 +51,7 @@ test.describe('Set a new password through the mail', { tag: '@smoke' }, () => {
 
     await test.step('4. Open the link of [mail:request-password-reset]', async () => {
       await openResetMail(page, data.email, 1)
-      // Expected: After step 4 the link opens [/reset-password], with
+      // Expected: After step 4 the link opens [screen:user.reset-password], with
       //   [user.reset-password.password-rule-list]
       await expectPathname(page, CONTRACT_ROUTES['user.reset-password'])
       await expect(page.getByTestId('user.reset-password.password-rule-list')).toBeVisible()
@@ -88,7 +88,7 @@ test.describe('Set a new password through the mail', { tag: '@smoke' }, () => {
       await page.getByTestId('user.sign-in.password-input').fill(data.newPassword)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 7 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

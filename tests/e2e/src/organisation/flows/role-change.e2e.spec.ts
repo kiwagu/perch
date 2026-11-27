@@ -28,11 +28,11 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', () =>
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', () =>
         anotherAccount.signUp())
 
     const userA =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], create the organisation with [organisation.create.submit-button], enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], create the organisation with [organisation.create.submit-button], enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -53,7 +53,7 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
     // Full page loads of device B from step 4: its role changes must reach it without one.
     const loadsOfB = pageLoads(deviceB)
 
-    await test.step("4. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+    await test.step("4. On device B, open [screen:organisation] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
       await acceptOnOrg(deviceB, data.name)
       // Expected: After step 4 device B shows the note by A without
       //   [organisation.notes.delete-button], and no [organisation.members.list]
@@ -64,7 +64,7 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
       await expect(deviceB.getByTestId('organisation.members.list')).toHaveCount(0)
     })
 
-    await test.step("5. On device A, reload [/org] and, on user B's [organisation.members.item], set [organisation.members.role-select] to [value:admin]", async () => {
+    await test.step("5. On device A, reload [screen:organisation] and, on user B's [organisation.members.item], set [organisation.members.role-select] to [value:admin]", async () => {
       await page.reload()
       await appReady(page)
       await memberItem(page, userB.email).getByTestId('organisation.members.role-select').click()

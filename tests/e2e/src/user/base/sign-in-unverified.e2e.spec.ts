@@ -27,7 +27,7 @@ test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
       account: { email: data.email, language: 'en' },
     }
 
-    await test.step('1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
+    await test.step('1. Open [screen:user.sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
       await startSignUp(page, data)
     })
 
@@ -38,7 +38,7 @@ test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 2 [user.sign-in.error] carries [code:email-not-verified],
-      //   [user.sign-in.resend-button] shows and the URL stays [/sign-in]
+      //   [user.sign-in.resend-button] shows and the URL stays [screen:user.sign-in]
       await expect(page.getByTestId('user.sign-in.error')).toHaveAttribute(
         'data-code',
         'email-not-verified',
@@ -60,7 +60,7 @@ test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
     await test.step('4. Open the link of [mail:resend-verification]', async () => {
       await openDeclaredMail(page, 'resend-verification', resent, 1)
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible()
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

@@ -14,7 +14,7 @@ test.describe('Rename yourself on the profile page', { tag: '@smoke' }, () => {
       newName: generate.newName(),
     }
 
-    await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toHaveText(signedIn.name)

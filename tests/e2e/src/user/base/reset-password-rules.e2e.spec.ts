@@ -29,7 +29,7 @@ test.describe('Keep the rules and type the new password twice on the reset page'
       await signOut(page)
     })
 
-    await test.step('2. Open [/forgot-password], enter the email into [user.forgot-password.email-input], click [user.forgot-password.send-button], and open the link of [mail:request-password-reset]', async () => {
+    await test.step('2. Open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input], click [user.forgot-password.send-button], and open the link of [mail:request-password-reset]', async () => {
       await askForReset(page, data.email)
       await openResetMail(page, data.email, 1)
     })

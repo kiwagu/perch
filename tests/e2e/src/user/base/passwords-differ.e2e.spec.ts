@@ -26,7 +26,7 @@ test.describe('Sign up with the password typed again differently', { tag: '@smok
     const begun = data.password.slice(0, -1)
     const last = data.password.slice(-1)
 
-    await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })

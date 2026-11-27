@@ -22,7 +22,7 @@ test.describe('Open an email confirmation link in a browser signed in to another
       newEmail: generate.newEmail(),
     }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up], open [/settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up], open [screen:user.settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]', async () => {
       await signUp(page, data)
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
@@ -31,7 +31,7 @@ test.describe('Open an email confirmation link in a browser signed in to another
 
     // The other email, password and name are the other account's own (`anotherAccount`).
     const deviceB =
-      await test.step('2. On device B, sign up with the other email, the other password and the other name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('2. On device B, sign up with the other email, the other password and the other name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await anotherAccount.signUp()
 
         await expect(b.getByTestId('user.profile.heading')).toHaveText(anotherAccount.account.name)

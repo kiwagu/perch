@@ -10,13 +10,13 @@ test.describe("Follow a guest's theme in every tab of the browser", { tag: '@ful
   }) => {
     const select = page.getByTestId('app-shell.theme-select')
 
-    await test.step('1. In a first tab, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. In a first tab, open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })
 
     const second =
-      await test.step('2. In a second tab, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('2. In a second tab, open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
         await tab.goto(CONTRACT_ROUTES['user.sign-in'])

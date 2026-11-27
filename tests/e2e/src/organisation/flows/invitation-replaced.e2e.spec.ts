@@ -23,11 +23,11 @@ test.describe('Invite the same email again', { tag: '@full' }, () => {
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', () =>
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', () =>
         anotherAccount.signUp())
 
     const invitation =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async (): Promise<InvitationMail> => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async (): Promise<InvitationMail> => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()

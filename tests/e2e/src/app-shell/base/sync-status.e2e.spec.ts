@@ -33,7 +33,7 @@ test.describe("See the state of this device's sync in every tab", { tag: '@full'
     // whichever tab leads.
     const networks = [await SyncNetwork.attach(page)]
 
-    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
+    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]', async () => {
       await signUp(page)
       await appReady(page)
       // Expected: After step 1 [app-shell.sync-message] carries [code:synced]
@@ -41,7 +41,7 @@ test.describe("See the state of this device's sync in every tab", { tag: '@full'
     })
 
     const second =
-      await test.step('2. Open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('2. Open [screen:user.profile] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
         networks.push(await SyncNetwork.attach(tab))

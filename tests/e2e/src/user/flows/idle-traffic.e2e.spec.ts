@@ -52,7 +52,7 @@ test.describe('Stay quiet while idle', { tag: '@full' }, () => {
     })
 
     const start =
-      await test.step("1. Put the page's clock under the test's control, open [/me] and wait until the sync channel is up and the catch-up after opening has settled", async () => {
+      await test.step("1. Put the page's clock under the test's control, open [screen:user.profile] and wait until the sync channel is up and the catch-up after opening has settled", async () => {
         page.on('console', (message) => {
           if (message.type() === 'error') {
             errors.push(

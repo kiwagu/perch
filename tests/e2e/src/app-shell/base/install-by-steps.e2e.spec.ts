@@ -20,7 +20,7 @@ test.describe('Be shown the steps that install the app where the browser cannot'
   }) => {
     const reminder = page.getByTestId('app-shell.install-message')
 
-    await test.step('1. Open [/sign-in] in Safari on an iPhone and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] in Safari on an iPhone and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       // Expected: After step 1 [app-shell.install-message] carries [code:install-by-steps], with

@@ -29,12 +29,12 @@ test.describe('Change the email while another device is signed in', { tag: '@ful
       newEmail: generate.newEmail(),
     }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
     })
 
     const deviceB =
-      await test.step('2. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], click [user.sign-in.submit-button] and wait for [/me]', async () => {
+      await test.step('2. On device B, open [screen:user.sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], click [user.sign-in.submit-button] and wait for [screen:user.profile]', async () => {
         const b = await freshDevice.open()
 
         await signIn(b, data)
@@ -45,7 +45,7 @@ test.describe('Change the email while another device is signed in', { tag: '@ful
         return b
       })
 
-    await test.step('3. On device A, open [/settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], click [user.settings.email.send-button], and open the link of [mail:change-email]', async () => {
+    await test.step('3. On device A, open [screen:user.settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], click [user.settings.email.send-button], and open the link of [mail:change-email]', async () => {
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await askToChangeEmail(page, data.newEmail, data.password)
@@ -76,7 +76,7 @@ test.describe('Change the email while another device is signed in', { tag: '@ful
       await deviceB.getByTestId('user.sign-in.email-input').fill(data.newEmail)
       await deviceB.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 5 [app-shell.notice-message] carries [code:welcome] on device B and
-      //   its URL is [/me]
+      //   its URL is [screen:user.profile]
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
