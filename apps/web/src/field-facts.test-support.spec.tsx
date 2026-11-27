@@ -12,12 +12,12 @@ import { renderWithProviders } from './test-utils'
 
 /** A field with every fact, one that declares none, and the anchors a view's other fields render. */
 const FACTS: FieldFactsByAnchor = {
-  'x.name-input': { maxLength: 7, type: 'email', marksState: false },
+  'x.name-input': { maxLength: 7, type: 'email', marksState: false, required: true },
   'x.plain-input': {},
 }
 
 const AGREEING: ReactElement = (
-  <Input data-testid="x.name-input" maxLength={7} type="email" marksState={false} />
+  <Input data-testid="x.name-input" maxLength={7} type="email" marksState={false} required />
 )
 
 describe('expectFieldFacts', () => {
@@ -63,6 +63,11 @@ describe('expectFieldFacts', () => {
       'a state colour where the facts opt the field out',
       <Input data-testid="x.name-input" maxLength={7} type="email" />,
       /x\.name-input: its state colours/,
+    ],
+    [
+      'a field the facts say must be filled that is not required',
+      <Input data-testid="x.name-input" maxLength={7} type="email" marksState={false} />,
+      /x\.name-input: whether it must be filled/,
     ],
   ])('fails on %s', (_name, field, message) => {
     const { container } = renderWithProviders(field)

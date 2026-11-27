@@ -66,7 +66,6 @@ export function KeyStep(props: KeyStepProps) {
               onChange={(event) => props.onCode(event.target.value)}
               autoComplete="one-time-code"
               inputMode="numeric"
-              required
               aria-invalid={concerns === 'code' ? true : undefined}
               aria-describedby={concerns === 'code' ? ids.error : undefined}
               data-testid="user.settings.two-factor.code-input"

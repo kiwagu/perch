@@ -49,7 +49,8 @@ export const FIELD_FACTS = {
   "user.forgot-password.email-input": {
     "maxLength": 254,
     "type": "email",
-    "marksState": false
+    "marksState": false,
+    "required": true
   },
   "user.profile.bio-textarea": {
     "maxLength": 2000
@@ -62,42 +63,52 @@ export const FIELD_FACTS = {
   },
   "user.reset-password.password-confirmation-input": {
     "maxLength": 35,
-    "marksState": false
+    "marksState": false,
+    "required": true
   },
   "user.reset-password.password-input": {
     "maxLength": 35,
-    "marksState": false
+    "marksState": false,
+    "required": true
   },
   "user.settings.deletion.password-input": {
-    "maxLength": 35
+    "maxLength": 35,
+    "required": true
   },
   "user.settings.email.email-input": {
     "maxLength": 254,
-    "type": "email"
+    "type": "email",
+    "required": true
   },
   "user.settings.email.password-input": {
-    "maxLength": 35
+    "maxLength": 35,
+    "required": true
   },
   "user.settings.locale-select": {
     "holdsInput": false
   },
   "user.settings.password.current-password-input": {
-    "maxLength": 35
+    "maxLength": 35,
+    "required": true
   },
   "user.settings.password.new-password-input": {
-    "maxLength": 35
+    "maxLength": 35,
+    "required": true
   },
   "user.settings.password.password-confirmation-input": {
-    "maxLength": 35
+    "maxLength": 35,
+    "required": true
   },
   "user.settings.theme-select": {
     "holdsInput": false
   },
   "user.settings.two-factor.code-input": {
-    "maxLength": 11
+    "maxLength": 11,
+    "required": true
   },
   "user.settings.two-factor.password-input": {
-    "maxLength": 35
+    "maxLength": 35,
+    "required": true
   },
   "user.sign-in.code.code-input": {
     "maxLength": 11,
@@ -106,23 +117,28 @@ export const FIELD_FACTS = {
   "user.sign-in.email-input": {
     "maxLength": 254,
     "type": "email",
-    "marksState": false
+    "marksState": false,
+    "required": true
   },
   "user.sign-in.name-input": {
     "maxLength": 80,
-    "marksState": false
+    "marksState": false,
+    "required": true
   },
   "user.sign-in.password-confirmation-input": {
     "maxLength": 35,
-    "marksState": false
+    "marksState": false,
+    "required": true
   },
   "user.sign-in.password-input": {
     "maxLength": 35,
-    "marksState": false
+    "marksState": false,
+    "required": true
   },
   "user.verify-email.email-input": {
     "maxLength": 254,
     "type": "email",
-    "marksState": false
+    "marksState": false,
+    "required": true
   }
 } as const

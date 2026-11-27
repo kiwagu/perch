@@ -10,7 +10,8 @@ import { type RenderOptions, renderWithProviders } from './test-utils'
 
 /**
  * Renders a view the way the app does, inside the provider of the generated field facts, so a
- * field takes the limit, the type and the state colour the contract gives its anchor. Like
+ * field takes the limit, the type, the state colour and the need to be filled the contract gives
+ * its anchor. Like
  * `renderWithProviders`, whose providers wrap the component, `rerender` keeps them.
  */
 export function renderWithFacts(ui: ReactElement, options: RenderOptions = {}): RenderResult {
@@ -19,8 +20,8 @@ export function renderWithFacts(ui: ReactElement, options: RenderOptions = {}): 
 
 /**
  * Holds each field the container renders that the facts declare, found by its `data-testid`, to
- * what they say: its limit (none when they give none), its type when they give one, and no state
- * colour when they opt it out. It answers the anchors it held, and fails when none was rendered:
+ * what they say: its limit (none when they give none), its type when they give one, no state
+ * colour when they opt it out, and `required` when they say it must be filled. It answers the anchors it held, and fails when none was rendered:
  * a container with no declared field proves nothing. A caller whose field renders in a portal
  * passes `document.body`; a spec of the helper itself passes its own `facts`.
  */
@@ -36,7 +37,7 @@ export function expectFieldFacts(
 
   return declared.map((field) => {
     const anchor = field.dataset['testid'] ?? ''
-    const { maxLength, type, marksState } = facts[anchor] ?? {}
+    const { maxLength, type, marksState, required } = facts[anchor] ?? {}
 
     expect(field.getAttribute('maxlength'), `${anchor}: its maxlength`).toBe(
       maxLength === undefined ? null : String(maxLength),
@@ -48,6 +49,10 @@ export function expectFieldFacts(
 
     if (marksState === false) {
       expect(stateColoursOf(field), `${anchor}: its state colours`).toEqual([])
+    }
+
+    if (required === true) {
+      expect(field.hasAttribute('required'), `${anchor}: whether it must be filled`).toBe(true)
     }
 
     return anchor

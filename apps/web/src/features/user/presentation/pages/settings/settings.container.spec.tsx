@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
 import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 import {
@@ -28,6 +29,7 @@ import {
 } from '../../../../../platform/__fixtures__/two-factor'
 import { englishCatalog } from '../../../../../platform/catalogs'
 import { ConfirmGuardContext } from '../../../../../platform/confirm-guard.port'
+import { FIELD_FACTS } from '../../../../../platform/field-facts.gen'
 import { defineModule } from '../../../../../platform/module'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
@@ -119,10 +121,12 @@ function open(
             <ConfirmGuardContext.Provider
               value={{ before: world.confirm ?? (() => Promise.resolve(true)) }}
             >
-              <UnsavedInputScope>
-                <RouterProvider router={router} />
-                <UnsavedProbe />
-              </UnsavedInputScope>
+              <FieldFactsProvider facts={FIELD_FACTS}>
+                <UnsavedInputScope>
+                  <RouterProvider router={router} />
+                  <UnsavedProbe />
+                </UnsavedInputScope>
+              </FieldFactsProvider>
             </ConfirmGuardContext.Provider>
           </SettingsWritesContext.Provider>
         </ThemeContext.Provider>
