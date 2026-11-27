@@ -22,10 +22,11 @@ export interface TextareaProps extends React.ComponentProps<'textarea'> {
 const text = (value: React.ComponentProps<'textarea'>['value']): string | undefined =>
   value === undefined ? undefined : Array.isArray(value) ? value.join(',') : String(value)
 
-/** A textarea: what its element does not say, its facts (by its anchor) give: `maxLength`. */
+/** A textarea: what its element does not say, its facts (by its anchor) give: `maxLength` and `required`. */
 function Textarea({
   className,
   maxLength,
+  required,
   holdsInput,
   marksState,
   onChange,
@@ -46,6 +47,7 @@ function Textarea({
   return (
     <textarea
       maxLength={maxLength ?? facts?.maxLength}
+      required={required ?? facts?.required}
       data-slot="textarea"
       data-state={state}
       className={cn(
