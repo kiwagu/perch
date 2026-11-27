@@ -34,7 +34,7 @@ async function resend(
 /**
  * What the page shows once the gateway accepted a resend (202, the same answer for any email): the
  * button enabled again (the page has left its sending state and shows that answer), the message,
- * no error, and the page still on /verify-email.
+ * no error, and the page still on `user.verify-email`.
  */
 async function expectResent(page: Page, answer: Response): Promise<void> {
   expect(answer.status(), 'the gateway accepted the resend').toBe(202)

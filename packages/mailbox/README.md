@@ -6,7 +6,7 @@ The suites' way to read the mails the gateway sends on a stand: a client of Mail
 (`GET /email?to.address=<address>`), which every stand runs as its mailbox (see
 `infra/dev/README.md`). It answers the mails to an address, oldest first, waits for the next one
 (the gateway does not await its sends), and reads the first link of a mail and the token of a
-verification link (a link to the front's `/verify-email`; a token on any other screen is
+verification link (a link to the front's `user.verify-email`; a token on any other screen is
 refused). Every look at the mailbox, the request and the reading of its answer, ends within the
 time it was given (what is left of `next`'s wait, 10 s for `mails` and `count`), its request
 cancelled when it runs out, whatever MailDev does. Its failures say what went wrong in fixed

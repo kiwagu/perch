@@ -10,7 +10,7 @@ import { appReady, expect, signUp, test } from '../../support/fixtures'
 /** An address no route takes, where the not-found page is the page of its own. */
 const UNKNOWN_ADDRESS = '/no-such-page'
 
-/** Any id of an account, as the search of `/console/account` carries one. */
+/** Any id of an account, as the search of `console.account` carries one. */
 const ANY_ID = 'idn_01jkq5x3y8z2h9m4n6p7r8s9t0'
 
 /**

@@ -10,11 +10,11 @@ import { openDeclaredMail } from './mail-contract'
 export const deletionRequested = (page: Page) =>
   page.locator('[data-testid="user.settings.deletion.message"][data-code="check-your-mail"]')
 
-/** The message of /delete-account, once the account is gone. */
+/** The message of `user.delete-account`, once the account is gone. */
 export const accountDeleted = (page: Page) =>
   page.locator('[data-testid="user.delete-account.message"][data-code="account-deleted"]')
 
-/** Opens /settings and waits until the app is ready there. */
+/** Opens `user.settings` and waits until the app is ready there. */
 export async function openSettings(page: Page): Promise<void> {
   await page.goto(CONTRACT_ROUTES['user.settings'])
   await appReady(page)
@@ -22,8 +22,8 @@ export async function openSettings(page: Page): Promise<void> {
 }
 
 /**
- * On /settings, enters `password` into the deletion form and clicks its send button; resolves the
- * moment the test saw the gateway's answer to that request, waited for from before the click.
+ * On `user.settings`, enters `password` into the deletion form and clicks its send button; resolves
+ * the moment the test saw the gateway's answer to that request, waited for from before the click.
  */
 export async function sendDeletionRequest(page: Page, password: string): Promise<number> {
   const answered = page.waitForResponse(
@@ -41,8 +41,8 @@ export async function sendDeletionRequest(page: Page, password: string): Promise
 }
 
 /**
- * On /settings, asks with `password` to delete the account; waits until the form asks to open the
- * link of the mail sent to the account's email.
+ * On `user.settings`, asks with `password` to delete the account; waits until the form asks to open
+ * the link of the mail sent to the account's email.
  */
 export async function askToDeleteAccount(page: Page, password: string): Promise<void> {
   await sendDeletionRequest(page, password)
@@ -63,8 +63,8 @@ export const openDeletionMail = (page: Page, email: string, seen: number): Promi
   )
 
 /**
- * On /delete-account, clicks the delete button, which asks the frame's confirmation with the code
- * `delete-account`, and confirms it.
+ * On `user.delete-account`, clicks the delete button, which asks the frame's confirmation with the
+ * code `delete-account`, and confirms it.
  */
 export async function deleteAccount(page: Page): Promise<void> {
   await page.getByTestId('user.delete-account.delete-button').click()

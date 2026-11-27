@@ -16,11 +16,14 @@ export type Role = 'member' | 'admin'
 export const noteItem = (device: Page, text: string) =>
   device.getByTestId('organisation.notes.item').filter({ hasText: text })
 
-/** The items of the members list of an administrator's "/org" page. */
+/** The items of the members list of an administrator's `organisation` page. */
 export const memberItems = (page: Page) =>
   page.getByTestId('organisation.members.list').getByTestId('organisation.members.item')
 
-/** The items of the invitations sent and not accepted yet, on an administrator's "/org" page. */
+/**
+ * The items of the invitations sent and not accepted yet, on an administrator's `organisation`
+ * page.
+ */
 export const sentItems = (page: Page) =>
   page.getByTestId('organisation.sent.list').getByTestId('organisation.sent.item')
 
@@ -65,8 +68,8 @@ export async function invitationsRead(page: Page, list: 'sent' | 'received'): Pr
 }
 
 /**
- * Creates the organisation from the open "/org" page: the heading then names it and the role
- * badge says the creator administers it.
+ * Creates the organisation from the open `organisation` page: the heading then names it and the
+ * role badge says the creator administers it.
  */
 export async function createOrganisation(
   page: Page,
@@ -96,8 +99,8 @@ export async function expectMembers(page: Page, emails: readonly string[]): Prom
 }
 
 /**
- * Invites the email `email` from the open "/org" page of an administrator, with `role` when given
- * (the form's own, member, otherwise): the toast `invited`, then the email in the invitations
+ * Invites the email `email` from the open `organisation` page of an administrator, with `role` when
+ * given (the form's own, member, otherwise): the toast `invited`, then the email in the invitations
  * sent. The email may have an account or none.
  */
 export async function inviteEmail(page: Page, email: string, role?: Role): Promise<void> {
@@ -116,7 +119,7 @@ export async function inviteEmail(page: Page, email: string, role?: Role): Promi
 }
 
 /**
- * Opens "/org" through the navigation, accepts the invitation of the organisation named
+ * Opens `organisation` through the navigation, accepts the invitation of the organisation named
  * `organisationName` from the list of those received, and waits for the toast
  * `invitation-accepted` and for the page to show the organisation. The toast is watched while the
  * heading is, so its short life is not spent first.
@@ -134,7 +137,7 @@ export async function acceptOnOrg(page: Page, organisationName: string): Promise
   ])
 }
 
-/** The item of the member at `email` on an administrator's "/org" page. */
+/** The item of the member at `email` on an administrator's `organisation` page. */
 export const memberItem = (page: Page, email: string) =>
   memberItems(page).filter({ hasText: email })
 
@@ -147,16 +150,19 @@ export const memberRoleOption = (page: Page, role: Role) =>
     `[data-testid="organisation.members.role-select.option"][data-value="${role}"]:visible`,
   )
 
-/** Chooses `role` in the role select of the member at `email` on an administrator's "/org" page. */
+/**
+ * Chooses `role` in the role select of the member at `email` on an administrator's `organisation`
+ * page.
+ */
 export async function chooseMemberRole(page: Page, email: string, role: Role): Promise<void> {
   await memberItem(page, email).getByTestId('organisation.members.role-select').click()
   await memberRoleOption(page, role).click()
 }
 
 /**
- * Chooses `locale` as the organisation's default language on an administrator's "/org" page: the
- * select takes a choice once the organisation's settings row is on the device, which the leading
- * tab creates after the organisation's region caught up.
+ * Chooses `locale` as the organisation's default language on an administrator's `organisation`
+ * page: the select takes a choice once the organisation's settings row is on the device, which the
+ * leading tab creates after the organisation's region caught up.
  */
 export async function chooseDefaultLanguage(page: Page, locale: string): Promise<void> {
   const select = page.getByTestId('organisation.settings.locale-select')
@@ -169,7 +175,7 @@ export async function chooseDefaultLanguage(page: Page, locale: string): Promise
   await expect(select).toHaveAttribute('data-value', locale)
 }
 
-/** Removes the organisation's default language on an administrator's "/org" page. */
+/** Removes the organisation's default language on an administrator's `organisation` page. */
 export async function removeDefaultLanguage(page: Page): Promise<void> {
   const clear = page.getByTestId('organisation.settings.clear-button')
 

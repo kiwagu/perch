@@ -1,6 +1,6 @@
 /**
  * The operator console as the tests drive it: an operator appointed by the host's command, the
- * accounts of `/console/users` found by a search and paged, and an account's card opened from its
+ * accounts of `console.users` found by a search and paged, and an account's card opened from its
  * entry. The console's pages load on their own after the frame, so each helper waits for its
  * page's anchors, never for the address alone.
  */
@@ -18,10 +18,10 @@ export const consoleLink = (page: Page): Locator =>
   page.getByTestId('app-shell.nav').getByTestId('app-shell.nav.console-link')
 
 /**
- * Signs `account` up on `page` through the sign-in page and its mail, on `/me`; then the host's
- * command makes the account an operator, as an operator is appointed, and the page loads again: a
- * device learns its roles only from the welcome of its hello. Waits for the navigation's link to
- * the console, which shows once that welcome is in.
+ * Signs `account` up on `page` through the sign-in page and its mail, on `user.profile`; then the
+ * host's command makes the account an operator, as an operator is appointed, and the page loads
+ * again: a device learns its roles only from the welcome of its hello. Waits for the navigation's
+ * link to the console, which shows once that welcome is in.
  */
 export async function signUpOperator(page: Page, account: SeedAccount): Promise<void> {
   await signUp(page, account)
@@ -31,7 +31,7 @@ export async function signUpOperator(page: Page, account: SeedAccount): Promise<
   await expect(consoleLink(page)).toBeVisible({ timeout: 10_000 })
 }
 
-/** Opens `/console/users` through the navigation's link and waits for the page's search box. */
+/** Opens `console.users` through the navigation's link and waits for the page's search box. */
 export async function openUsers(page: Page): Promise<void> {
   await consoleLink(page).click()
   await expectPathname(page, CONTRACT_ROUTES['console.users'])
@@ -113,7 +113,7 @@ export async function expectRange(
 }
 
 /**
- * On `/console/users`, searches the account of `email` and clicks the open link of its entry once
+ * On `console.users`, searches the account of `email` and clicks the open link of its entry once
  * the address carries the search, so no move of the search lands after the card's; waits for the
  * card, read, with that email. Answers the account's id, as its entry carries it.
  */

@@ -53,7 +53,7 @@ test.describe('Open an email confirmation link in a browser signed in to another
     })
 
     // Expected: [user.profile.email-input] on device A holds the new email. Device A is still on
-    // /settings after step 1: its profile is read through its navigation.
+    // `user.settings` after step 1: its profile is read through its navigation.
     await page.getByTestId('app-shell.nav.profile-link').click()
     await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     await expect(page.getByTestId('user.profile.email-input')).toHaveValue(data.newEmail, {

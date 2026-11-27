@@ -254,7 +254,7 @@ Better Auth signs its verification token with the auth secret (an HS256 token na
 alone) and hands it, with the account, to `verificationMailer` (`verification-mail.ts`), its
 `sendVerificationEmail`, which starts the mail and returns at once: the request that asked for a
 mail never waits for it. The mail links to the front's own screen,
-`<GATEWAY_PUBLIC_URL>/verify-email?token=…` (`verificationLink`, `VERIFY_EMAIL_PATH`), never to
+`user.verify-email` at `<GATEWAY_PUBLIC_URL>` with `?token=…` (`verificationLink`, `VERIFY_EMAIL_PATH`), never to
 Better Auth's own verifying URL. The link's token is the gateway's own
 (`account-links/verification-token.ts`): it names the account the mail goes to beside Better
 Auth's token, signed with a key derived from the auth secret (`verificationKey`), so Better Auth
@@ -356,7 +356,7 @@ is spent), then, in the account's turn by the email in lower case, asks Better A
 `verification` (`reset-password:<token>`, the identity's key as its value, an hour of life,
 `RESET_LINK_LIFETIME_S`) and calls `resetMailer` (`reset-mail.ts`), which ends the account's
 earlier links first, so only the newest works, then starts the reset mail to the front's
-`/reset-password?token=…` (`AccountMails.resetPassword`). Every request it took answers 202 with
+`user.reset-password` with `?token=…` (`AccountMails.resetPassword`). Every request it took answers 202 with
 no body, no sooner than `RESET_REQUEST_FLOOR_MS` (800 ms) after it began, alike for any email; one
 whose email is not an email answers 400. `POST /auth/reset-password` `{ token, password }` takes
 one of its address's attempts at that link (`ADDRESS_LINK_ATTEMPTS`) first, refused or not (429), then answers 400
@@ -620,7 +620,7 @@ earlier pending change then ends; when no account has the
 new email (the account's own counts as taken), a new change
 is kept (`EmailChanges.ask`: one row per identity in `verification`, `change-email:<identity
 key>`, a random `jti` as its value) and the mail to the new email starts, its link the front's
-`/confirm-email?token=…` (`AccountMails.confirmEmail`). The token is a JWT naming the identity,
+`user.confirm-email` with `?token=…` (`AccountMails.confirmEmail`). The token is a JWT naming the identity,
 its email and the new one, the `jti` and when it was asked, signed with a key derived from the
 auth secret (`account-links/change-token.ts`), so Better Auth's verification never takes it for
 one of its own, nor the gateway one of Better Auth's for it. Both answer 202 with no body, no
@@ -674,7 +674,7 @@ written by `@workspace/email`) start at once and never hold the request, and spe
 language, as the verification mail does: its settings' once it has settings, its sign-up's
 before; settings that could not be read send nothing (`mail:LOCALE_UNREADABLE`), and a mail that
 could not be read, written or sent is logged by its code, never with its address, its name or its
-link. A notice of a changed password links to the front's `/forgot-password`; the notices of a
+link. A notice of a changed password links to the front's `user.forgot-password`; the notices of a
 changed email and of a deleted account carry no link. Every mail about an account reads whom it
 goes to in one place (`accountAddressee`, `account-addressee.ts`): the account's email, its own
 name and that language. The notice of a deleted account is the one exception: it is written from
@@ -691,7 +691,7 @@ failures). An account that is the only admin of a ready
 organisation with other members answers 409 `last-admin` and gets no mail. Any other keeps its
 deletion as the pending one (`AccountDeletions.ask`: one row per identity in `verification`,
 `delete-account:<identity key>`, replacing an earlier one), and the mail to the account's own
-email starts in its language, its link the front's `/delete-account?token=…`
+email starts in its language, its link the front's `user.delete-account` with `?token=…`
 (`AccountMails.deleteAccount`): 202 with no body. The request has no floor: it concerns the
 caller's own account, and its answer tells nothing of others. The link only opens a page; the
 account goes on the press of that page's button, `POST /auth/delete-account` `{ token }`, with no

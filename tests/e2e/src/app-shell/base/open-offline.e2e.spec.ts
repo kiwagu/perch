@@ -74,9 +74,10 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
     })
 
     // Beyond the scenario: the settings open offline from the worker's precache. Online, this
-    // browser context loaded the start page, the sign-in and `/me` alone, never `/settings`: the
-    // page asked for the settings' script for the first time after going offline, and the worker
-    // answered it, so no cache but the worker's precache can have held it for the page.
+    // browser context loaded the start page, the sign-in and `user.profile` alone, never
+    // `user.settings`: the page asked for the settings' script for the first time after going
+    // offline, and the worker answered it, so no cache but the worker's precache can have held it
+    // for the page.
     await test.step('Open the settings offline: their script, never requested before, comes from the worker', async () => {
       expect(
         requested,

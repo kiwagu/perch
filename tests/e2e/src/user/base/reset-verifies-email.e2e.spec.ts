@@ -56,7 +56,8 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
         //   [user.profile.name-input] holds the name
         await expect(notice(b, 'welcome')).toBeVisible({ timeout: 15_000 })
         await expectPathname(b, CONTRACT_ROUTES['user.profile'])
-        // The profile comes once the private region caught up, about a round trip after /me opens.
+        // The profile comes once the private region caught up, about a round trip after
+        // `user.profile` opens.
         await expect(b.getByTestId('user.profile.email-input')).toHaveValue(data.email, {
           timeout: 15_000,
         })

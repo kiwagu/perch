@@ -23,7 +23,7 @@ const seenWithinAMinute = (page: Page): Promise<string[]> =>
     return [now, now - 60_000].map((time) => `Last seen ${format.format(time)}`)
   })
 
-/** The device is signed out: on "/sign-in", showing the sign-in form and no navigation. */
+/** The device is signed out: on `user.sign-in`, showing the sign-in form and no navigation. */
 async function expectSignedOut(device: Page): Promise<void> {
   await expect(device).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']))
   await expect(device.getByTestId('user.sign-in.form')).toBeVisible()
