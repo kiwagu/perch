@@ -17,6 +17,8 @@ export interface FieldFacts {
   readonly marksState?: boolean | undefined
   /** Whether the field keeps what is typed until an action takes it; false for a choice that applies at once. */
   readonly holdsInput?: boolean | undefined
+  /** Whether an `Input` or a `Textarea` must be filled before its form's press is taken: the browser stops the press while it is empty. */
+  readonly required?: boolean | undefined
 }
 
 /** The facts of the fields, by the anchor each renders. */
