@@ -10,7 +10,7 @@ data:
 ---
 # Sign in with a code of the second factor
 
-Where: [/sign-in], once the account turned its second factor on at [/settings]
+Where: [screen:user.sign-in], once the account turned its second factor on at [screen:user.settings]
 
 ## Scenario: The right password of an account whose second factor is on asks for a code and signs nothing in until a code of its key is taken; going back starts again from the password
 
@@ -25,8 +25,8 @@ Where: [/sign-in], once the account turned its second factor on at [/settings]
 8. Enter the code the authenticator app shows now for the key into [user.sign-in.code.code-input] and click [user.sign-in.code.dialog.confirm-button]
 
 ### Expected result
-- After step 4 [user.sign-in.code.dialog] carries [code:code-required] and the URL is still [/sign-in]: nothing is signed in yet
-- After step 5 [user.sign-in.code.dialog] is gone and the URL is still [/sign-in]
+- After step 4 [user.sign-in.code.dialog] carries [code:code-required] and the URL is still [screen:user.sign-in]: nothing is signed in yet
+- After step 5 [user.sign-in.code.dialog] is gone and the URL is still [screen:user.sign-in]
 - After step 6 [user.sign-in.code.dialog] carries [code:code-required] again
-- After step 7 [user.sign-in.code.error] carries [code:invalid-code] under [user.sign-in.code.code-input], and the URL is still [/sign-in]
-- After step 8 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]
+- After step 7 [user.sign-in.code.error] carries [code:invalid-code] under [user.sign-in.code.code-input], and the URL is still [screen:user.sign-in]
+- After step 8 [app-shell.notice-message] carries [code:welcome] and the URL is [screen:user.profile]

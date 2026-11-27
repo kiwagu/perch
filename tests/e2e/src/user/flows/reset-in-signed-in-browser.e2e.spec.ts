@@ -20,12 +20,12 @@ test.describe('Set a new password from a browser that is still signed in', { tag
       newPassword: generate.newPassword(),
     }
 
-    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
       await expect(page.getByTestId('app-shell.nav')).toBeVisible()
     })
 
-    await test.step('2. On device B, open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
+    await test.step('2. On device B, open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
       await askForReset(await freshDevice.open(), data.email)
     })
 
@@ -49,7 +49,7 @@ test.describe('Set a new password from a browser that is still signed in', { tag
       await page.getByTestId('user.sign-in.password-input').fill(data.newPassword)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
-      //   [/me]
+      //   [screen:user.profile]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })

@@ -7,13 +7,13 @@ data: {}
 ---
 # Follow a guest's theme in every tab of the browser
 
-Where: [/sign-in] in two tabs of device A, no account signed in
+Where: [screen:user.sign-in] in two tabs of device A, no account signed in
 
 ## Scenario: A theme a guest chooses in one tab shows in the browser's other tab at once
 
 ### Steps
-1. In a first tab, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]
-2. In a second tab, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]
+1. In a first tab, open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]
+2. In a second tab, open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]
 3. In the first tab, choose [value:dark] in [app-shell.theme-select]
 
 ### Expected result

@@ -49,7 +49,7 @@ test.describe('Sign in with a passkey', { tag: '@full' }, () => {
 
       await passkeyButton.click()
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome], the URL is
-      //   [/me], and [user.sign-in.code.dialog] never showed
+      //   [screen:user.profile], and [user.sign-in.code.dialog] never showed
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       expect(await codeDialogShown(), 'the code dialog never showed').toBe(false)
@@ -73,7 +73,7 @@ test.describe('Sign in with a passkey', { tag: '@full' }, () => {
       await signOut(page)
       await passkeyButton.click()
       // Expected: After step 6 the authenticator offers the passkey it still keeps,
-      //   [user.sign-in.error] carries [code:passkey-unknown], and the URL is still [/sign-in]:
+      //   [user.sign-in.error] carries [code:passkey-unknown], and the URL is still [screen:user.sign-in]:
       //   the account no longer has that passkey
       await expect(page.getByTestId('user.sign-in.error')).toHaveAttribute(
         'data-code',

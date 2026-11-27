@@ -88,7 +88,7 @@ const reported = (lines: readonly unknown[], expected: readonly unknown[]) =>
   vi.waitFor(() => expect(lines).toEqual(expected), { timeout: REPORT_WAIT_MS, interval: 5 })
 
 describe('verificationMailer', () => {
-  it("starts the mail and returns before it is sent, linking to the front's /verify-email", async () => {
+  it("starts the mail and returns before it is sent, linking to the front's user.verify-email", async () => {
     const { outbox, send } = await mailer()
 
     await send({ user: user('en'), token: 'a.b.c' })

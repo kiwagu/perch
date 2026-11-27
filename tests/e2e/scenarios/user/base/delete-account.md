@@ -10,7 +10,7 @@ data:
 ---
 # Delete the account
 
-Where: [/settings], the form [user.settings.deletion.form], then [/delete-account] from [mail:request-account-deletion]
+Where: [screen:user.settings], the form [user.settings.deletion.form], then [screen:user.delete-account] from [mail:request-account-deletion]
 
 ## Scenario: The account goes once the button of the page the mail's link opens is pressed; the old password no longer signs in, and the email signs up again
 
@@ -24,7 +24,7 @@ Where: [/settings], the form [user.settings.deletion.form], then [/delete-accoun
 
 ### Expected result
 - After step 2 [user.settings.deletion.message] carries [code:check-your-mail], [user.settings.deletion.password-input] is empty, and [mail:request-account-deletion] reaches the email
-- After step 3 the link opens [/delete-account] with [user.delete-account.delete-button]
+- After step 3 the link opens [screen:user.delete-account] with [user.delete-account.delete-button]
 - At step 4 [app-shell.confirmation] carries [code:delete-account]; after it [user.delete-account.message] carries [code:account-deleted], [user.delete-account.sign-in-link] shows, and [notice:delete-account.account-deleted] reaches the email
 - After step 5 [user.sign-in.error] carries [code:invalid-credentials]
 - After step 6 [user.sign-in.mail-message] carries [code:check-your-mail] and [mail:sign-up] reaches the email

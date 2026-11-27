@@ -17,7 +17,7 @@ test.describe('Accept an invitation by the link of its mail', { tag: '@full' }, 
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, open [/sign-in], choose [value:es] in [app-shell.locale-select], sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('1. On device B, open [screen:user.sign-in], choose [value:es] in [app-shell.locale-select], sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await anotherAccount.open()
 
         await signUp(b, userB, 'es')
@@ -26,7 +26,7 @@ test.describe('Accept an invitation by the link of its mail', { tag: '@full' }, 
       })
 
     const userA =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -55,7 +55,7 @@ test.describe('Accept an invitation by the link of its mail', { tag: '@full' }, 
 
     await test.step('4. On device B, open the link of [mail:organisations.invite]', async () => {
       await openMailLink(deviceB, mail, 'organisations.invite')
-      // Expected: After step 4 the link opens [/invitation], [organisation.invitation.heading]
+      // Expected: After step 4 the link opens [screen:organisation.invitation], [organisation.invitation.heading]
       //   shows the organisation name, [organisation.invitation.role-badge] carries
       //   [value:member], and [organisation.invitation.accept-button] and
       //   [organisation.invitation.decline-button] show; the page shows no email
@@ -72,7 +72,7 @@ test.describe('Accept an invitation by the link of its mail', { tag: '@full' }, 
 
     await test.step('5. On device B, click [organisation.invitation.accept-button]', async () => {
       await deviceB.getByTestId('organisation.invitation.accept-button').click()
-      // Expected: After step 5 the URL is [/org], [app-shell.toast] carries
+      // Expected: After step 5 the URL is [screen:organisation], [app-shell.toast] carries
       //   [code:invitation-accepted], [organisation.page.heading] shows the organisation name and
       //   [organisation.page.role-badge] carries [value:member]
       await Promise.all([

@@ -17,7 +17,7 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       bio: generate.bio(),
     }
 
-    await test.step('1. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+    await test.step('1. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.organisation-link').click()
       // Expected: After step 1 device A shows [app-shell.toast] carrying
@@ -78,7 +78,7 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       await expect(toast(page, 'note-deleted')).toBeVisible()
     })
 
-    await test.step('8. On device A, wait until no [app-shell.toast] shows, open [/me], enter the new name into [user.profile.name-input] and the bio into [user.profile.bio-textarea], and click [user.profile.save-button]', async () => {
+    await test.step('8. On device A, wait until no [app-shell.toast] shows, open [screen:user.profile], enter the new name into [user.profile.name-input] and the bio into [user.profile.bio-textarea], and click [user.profile.save-button]', async () => {
       await expect(page.getByTestId('app-shell.toast')).toHaveCount(0, { timeout: 10_000 })
       await page.getByTestId('app-shell.nav.profile-link').click()
       await page.getByTestId('user.profile.name-input').fill(data.newName)

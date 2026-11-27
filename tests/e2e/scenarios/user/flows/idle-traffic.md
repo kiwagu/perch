@@ -9,12 +9,12 @@ data:
 ---
 # Stay quiet while idle
 
-Where: [/me] in a visible tab left alone
+Where: [screen:user.profile] in a visible tab left alone
 
 ## Scenario: A visible tab with its sync channel up sends few sync frames while nobody uses it
 
 ### Steps
-1. Put the page's clock under the test's control, open [/me] and wait until the sync channel is up and the catch-up after opening has settled
+1. Put the page's clock under the test's control, open [screen:user.profile] and wait until the sync channel is up and the catch-up after opening has settled
 2. Leave the tab idle for the idle minutes of the page's time
 
 ### Expected result

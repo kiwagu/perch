@@ -112,7 +112,6 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     autoComplete="email"
-                    required
                     data-testid="user.verify-email.email-input"
                   />
                 </Field>

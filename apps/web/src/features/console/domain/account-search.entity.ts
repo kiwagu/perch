@@ -1,6 +1,6 @@
 /**
  * The search of the platform's accounts an operator's page shows, as its address carries it
- * (`/console/users`): a part of the email or of the name the accounts are found by, the page from
+ * (`console.users`): a part of the email or of the name the accounts are found by, the page from
  * 1, and how many accounts a page holds, one of the sizes `accounts.list` pages by. A value equal
  * to its default stays out of the address, and a size chosen is kept across a new search.
  */

@@ -26,7 +26,7 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
     })
 
     const second =
-      await test.step('2. Open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('2. Open [screen:user.profile] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
         await tab.goto(CONTRACT_ROUTES['user.profile'])
@@ -41,7 +41,7 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
 
         await page.reload({ waitUntil: 'commit' })
         // Expected: After step 3 the first tab's [app-shell.status] reaches [state:opening-data]
-        //   on [/devices], and its [device.list] holds one [device.list.session-item], in
+        //   on [screen:device], and its [device.list] holds one [device.list.session-item], in
         //   [state:current]
         await expect(page.getByTestId('app-shell.status')).toHaveAttribute(
           'data-state',
@@ -58,21 +58,21 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
         return held
       })
 
-    await test.step('4. In the second tab, click [user.profile.sign-out-button] and wait for [/sign-in]', async () => {
+    await test.step('4. In the second tab, click [user.profile.sign-out-button] and wait for [screen:user.sign-in]', async () => {
       await signOut(second)
-      // Expected: Within 5 seconds of step 4 the first tab is on [/sign-in] and shows
+      // Expected: Within 5 seconds of step 4 the first tab is on [screen:user.sign-in] and shows
       //   [user.sign-in.form], its database engines still held back
       await expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 5_000)
       await expect(page.getByTestId('user.sign-in.form')).toBeVisible()
     })
 
-    await test.step('5. In the second tab, sign up with the other email, the other password and the other name, open the link of [mail:sign-up] and wait for [/me]', async () => {
+    await test.step('5. In the second tab, sign up with the other email, the other password and the other name, open the link of [mail:sign-up] and wait for [screen:user.profile]', async () => {
       await signUp(second, other)
     })
 
     await test.step("6. Let the first tab's database engines load", async () => {
       engines.release()
-      // Expected: After step 6 the first tab is on [/me] and its [user.profile.heading] shows the
+      // Expected: After step 6 the first tab is on [screen:user.profile] and its [user.profile.heading] shows the
       //   other name: it follows the account signed in next once it can open that account's data
       await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await expect(page.getByTestId('user.profile.heading')).toHaveText(other.name, {

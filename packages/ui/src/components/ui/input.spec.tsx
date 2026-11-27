@@ -298,7 +298,7 @@ describe.each([
 
 /** The facts of some fields, by the anchor each renders. */
 const FACTS = {
-  'x.name-input': { maxLength: 7, type: 'email', marksState: false },
+  'x.name-input': { maxLength: 7, type: 'email', marksState: false, required: true },
   'x.once-input': { holdsInput: false },
   'x.marked-input': { marksState: true },
   'x.silent-input': {},
@@ -331,40 +331,69 @@ describe.each([
     expect(element.className).not.toContain('border-success')
   })
 
-  it('keeps what its own props say, whatever the facts say', () => {
-    inFacts(field({ 'data-testid': 'x.name-input', maxLength: 3, marksState: true }))
+  it('must be filled when the facts of its anchor say so: the browser finds it empty', () => {
+    inFacts(field({ 'data-testid': 'x.name-input' }))
 
-    const element = screen.getByLabelText('f')
+    const element = screen.getByLabelText('f') as HTMLInputElement | HTMLTextAreaElement
+
+    expect(element.required).toBe(true)
+    expect(element.validity.valueMissing).toBe(true)
+  })
+
+  it('keeps what its own props say, whatever the facts say', () => {
+    inFacts(
+      field({ 'data-testid': 'x.name-input', maxLength: 3, marksState: true, required: false }),
+    )
+
+    const element = screen.getByLabelText('f') as HTMLInputElement | HTMLTextAreaElement
 
     expect(element.getAttribute('maxlength')).toBe('3')
     expect(element.className).toContain('border-warning')
+    expect(element.required).toBe(false)
   })
 
   it('takes a prop it was given undefined from the facts', () => {
-    inFacts(field({ 'data-testid': 'x.name-input', maxLength: undefined, marksState: undefined }))
+    inFacts(
+      field({
+        'data-testid': 'x.name-input',
+        maxLength: undefined,
+        marksState: undefined,
+        required: undefined,
+      }),
+    )
 
-    const element = screen.getByLabelText('f')
+    const element = screen.getByLabelText('f') as HTMLInputElement | HTMLTextAreaElement
 
     expect(element.getAttribute('maxlength')).toBe('7')
     expect(element.className).not.toContain('border-warning')
+    expect(element.required).toBe(true)
   })
 
-  it('takes nothing without a provider, for an anchor with no entry, or with no anchor', () => {
+  it('takes nothing without a provider, for an anchor with an empty entry or none, or with no anchor', () => {
     render(field({ 'data-testid': 'x.name-input' }))
 
     const bare = screen.getByLabelText('f')
 
     expect(bare.hasAttribute('maxlength')).toBe(false)
+    expect(bare.hasAttribute('required')).toBe(false)
     expect(bare.className).toContain('border-warning')
 
     cleanup()
     inFacts(field({ 'data-testid': 'x.silent-input' }))
     expect(screen.getByLabelText('f').hasAttribute('maxlength')).toBe(false)
+    expect(screen.getByLabelText('f').hasAttribute('required')).toBe(false)
+    expect(screen.getByLabelText('f').className).toContain('border-warning')
+
+    cleanup()
+    inFacts(field({ 'data-testid': 'x.unlisted-input' }))
+    expect(screen.getByLabelText('f').hasAttribute('maxlength')).toBe(false)
+    expect(screen.getByLabelText('f').hasAttribute('required')).toBe(false)
     expect(screen.getByLabelText('f').className).toContain('border-warning')
 
     cleanup()
     inFacts(field({}))
     expect(screen.getByLabelText('f').hasAttribute('maxlength')).toBe(false)
+    expect(screen.getByLabelText('f').hasAttribute('required')).toBe(false)
     expect(screen.getByLabelText('f').className).toContain('border-warning')
   })
 

@@ -13,7 +13,7 @@ test.describe('Choose the theme of this device from the frame as a guest, and th
     const theme = page.getByTestId('app-shell.theme-select')
     const settingsTheme = page.getByTestId('user.settings.theme-select')
 
-    await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       // Expected: After step 1 [app-shell.theme-select] shows [value:system]
@@ -61,7 +61,7 @@ test.describe('Choose the theme of this device from the frame as a guest, and th
     await test.step('6. Click [app-shell.nav.profile-link] and click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
       await signOut(page)
-      // Expected: After step 6 the URL is [/sign-in] and [app-shell.theme-select] shows
+      // Expected: After step 6 the URL is [screen:user.sign-in] and [app-shell.theme-select] shows
       //   [value:light], the theme this device showed last
       await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)

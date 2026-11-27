@@ -10,8 +10,8 @@ export const emailChangeRequested = (page: Page) =>
   page.locator('[data-testid="user.settings.email.message"][data-code="check-your-mail"]')
 
 /**
- * On /settings, enters `email` as the new email and `password` as the account's, and sends the
- * confirmation; waits until the form asks to open the link of the mail sent to the new email.
+ * On `user.settings`, enters `email` as the new email and `password` as the account's, and sends
+ * the confirmation; waits until the form asks to open the link of the mail sent to the new email.
  */
 export async function askToChangeEmail(page: Page, email: string, password: string): Promise<void> {
   await page.getByTestId('user.settings.email.email-input').fill(email)

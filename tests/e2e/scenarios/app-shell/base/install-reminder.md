@@ -7,12 +7,12 @@ data: {}
 ---
 # Be reminded to install the app until it is installed
 
-Where: [/sign-in], in a browser that offers to install the app
+Where: [screen:user.sign-in], in a browser that offers to install the app
 
 ## Scenario: The reminder comes with the browser's offer, goes for three days when put off, comes back, and goes for good once the app is installed
 
 ### Steps
-1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]
+1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]
 2. The browser offers to install the app
 3. Click [app-shell.install-later-button]
 4. Reload the page; the browser offers to install the app again

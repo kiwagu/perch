@@ -17,7 +17,7 @@ test.describe("See a field's unsaved and saved states", { tag: '@full' }, () => 
     const name = page.getByTestId('user.profile.name-input')
     const email = page.getByTestId('user.settings.email.email-input')
 
-    await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(name).toHaveValue(signedIn.name)
@@ -46,7 +46,7 @@ test.describe("See a field's unsaved and saved states", { tag: '@full' }, () => 
     await expect(name).toHaveValue(data.newName)
     await expect(name).not.toHaveAttribute('data-state')
 
-    await test.step('5. Open [/settings] and enter the email into [user.settings.email.email-input]', async () => {
+    await test.step('5. Open [screen:user.settings] and enter the email into [user.settings.email.email-input]', async () => {
       await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await email.fill(data.email)

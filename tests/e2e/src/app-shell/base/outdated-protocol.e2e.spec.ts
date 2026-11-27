@@ -15,7 +15,7 @@ test.describe('Hear that the server no longer takes the protocol of this version
     const network = await SyncNetwork.attach(page)
     const updateMessage = page.getByTestId('app-shell.update-message')
 
-    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
+    await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]', async () => {
       await signUp(page)
       await appReady(page)
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
@@ -47,7 +47,7 @@ test.describe('Hear that the server no longer takes the protocol of this version
       await page.getByTestId('app-shell.update-button').click()
       await loaded
       // Expected: After step 3 the page loads again on the version the server serves,
-      //   [app-shell.status] reaches [state:ready] on [/me] and no [app-shell.update-message] shows
+      //   [app-shell.status] reaches [state:ready] on [screen:user.profile] and no [app-shell.update-message] shows
       await appReady(page)
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {

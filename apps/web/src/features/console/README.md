@@ -16,11 +16,11 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
 
 ## Surface
 
-- Route: `/console/users` (roles `operator`; any other device gets the not-found page at the same
+- Route: the screen `console.users` (roles `operator`; any other device gets the not-found page at the same
   address, its search unread) renders `UsersPage`. Its search: `q` (within the length of the
   contract's `account-search` value), `page` (from 1, default 1) and `size` (10, 25 or 50, default 25); a value equal to its default
   stays out of the address, and `size` is retained across a new search.
-- Route: `/console/account` (roles `operator`, likewise) renders `AccountPage`. Its search: `id`
+- Route: the screen `console.account` (roles `operator`, likewise) renders `AccountPage`. Its search: `id`
   (within the length of the contract's `id` value), the identity id of the account.
 - Both pages are lazy pages (`LazyPage`): their code (containers, views, machines) loads apart
   from the first frame, when an operator first opens one of them, never for any other device; the
@@ -36,7 +36,7 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
   (`application/users.machine.ts`, held to the screen's flow by `platform/machines.spec.ts`)
   through the platform's `useScreenMachine`: the search button moves to the first page of what
   the box holds (an empty box leaves the text out of the address), and a row's link moves to the
-  account's card (`/console/account?id=<identity>`, the id read off the row's `data-id`), which
+  account's card (the address of `console.account` with `?id=<identity>`, the id read off the row's `data-id`), which
   ends the page. The search box follows the address (`useSearchValue`): a new search, a page and
   Back give it the address's text. The list is read through the platform's `useListed` for the
   account signed in and the search keys its source reads (`q`, `page`, `size`): a change shows

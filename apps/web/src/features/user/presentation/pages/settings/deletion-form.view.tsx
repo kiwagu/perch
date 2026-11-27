@@ -107,7 +107,6 @@ export function DeletionFormView(props: DeletionFormViewProps) {
                 value={props.password}
                 onChange={(event) => props.onChange(event.target.value)}
                 autoComplete="current-password"
-                required
                 aria-invalid={concerns === 'password' ? true : undefined}
                 aria-describedby={concerns === 'password' ? ids.error : undefined}
                 showLabel={t('user.password.show')}

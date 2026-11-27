@@ -24,7 +24,7 @@ test.describe('Share notes inside an organisation and keep private data private'
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await anotherAccount.signUp()
 
         await expect(b.getByTestId('user.profile.heading')).toHaveText(userB.name)
@@ -35,7 +35,7 @@ test.describe('Share notes inside an organisation and keep private data private'
     const loadsOfB = pageLoads(deviceB)
 
     const { userA, loadsOfA } =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
         // Full page loads of device A from here: B's note must reach it without one.
         const loads = pageLoads(page)
@@ -62,7 +62,7 @@ test.describe('Share notes inside an organisation and keep private data private'
       ).toHaveText([data.noteByA])
     })
 
-    await test.step('5. On device A, open [/me], enter the bio of A into [user.profile.bio-textarea], click [user.profile.save-button] and open [/org] again', async () => {
+    await test.step('5. On device A, open [screen:user.profile], enter the bio of A into [user.profile.bio-textarea], click [user.profile.save-button] and open [screen:organisation] again', async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
       await expect(page.getByTestId('user.profile.heading')).toHaveText(userA.name)
       await page.getByTestId('user.profile.bio-textarea').fill(data.bioOfA)
@@ -74,7 +74,7 @@ test.describe('Share notes inside an organisation and keep private data private'
       ).toHaveText([data.noteByA])
     })
 
-    await test.step("6. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+    await test.step("6. On device B, open [screen:organisation] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
       await acceptOnOrg(deviceB, data.name)
       // Expected: After step 6 device B shows the organisation name in [organisation.page.heading],
       //   [organisation.page.role-badge] with [value:member] and the note by A in
@@ -147,7 +147,7 @@ test.describe('Share notes inside an organisation and keep private data private'
     )
     await expect(deviceB.getByTestId('organisation.members.list')).toHaveCount(0)
     await expect(deviceB.getByTestId('organisation.invite.form')).toHaveCount(0)
-    // - Device B shows nothing of user A's profile: its [/me] shows user B's own name in
+    // - Device B shows nothing of user A's profile: its [screen:user.profile] shows user B's own name in
     //   [user.profile.heading] and an empty [user.profile.bio-textarea]
     await deviceB.getByTestId('app-shell.nav.profile-link').click()
     await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(userB.name)

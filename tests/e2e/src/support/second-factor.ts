@@ -1,7 +1,7 @@
 /**
- * The second factor the tests share: turning it on from `/settings`, and the sign-in page's
+ * The second factor the tests share: turning it on from `user.settings`, and the sign-in page's
  * password step and code dialog. The sign-in steps are written out by hand, since `signIn` of
- * the fixtures asserts `/me` and an account with the second factor on stops at the dialog.
+ * the fixtures asserts `user.profile` and an account with the second factor on stops at the dialog.
  */
 
 import type { Locator, Page } from '@playwright/test'
@@ -19,7 +19,7 @@ export interface SecondFactorOn {
   readonly codes: readonly string[]
 }
 
-/** The second-factor section of `/settings`, by its anchor. */
+/** The second-factor section of `user.settings`, by its anchor. */
 export const twoFactorSection = (page: Page): Locator =>
   page.getByTestId('user.settings.two-factor.section')
 
@@ -39,7 +39,7 @@ export async function backupCodesShown(page: Page): Promise<readonly string[]> {
 }
 
 /**
- * On `/settings` with the second factor off and read, enters `password`, starts turning it on,
+ * On `user.settings` with the second factor off and read, enters `password`, starts turning it on,
  * enters the code the shown key gives now and confirms it; resolves once the toast says it is on,
  * the backup codes still shown: the test hides them.
  */

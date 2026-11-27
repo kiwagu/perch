@@ -24,7 +24,7 @@ test.describe('Ask for the reset mail too often', { tag: '@full' }, () => {
       await signOut(page)
     })
 
-    await test.step('2. Open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button] three times, waiting for [user.forgot-password.message] each time', async () => {
+    await test.step('2. Open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button] three times, waiting for [user.forgot-password.message] each time', async () => {
       await page.goto(CONTRACT_ROUTES['user.forgot-password'])
       await appReady(page)
       await page.getByTestId('user.forgot-password.email-input').fill(data.email)

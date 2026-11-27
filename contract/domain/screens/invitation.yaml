@@ -141,10 +141,10 @@ flow:
       description: The error says why the link could not be read; loading the page again tries it again.
       type: final
     joined:
-      description: The app has moved to /org, the organisation current.
+      description: The app has moved to the screen organisation, with the joined organisation current.
       type: final
     declined:
-      description: The app has moved to /org.
+      description: The app has moved to the screen organisation.
       type: final
 wireframe: |-
   - heading /.+/ [level=1]

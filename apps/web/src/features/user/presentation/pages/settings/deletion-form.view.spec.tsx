@@ -3,14 +3,14 @@ import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 
 import { DeletionFormView, type DeletionFormViewProps } from './deletion-form.view'
 
 function renderView(props: Partial<DeletionFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSend: vi.fn(() => Promise.resolve(true)) }
 
-  renderWithProviders(<DeletionFormView password="" can={() => true} {...handlers} {...props} />)
+  renderWithFacts(<DeletionFormView password="" can={() => true} {...handlers} {...props} />)
 
   return handlers
 }
@@ -31,6 +31,12 @@ describe('DeletionFormView', () => {
     expect(screen.getByTestId('user.settings.deletion.send-button').textContent).toBe(
       'Send the deletion link',
     )
+  })
+
+  it('gives the password what the contract says of it', () => {
+    renderView()
+
+    expect(expectFieldFacts(document.body)).toEqual(['user.settings.deletion.password-input'])
   })
 
   it('tells each keystroke, and sends', () => {

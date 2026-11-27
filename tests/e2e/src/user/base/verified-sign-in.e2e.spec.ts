@@ -15,12 +15,12 @@ test.describe('Sign in with a verified email and see the profile', { tag: '@smok
 
     const data = { ...generate.account(), name: generate.name() }
 
-    await test.step('1. Sign up with the email, the password and the name, open the link of [mail:sign-up], and wait for [/me]', async () => {
+    await test.step('1. Sign up with the email, the password and the name, open the link of [mail:sign-up], and wait for [screen:user.profile]', async () => {
       await signUp(page, data)
       await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
     })
 
-    await test.step('2. Click [user.profile.sign-out-button] and wait for [/sign-in]', async () => {
+    await test.step('2. Click [user.profile.sign-out-button] and wait for [screen:user.sign-in]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     })
@@ -33,7 +33,7 @@ test.describe('Sign in with a verified email and see the profile', { tag: '@smok
     })
 
     // Expected:
-    // - After step 3 [app-shell.notice-message] carries [code:welcome], the URL is [/me] and
+    // - After step 3 [app-shell.notice-message] carries [code:welcome], the URL is [screen:user.profile] and
     //   [user.profile.heading] shows the name the account signed up with
     await expect(notice(page, 'welcome')).toBeVisible()
     await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))

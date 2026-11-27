@@ -7,12 +7,12 @@ data: {}
 ---
 # Be shown the steps that install the app where the browser cannot
 
-Where: [/sign-in] in Safari on an iPhone, where only the user's own steps install the app
+Where: [screen:user.sign-in] in Safari on an iPhone, where only the user's own steps install the app
 
 ## Scenario: Safari on an iPhone shows the steps that install the app, which the user can put off
 
 ### Steps
-1. Open [/sign-in] in Safari on an iPhone and wait for [app-shell.status] to reach [state:ready]
+1. Open [screen:user.sign-in] in Safari on an iPhone and wait for [app-shell.status] to reach [state:ready]
 2. Click [app-shell.install-later-button]
 3. Reload the page
 

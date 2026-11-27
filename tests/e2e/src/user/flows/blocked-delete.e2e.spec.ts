@@ -15,7 +15,7 @@ test.describe('Sign out while another tab holds the data open', { tag: '@full' }
     test.slow()
 
     const database =
-      await test.step('1. On device A, open [/me] in a first tab and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('1. On device A, open [screen:user.profile] in a first tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         await page.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(page)
         await expect(page.getByTestId('user.profile.heading')).toBeVisible()
@@ -53,7 +53,7 @@ test.describe('Sign out while another tab holds the data open', { tag: '@full' }
 
     await test.step('3. In the first tab, click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
-      // Expected: Within 15 seconds of step 3 the first tab is on [/sign-in] and
+      // Expected: Within 15 seconds of step 3 the first tab is on [screen:user.sign-in] and
       //   [user.sign-in.notice-message] carries [code:delete-pending]: the device is signed out,
       //   and its data leaves it once the other Perch tabs are closed
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })

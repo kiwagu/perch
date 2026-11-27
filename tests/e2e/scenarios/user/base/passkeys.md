@@ -10,7 +10,7 @@ data:
 ---
 # Add and remove a passkey in the settings
 
-Where: [/settings], the list [user.settings.passkeys.list], in a browser whose authenticator makes passkeys and unlocks them at once
+Where: [screen:user.settings], the list [user.settings.passkeys.list], in a browser whose authenticator makes passkeys and unlocks them at once
 
 ## Scenario: A passkey is added by the browser, listed, and removed only once the frame's question is confirmed
 

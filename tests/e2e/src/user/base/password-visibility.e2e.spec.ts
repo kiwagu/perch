@@ -13,7 +13,7 @@ test.describe('Show the password as it is typed', { tag: '@smoke' }, () => {
     const password = page.getByTestId('user.sign-in.password-input')
     const eye = page.getByTestId('user.sign-in.password-input.visibility-button')
 
-    await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
     })

@@ -10,13 +10,13 @@ data:
 ---
 # Ask for the reset mail too often
 
-Where: [/forgot-password], four requests for one email within a quarter of an hour
+Where: [screen:user.forgot-password], four requests for one email within a quarter of an hour
 
 ## Scenario: One email takes three reset requests within a quarter of an hour; the fourth is refused and sends nothing
 
 ### Steps
 1. Sign up with the email, the password and the name, open the link of [mail:sign-up], and click [user.profile.sign-out-button]
-2. Open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button] three times, waiting for [user.forgot-password.message] each time
+2. Open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button] three times, waiting for [user.forgot-password.message] each time
 3. Click [user.forgot-password.send-button] once more
 
 ### Expected result

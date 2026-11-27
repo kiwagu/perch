@@ -18,7 +18,7 @@ test.describe('Open the app in a browser that blocks site data', { tag: '@smoke'
       })
     })
 
-    await test.step('2. Open [/sign-in]', async () => {
+    await test.step('2. Open [screen:user.sign-in]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
     })
 

@@ -45,7 +45,7 @@ test.describe("An invited account starts in its organisation's default language"
       device.getByTestId('user.settings.locale-select')
 
     const userA =
-      await test.step('1. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('1. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -55,7 +55,7 @@ test.describe("An invited account starts in its organisation's default language"
       })
 
     const deviceD =
-      await test.step('2. On device A, wait for [organisation.settings.locale-select] to be enabled and in [organisation.settings.locale-select] choose [value:es]; on device D, sign in as user A, open [/org] and wait for [organisation.settings.locale-select] to show [value:es]', async () => {
+      await test.step('2. On device A, wait for [organisation.settings.locale-select] to be enabled and in [organisation.settings.locale-select] choose [value:es]; on device D, sign in as user A, open [screen:organisation] and wait for [organisation.settings.locale-select] to show [value:es]', async () => {
         await chooseDefaultLanguage(page, 'es')
 
         const d = await freshDevices.open()
@@ -90,7 +90,7 @@ test.describe("An invited account starts in its organisation's default language"
     })
 
     const deviceB =
-      await test.step('4. On device B, open [/sign-in], sign up with the invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]', async () => {
+      await test.step('4. On device B, open [screen:user.sign-in], sign up with the invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]', async () => {
         const b = await freshDevices.open()
         const invited = {
           ...generate.account(),
@@ -121,7 +121,7 @@ test.describe("An invited account starts in its organisation's default language"
         return b
       })
 
-    await test.step("5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+    await test.step("5. On device B, open [screen:organisation] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
       await acceptOnOrg(deviceB, data.name)
       // Expected: After step 5 device B shows [organisation.page.role-badge] carrying
       //   [value:member] and no [organisation.settings.locale-select]
@@ -149,7 +149,7 @@ test.describe("An invited account starts in its organisation's default language"
       await expect(settingsLanguage(deviceB)).toHaveAttribute('data-value', 'en')
     })
 
-    await test.step('7. On device A, reload [/org]', async () => {
+    await test.step('7. On device A, reload [screen:organisation]', async () => {
       await page.reload()
       // Expected: After step 7 [organisation.settings.locale-select] still shows [value:es] on
       //   device A, with [organisation.settings.clear-button] beside it
@@ -157,7 +157,7 @@ test.describe("An invited account starts in its organisation's default language"
       await expect(clear(page)).toBeVisible()
     })
 
-    await test.step('8. On device A, click [organisation.settings.clear-button]; on device D, still on [/org], wait for [organisation.settings.clear-button] to be gone', async () => {
+    await test.step('8. On device A, click [organisation.settings.clear-button]; on device D, still on [screen:organisation], wait for [organisation.settings.clear-button] to be gone', async () => {
       await expect(clear(page)).toBeEnabled()
       await removeDefaultLanguage(page)
       await expect(clear(deviceD)).toHaveCount(0, { timeout: 15_000 })
@@ -184,7 +184,7 @@ test.describe("An invited account starts in its organisation's default language"
       )
     })
 
-    await test.step('10. On device C, open [/sign-in], sign up with the second invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]', async () => {
+    await test.step('10. On device C, open [screen:user.sign-in], sign up with the second invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]', async () => {
       const c = await freshDevices.open()
       const invited = {
         ...generate.account(),

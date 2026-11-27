@@ -29,6 +29,7 @@ anchors:
     description: Changes the account's password.
   user.settings.password.current-password-input:
     kind: input
+    required: true
     secret: true
     description: The password the account has now.
     binding:
@@ -37,6 +38,7 @@ anchors:
         currentPassword: user.settings.password.current-password-input
   user.settings.password.new-password-input:
     kind: input
+    required: true
     secret: true
     composite: password-rules
     description: The new password.
@@ -46,6 +48,7 @@ anchors:
         password: user.settings.password.new-password-input
   user.settings.password.password-confirmation-input:
     kind: input
+    required: true
     secret: true
     description: The new password typed again; never sent.
     confirms: user.settings.password.new-password-input
@@ -63,6 +66,7 @@ anchors:
     description: Asks to change the account's email.
   user.settings.email.email-input:
     kind: input
+    required: true
     description: The new email.
     binding:
       action: platform.change-email
@@ -70,6 +74,7 @@ anchors:
         email: user.settings.email.email-input
   user.settings.email.password-input:
     kind: input
+    required: true
     secret: true
     description: The password the account has now, which confirms the request.
     binding:
@@ -102,6 +107,7 @@ anchors:
     description: Marks the account's second factor as off, once it was read.
   user.settings.two-factor.password-input:
     kind: input
+    required: true
     secret: true
     description: The password the account has now, which confirms turning the second factor on or off, or renewing its backup codes.
     binding:
@@ -124,6 +130,7 @@ anchors:
     description: The key for the authenticator app, as text to type; a QR code beside it carries the same key to scan.
   user.settings.two-factor.code-input:
     kind: input
+    required: true
     description: The code the authenticator app shows now for the key.
     binding:
       action: platform.two-factor.confirm
@@ -188,6 +195,7 @@ anchors:
     description: "Asks to delete the account: a mail to its email carries the link of the page that deletes it."
   user.settings.deletion.password-input:
     kind: input
+    required: true
     secret: true
     description: The password the account has now, which confirms the request.
     binding:

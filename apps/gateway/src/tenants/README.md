@@ -250,7 +250,7 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   `InvitationAnswers` (`organisations/invitation-answers.ts`) and the views they answer
   (`organisations/invitation-views.ts`).
   `PendingInvitations` (`invitations/`, through its `index.ts`: the store, the token reader, the
-  seven-day lifetime and the link to the front's `/invitation` screen), `InvitationMails` and the
+  seven-day lifetime and the link to the front's `organisation.invitation` screen), `InvitationMails` and the
   `InvitationMailer` interface it implements (`invitations/mails.ts`, `invitations/mailer.ts`).
   `InvitedLanguage` (`invited-language.ts`): the starting language of an invited account.
   `organisationLocale` (`organisation-locale.ts`): an organisation's default language, which both

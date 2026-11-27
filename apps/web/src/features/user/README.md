@@ -56,7 +56,7 @@ attempt can still ask the confirmation, and signs in again with it, whatever the
 hold by then, forgetting it once the attempt ends), the
 verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
-the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
+the first verification shows the frame's `welcome` and moves to `user.profile`, a link verified before
 ends on its message, a refused one offers `platform.resend-verification` to an email typed; it
 keeps the codes of the page's error and message, and the address the last resend went to)
 and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
@@ -64,9 +64,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 
 ## Surface
 
-- Routes: `/sign-in` (guard `guest`; search `email`) renders `SignInPage`, its email field
+- Routes: the screen `user.sign-in` (guard `guest`; search `email`) renders `SignInPage`, its email field
   starting with the address's `email`, the one a page that moved there carried over
-  (`useSearchStart`); `/forgot-password` (guard `guest`: a signed-in account changes its
+  (`useSearchStart`); the screen `user.forgot-password` (guard `guest`: a signed-in account changes its
   password in its settings; search `email`) renders `ForgotPasswordPage`, which asks for the
   mail of a password reset (`application/forgot-password.machine.ts`, the flow of
   `contract/domain/screens/forgot-password.yaml`, invoking `platform.request-password-reset`; its
@@ -76,7 +76,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   it asked, a new password set in another tab of the browser (`platform.password-reset`, which the
   page's machine hears with the email field's value) leaves this tab's sign-in page
   `password-reset-elsewhere` and moves there with the email as typed (`reset-elsewhere`, final);
-  `/reset-password` (no guard; search `token`) renders `ResetPasswordPage`, what a reset mail's
+  the screen `user.reset-password` (no guard; search `token`) renders `ResetPasswordPage`, what a reset mail's
   link opens (`application/reset-password.machine.ts`, the flow of
   `contract/domain/screens/reset-password.yaml`): the new password typed twice, held to the rules
   of a new password and to the password typed again as either is typed (the guards of
@@ -87,7 +87,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   every device of the account out, this one too when it is signed in to it (its channel hears
   4002), and the page keeps its message, which its machine holds whatever the session does; the
   browser's other tabs hear of the reset (`platform.password-reset`);
-  `/confirm-email` (no guard; search `token`) renders `ConfirmEmailPage`, what an email
+  the screen `user.confirm-email` (no guard; search `token`) renders `ConfirmEmailPage`, what an email
   confirmation mail's link opens (`application/confirm-email.machine.ts`, the flow of
   `contract/domain/screens/confirm-email.yaml`): one exchange of the address's token through
   `platform.confirm-email`, kept across React's StrictMode restart as the verify page keeps its
@@ -96,7 +96,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   to the profile (this account: the session keeps the new email of the account signed in on this
   browser), to the sign-in page (nobody), or nowhere (another account); a refused link ends on its
   error;
-  `/delete-account` (no guard; search `token`) renders `DeleteAccountPage`, what an account
+  the screen `user.delete-account` (no guard; search `token`) renders `DeleteAccountPage`, what an account
   deletion mail's link opens (`application/delete-account.machine.ts`, the flow of
   `contract/domain/screens/delete-account.yaml`): the page says what goes with the account (its
   data, its sessions, the organisations it is the only member of) without naming it, and its
@@ -107,7 +107,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   the same link working again within its hour. The deletion signs every device of the account out,
   this one too when it is signed in to it, and the page keeps its message, which its machine holds
   whatever the session does; the link to sign in follows who is signed in here;
-  `/verify-email` (guard `guest`,
+  the screen `user.verify-email` (guard `guest`,
   search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
   its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
   is an empty one, which the session refuses as `data:LINK_INVALID` without asking the gateway).
@@ -116,8 +116,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   gateway signs a device in only at a link's first exchange, so the restart reuses the exchange
   already started; a page mounted anew (a later visit, a revisit after a sign-out or after a
   failed exchange) asks afresh, and another token in the address of the open page starts another
-  exchange with its own machine (the part of the page that runs it is keyed by the token). `/me` (guard `authenticated`)
-  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`, a lazy page
+  exchange with its own machine (the part of the page that runs it is keyed by the token). The screen `user.profile` (guard
+  `authenticated`) renders `ProfilePage`; the screen `user.settings` (guard `authenticated`) renders `SettingsPage`, a lazy page
   (`LazyPage`: its code loads apart from the first frame, when the route first opens for a
   signed-in device, the frame shown meanwhile; `settings-page.spec.ts`): the account's
   theme (stored through `settings.updateTheme`, shown at once through the platform's
@@ -212,7 +212,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   each password input is the kit's `PasswordInput`, whose eye (`<input>.visibility-button`,
   `user.password.show` or `.hide`) shows what it holds as typed or hides it again, presentation
   only and never an event of the flow;
-  in the mode sign-in the forgot-link (`user.sign-in.forgot-link`) moves to `/forgot-password`
+  in the mode sign-in the forgot-link (`user.sign-in.forgot-link`) moves to `user.forgot-password`
   carrying the email typed, as the flow's navigate says (the event carries the email field's value
   in its `fields`, the password never);
   a sign-up asks for the password twice, checked as it is typed: once the password typed again is
@@ -223,7 +223,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   mode among them, is enabled while the machine's state handles its event, so none is while a
   sign-in, a sign-up or a resend runs;
   a sign-up creates the account and has its verification mail sent, signing nothing in: the page
-  stays on `/sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
+  stays on `user.sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
   (`user.sign-in.mail-message`, code `check-your-mail`) and offers to send it again
   (`user.sign-in.resend-button`), the message naming the address the last sign-up or resend
   mailed, which typing in the field afterwards does not change; a sign-in of an account whose email is not verified yet says so

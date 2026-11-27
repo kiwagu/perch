@@ -21,11 +21,11 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
       newPassword: generate.newPassword(),
     }
 
-    await test.step('1. On device A, open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
+    await test.step('1. On device A, open [screen:user.sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
       await startSignUp(page, data)
     })
 
-    await test.step('2. On device A, open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
+    await test.step('2. On device A, open [screen:user.forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]', async () => {
       // Expected: After step 2 [user.forgot-password.message] carries [code:check-your-mail], and
       //   [mail:request-password-reset] reaches the email (step 3 waits for it, after the
       //   sign-up's)
@@ -43,7 +43,7 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
     })
 
     const deviceB =
-      await test.step('4. On device B, open [/sign-in], enter the email and the new password into [user.sign-in.email-input] and [user.sign-in.password-input], and click [user.sign-in.submit-button]', async () => {
+      await test.step('4. On device B, open [screen:user.sign-in], enter the email and the new password into [user.sign-in.email-input] and [user.sign-in.password-input], and click [user.sign-in.submit-button]', async () => {
         const b = await freshDevice.open()
 
         await b.goto(CONTRACT_ROUTES['user.sign-in'])
@@ -52,11 +52,12 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
         await b.getByTestId('user.sign-in.password-input').fill(data.newPassword)
         await b.getByTestId('user.sign-in.submit-button').click()
         // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] on device B,
-        //   its URL is [/me], [user.profile.email-input] holds the email and
+        //   its URL is [screen:user.profile], [user.profile.email-input] holds the email and
         //   [user.profile.name-input] holds the name
         await expect(notice(b, 'welcome')).toBeVisible({ timeout: 15_000 })
         await expectPathname(b, CONTRACT_ROUTES['user.profile'])
-        // The profile comes once the private region caught up, about a round trip after /me opens.
+        // The profile comes once the private region caught up, about a round trip after
+        // `user.profile` opens.
         await expect(b.getByTestId('user.profile.email-input')).toHaveValue(data.email, {
           timeout: 15_000,
         })
@@ -88,7 +89,7 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
         0,
       )
       // Expected: After step 6 [user.verify-email.message] carries [code:verified-before] on
-      //   device A, its URL stays [/verify-email] and [user.verify-email.sign-in-link] shows
+      //   device A, its URL stays [screen:user.verify-email] and [user.verify-email.sign-in-link] shows
       await expect(page.getByTestId('user.verify-email.message')).toHaveAttribute(
         'data-code',
         'verified-before',

@@ -18,7 +18,9 @@ export { expect }
 export interface SecondDevice {
   /** The device's page before it opens the app, for anything that must come first. */
   open(): Promise<Page>
-  /** Signs the device in with the `signedIn` account through the sign-in page, on `/me`. */
+  /**
+   * Signs the device in with the `signedIn` account through the sign-in page, on `user.profile`.
+   */
   signIn(): Promise<Page>
 }
 
@@ -31,7 +33,9 @@ export interface AnotherAccount {
   readonly account: SeedAccount
   /** The browser's page before it opens the app, for anything that must come first. */
   open(): Promise<Page>
-  /** Signs the account up through the sign-in page and its mail in that browser, on `/me`. */
+  /**
+   * Signs the account up through the sign-in page and its mail in that browser, on `user.profile`.
+   */
   signUp(): Promise<Page>
 }
 
@@ -58,7 +62,7 @@ export interface FreshDevices {
 interface Fixtures {
   /**
    * A user who has just signed up through the sign-in page, opened the link of the verification
-   * mail and landed on `/me` (device A).
+   * mail and landed on `user.profile` (device A).
    */
   readonly signedIn: SeedAccount
   readonly secondDevice: SecondDevice
@@ -117,8 +121,8 @@ export const checkYourMail = (page: Page) =>
   page.locator('[data-testid="user.sign-in.mail-message"][data-code="check-your-mail"]')
 
 /**
- * Signs in with an existing account through the sign-in page and waits for `/me`; fails at once
- * when the page shows its error instead.
+ * Signs in with an existing account through the sign-in page and waits for `user.profile`; fails at
+ * once when the page shows its error instead.
  */
 export async function signIn(page: Page, account: SeedAccount): Promise<void> {
   await page.goto(CONTRACT_ROUTES['user.sign-in'])
@@ -189,10 +193,10 @@ export async function startSignUp(page: Page, account: SeedAccount, locale = 'en
 
 /**
  * Signs `account` (a fresh one by default) up through the sign-in page in the app's language
- * `locale` (the browser's, `en`, unless the test chooses another there), then opens the link of the mail
- * the sign-up declares, held to its declaration, in the same page, which signs it in; returns it
- * on `/me`. The mail is the account's email's first after the ones it already holds, counted
- * before the sign-up: an email invited before it signs up holds the invitation first.
+ * `locale` (the browser's, `en`, unless the test chooses another there), then opens the link of the
+ * mail the sign-up declares, held to its declaration, in the same page, which signs it in; returns
+ * it on `user.profile`. The mail is the account's email's first after the ones it already holds,
+ * counted before the sign-up: an email invited before it signs up holds the invitation first.
  */
 export async function signUp(
   page: Page,
@@ -318,8 +322,8 @@ const navigatedAway = (error: unknown): boolean =>
   error instanceof Error && error.message.includes('Execution context was destroyed')
 
 /**
- * How wide a page is and how wide it shows. A step's last action may start a navigation (a
- * sign-out moves to /sign-in), which can replace the document while it is read: the new one is
+ * How wide a page is and how wide it shows. A step's last action may start a navigation (a sign-out
+ * moves to `user.sign-in`), which can replace the document while it is read: the new one is
  * measured once it has loaded, up to three times; any other failure fails at once.
  */
 async function pageWidths(

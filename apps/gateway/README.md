@@ -133,7 +133,7 @@ the update; each device's next hello is then refused with 4401.
   and a verification naming no device answered 400, the email staying unverified, a sign-in
   refused 403, until a verification that names one); then the reset of a password on a fresh
   identity with a phone's socket open (a reset request answered 202 with no body for it and for
-  an unknown email, mailing it only; the link of its mail opening `/reset-password`, setting a
+  an unknown email, mailing it only; the link of its mail opening `user.reset-password`, setting a
   new password with 200 and `signedOut` false, as opened with no session, which closes the
   phone's socket with 4002 and closes its token's hello with 4002 too (why its session ended),
   refuses the old password, signs in with the new one and mails the notice of a changed

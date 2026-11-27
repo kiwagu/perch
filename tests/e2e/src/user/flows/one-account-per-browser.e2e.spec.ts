@@ -18,19 +18,19 @@ test.describe('One account per browser', { tag: '@full' }, () => {
     // A sign-out waits for the sync channel first.
     test.slow()
 
-    await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. On device A, open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(page.getByTestId('user.profile.heading')).toHaveText(signedIn.name)
     })
 
-    await test.step('2. Click [user.profile.sign-out-button] and wait for [/sign-in]', async () => {
+    await test.step('2. Click [user.profile.sign-out-button] and wait for [screen:user.sign-in]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
       await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     })
 
     const second =
-      await test.step('3. On device A, open [/sign-in] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await test.step('3. On device A, open [screen:user.sign-in] in a second tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
         await tab.goto(CONTRACT_ROUTES['user.sign-in'])
@@ -40,12 +40,12 @@ test.describe('One account per browser', { tag: '@full' }, () => {
         return tab
       })
 
-    await test.step('4. In the first tab, sign in again with the same account and wait for [/me]', async () => {
+    await test.step('4. In the first tab, sign in again with the same account and wait for [screen:user.profile]', async () => {
       await signIn(page, signedIn)
     })
 
     // Expected:
-    // - Within 5 seconds of step 4 the second tab is on [/me] and [user.profile.heading] shows the
+    // - Within 5 seconds of step 4 the second tab is on [screen:user.profile] and [user.profile.heading] shows the
     //   account's name
     await expect(second).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']), { timeout: 5_000 })
     await expect(second.getByTestId('user.profile.heading')).toHaveText(signedIn.name, {

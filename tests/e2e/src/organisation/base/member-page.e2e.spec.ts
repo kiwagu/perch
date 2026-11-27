@@ -22,7 +22,7 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [screen:user.profile]', async () => {
         const b = await anotherAccount.signUp()
 
         await expect(b.getByTestId('user.profile.heading')).toHaveText(userB.name)
@@ -31,7 +31,7 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
       })
 
     const userA =
-      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -68,7 +68,7 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
       await expectMembers(page, [userA.email])
     })
 
-    await test.step("5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+    await test.step("5. On device B, open [screen:organisation] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
       await acceptOnOrg(deviceB, data.name)
       // Expected: After step 5 device B shows the organisation name in
       //   [organisation.page.heading], [organisation.page.role-badge] carrying [value:member],

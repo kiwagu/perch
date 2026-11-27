@@ -31,7 +31,7 @@ test.describe('Deliver an accepted invitation and a removal to a signed-in devic
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and open [/org]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and open [screen:organisation]', async () => {
         const b = await anotherAccount.signUp()
 
         await b.getByTestId('app-shell.nav.organisation-link').click()
@@ -143,7 +143,7 @@ test.describe('Deliver an accepted invitation and a removal to a signed-in devic
         return name
       })
 
-    await test.step("5. On device A, reload [/org], click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+    await test.step("5. On device A, reload [screen:organisation], click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await page.reload()
       await appReady(page)
       await page
@@ -157,7 +157,7 @@ test.describe('Deliver an accepted invitation and a removal to a signed-in devic
     // Expected:
     // - Within 5 seconds of step 5 device B shows [organisation.page.status] in [state:empty] (not
     //   a member of any organisation yet) again, without a reload, and its organisation data is
-    //   gone from the device: a reload of [/org] still shows no organisation
+    //   gone from the device: a reload of [screen:organisation] still shows no organisation
     await Promise.all([
       expect(deviceB.getByTestId('organisation.page.status')).toHaveAttribute(
         'data-state',

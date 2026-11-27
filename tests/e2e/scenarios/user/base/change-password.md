@@ -12,7 +12,7 @@ data:
 ---
 # Change the password in the settings
 
-Where: [/settings], the form [user.settings.password.form]
+Where: [screen:user.settings], the form [user.settings.password.form]
 
 ## Scenario: The password changes only with the current one right; the toast says so, and the account then signs in with the new one
 
@@ -25,4 +25,4 @@ Where: [/settings], the form [user.settings.password.form]
 ### Expected result
 - After step 2 [user.settings.password.error] carries [code:invalid-credentials] under [user.settings.password.current-password-input]
 - After step 3 [app-shell.toast] carries [code:password-changed], the fields of [user.settings.password.form] are empty, and [notice:change-password.password-changed] reaches the email
-- After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]
+- After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is [screen:user.profile]

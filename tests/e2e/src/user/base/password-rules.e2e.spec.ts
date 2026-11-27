@@ -50,7 +50,7 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
       }
     }
 
-    await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       await expect(list).toHaveCount(0)

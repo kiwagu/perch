@@ -81,7 +81,6 @@ export function ForgotPasswordView(props: ForgotPasswordViewProps) {
                 value={props.email}
                 onChange={(event) => props.onEmailChange(event.target.value)}
                 autoComplete="email"
-                required
                 data-testid="user.forgot-password.email-input"
               />
             </Field>

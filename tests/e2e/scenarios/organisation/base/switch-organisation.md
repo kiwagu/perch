@@ -12,12 +12,12 @@ data:
 ---
 # Create a second organisation and switch between them
 
-Where: [/org] with one organisation, then [organisation.create.toggle-button] and [organisation.page.current-select]
+Where: [screen:organisation] with one organisation, then [organisation.create.toggle-button] and [organisation.page.current-select]
 
 ## Scenario: An admin of one organisation creates a second one, which becomes current, and chooses the first one again
 
 ### Steps
-1. Sign up, open the link of [mail:sign-up], open [/org], enter the first key and name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. Sign up, open the link of [mail:sign-up], open [screen:organisation], enter the first key and name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 2. Enter the note into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 3. Click [organisation.create.toggle-button], enter the second key and name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 4. Choose the option of the first key in [organisation.page.current-select]

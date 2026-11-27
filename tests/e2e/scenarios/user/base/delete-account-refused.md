@@ -11,7 +11,7 @@ data:
 ---
 # Ask to delete the account with a wrong password
 
-Where: [/settings], the form [user.settings.deletion.form]
+Where: [screen:user.settings], the form [user.settings.deletion.form]
 
 ## Scenario: A wrong password is refused under it and sends no mail; the right one sends the mail
 
