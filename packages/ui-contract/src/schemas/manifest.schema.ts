@@ -237,7 +237,7 @@ const idSchema = z
       .literal(true)
       .optional()
       .describe(
-        'The field must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent and no code shows. See the rule `required-field`.',
+        'The field must be filled: while it is empty, a press that sends its form is stopped before the flow, so nothing is sent and the flow shows no new code. See the rule `required-field`.',
       ),
     value: resolvedValueSchema
       .optional()
