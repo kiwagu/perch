@@ -44,6 +44,13 @@ describe('the rule of a field that must be filled', () => {
       texts.some((text) => text.includes('error fields, input, colour, filling, questions')),
     ).toBe(true)
   })
+  it('says the coverage counts the contract as loaded, a place the check refuses included', () => {
+    const text = REFERENCE_RULES.map(({ text }) => text).find((candidate) =>
+      candidate.includes('The block also lists, per screen, its anchors'),
+    )
+
+    expect(text).toContain('runs no scenario check')
+  })
   it('says a state never disables a text field that is not read-only', () => {
     expect(textOf('renders')).toContain(
       'a text field that is not read-only takes typing in every state that renders it',

@@ -694,7 +694,8 @@ e2e tree beside its test (`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.
 ([the files](REFERENCE.md#rule-scenario-files)). The file is a front matter and fixed
 sections ([the format](REFERENCE.md#rule-scenario-format)), and its brackets reference the
 contract, each one resolved by the check: a place by its screen's id, `[screen:<screen>]`, never
-by its path, which stays written once, in the screen's binding, and a code, a state or a value to the anchor
+by its path, which stays written once, in the screen's binding (only a screen's further binding,
+which no id names, is written `[/path]`), and a code, a state or a value to the anchor
 the text names last before it ([the brackets](REFERENCE.md#rule-scenario-brackets)).
 
 The test pairs with the scenario by its path and names it on its first line,
