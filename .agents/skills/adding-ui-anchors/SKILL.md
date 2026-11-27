@@ -117,8 +117,9 @@ code and the tests follow; the checks hold them to the contract.
    of a text field are the contract's, and a view writes none of them: the kit takes them from the
    generated field facts, and the sources check refuses a view that does
    (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-emitted-modules`);
-   a field that must be filled before its form's press is taken says `required: true`, and the
-   field facts carry it to the kit (`contract/REFERENCE.md#rule-required-field`);
+   a field that must be filled before its form's press is taken says `required: true`, the field
+   facts carry it to the kit, and a view writes no `required` either
+   (`contract/REFERENCE.md#rule-required-field`);
    a field that holds a secret says `secret: true`, and the loader derives its `visibility-button`
    from version 4 (a file of version 3 or below may list `derived: [ visibility-button ]`;
    `contract/REFERENCE.md#rule-kind-parts`, `contract/REFERENCE.md#rule-visibility-button`;
