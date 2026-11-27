@@ -9,16 +9,16 @@ data:
 ---
 # See a field's unsaved and saved states
 
-Where: [/me], then [/settings]
+Where: [screen:user.profile], then [screen:user.settings]
 
 ## Scenario: A signed-in user sees a name field unsaved and then saved, and an email field that runs an action only unsaved
 
 ### Steps
-1. Open [/me] and wait for [app-shell.status] to reach [state:ready]
+1. Open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]
 2. Enter the new name into [user.profile.name-input]
 3. Click [user.profile.save-button]
 4. Reload the page and wait for [app-shell.status] to reach [state:ready]
-5. Open [/settings] and enter the email into [user.settings.email.email-input]
+5. Open [screen:user.settings] and enter the email into [user.settings.email.email-input]
 
 ### Expected result
 - After step 2 [user.profile.name-input] carries [state:unsaved]

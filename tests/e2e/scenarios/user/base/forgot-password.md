@@ -11,7 +11,7 @@ data:
 ---
 # Set a new password through the mail
 
-Where: [/sign-in] then [user.sign-in.forgot-link], [/forgot-password], then [/reset-password] from [mail:request-password-reset]
+Where: [screen:user.sign-in] then [user.sign-in.forgot-link], [screen:user.forgot-password], then [screen:user.reset-password] from [mail:request-password-reset]
 
 ## Scenario: A user who forgot the password asks for the mail, sets a new password from its link, and signs in with it while the old one no longer works
 
@@ -25,9 +25,9 @@ Where: [/sign-in] then [user.sign-in.forgot-link], [/forgot-password], then [/re
 7. Enter the new password into [user.sign-in.password-input] and click [user.sign-in.submit-button]
 
 ### Expected result
-- After step 2 the URL is [/forgot-password] and [user.forgot-password.email-input] holds the email
+- After step 2 the URL is [screen:user.forgot-password] and [user.forgot-password.email-input] holds the email
 - After step 3 [user.forgot-password.message] carries [code:check-your-mail], and [mail:request-password-reset] reaches the email
-- After step 4 the link opens [/reset-password], with [user.reset-password.password-rule-list]
+- After step 4 the link opens [screen:user.reset-password], with [user.reset-password.password-rule-list]
 - After step 5 [user.reset-password.message] carries [code:password-reset], [user.reset-password.sign-in-link] shows, and [notice:reset-password.password-changed] reaches the email
 - After step 6 [user.sign-in.error] carries [code:invalid-credentials]
-- After step 7 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]
+- After step 7 [app-shell.notice-message] carries [code:welcome] and the URL is [screen:user.profile]

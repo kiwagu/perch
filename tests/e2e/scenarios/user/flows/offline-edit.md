@@ -10,13 +10,13 @@ data:
 ---
 # Edit offline and catch up when back online
 
-Where: [/me] on device A, and [/me] on device B, another browser
+Where: [screen:user.profile] on device A, and [screen:user.profile] on device B, another browser
 
 ## Scenario: A bio written offline on one device and a name changed meanwhile on another reach both devices
 
 ### Steps
-1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]
-2. On device B, sign in with the same account and wait for [/me]
+1. On device A, open [screen:user.profile] and wait for [app-shell.status] to reach [state:ready]
+2. On device B, sign in with the same account and wait for [screen:user.profile]
 3. Take device B offline
 4. On device B, enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]
 5. On device A, enter the new name into [user.profile.name-input] and click [user.profile.save-button]

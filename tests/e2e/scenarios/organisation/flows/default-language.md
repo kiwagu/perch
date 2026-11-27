@@ -16,21 +16,21 @@ data:
 ---
 # An invited account starts in its organisation's default language
 
-Where: [/org] on devices A and D (user A, admin, in English, in two browsers); [/sign-in], then [/settings] and [/org], on devices B and C (two other browsers, in English)
+Where: [screen:organisation] on devices A and D (user A, admin, in English, in two browsers); [screen:user.sign-in], then [screen:user.settings] and [screen:organisation], on devices B and C (two other browsers, in English)
 
 ## Scenario: An admin sets the organisation's default language; an account its invitation creates starts in it, the member's own choice wins afterwards, and once the admin removes it a new account starts in its sign-up's language
 
 ### Steps
-1. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
-2. On device A, wait for [organisation.settings.locale-select] to be enabled and in [organisation.settings.locale-select] choose [value:es]; on device D, sign in as user A, open [/org] and wait for [organisation.settings.locale-select] to show [value:es]
+1. On device A, sign up as user A, open the link of its [mail:sign-up], open [screen:organisation], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+2. On device A, wait for [organisation.settings.locale-select] to be enabled and in [organisation.settings.locale-select] choose [value:es]; on device D, sign in as user A, open [screen:organisation] and wait for [organisation.settings.locale-select] to show [value:es]
 3. On device A, enter the invited email into [organisation.invite.email-input], click [organisation.invite.submit-button] and wait for [app-shell.toast] to carry [code:invited]
-4. On device B, open [/sign-in], sign up with the invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]
-5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]
+4. On device B, open [screen:user.sign-in], sign up with the invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]
+5. On device B, open [screen:organisation] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]
 6. On device B, click [app-shell.nav.settings-link], in [user.settings.locale-select] choose [value:en], then reload the page and wait for [user.settings.locale-select] to be enabled
-7. On device A, reload [/org]
-8. On device A, click [organisation.settings.clear-button]; on device D, still on [/org], wait for [organisation.settings.clear-button] to be gone
+7. On device A, reload [screen:organisation]
+8. On device A, click [organisation.settings.clear-button]; on device D, still on [screen:organisation], wait for [organisation.settings.clear-button] to be gone
 9. On device A, enter the second invited email into [organisation.invite.email-input], click [organisation.invite.submit-button] and wait for [app-shell.toast] to carry [code:invited]
-10. On device C, open [/sign-in], sign up with the second invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]
+10. On device C, open [screen:user.sign-in], sign up with the second invited email, the password and the name, open the link of [mail:sign-up] and click [app-shell.nav.settings-link]
 
 ### Expected result
 - After step 2 [organisation.settings.locale-select] shows [value:es] on devices A and D: device D got it from the server, which holds it, and no [app-shell.notice-message] carries [code:change-rejected] on device A

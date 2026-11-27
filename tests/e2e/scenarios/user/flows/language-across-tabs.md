@@ -7,13 +7,13 @@ data: {}
 ---
 # Keep the language of an account in every tab
 
-Where: [/settings] in two tabs of device A
+Where: [screen:user.settings] in two tabs of device A
 
 ## Scenario: A language chosen in one tab is spoken in the account's other tab at once
 
 ### Steps
-1. In a first tab, open [/settings] and wait for [app-shell.status] to reach [state:ready]
-2. In a second tab, open [/settings] and wait for [app-shell.status] to reach [state:ready]
+1. In a first tab, open [screen:user.settings] and wait for [app-shell.status] to reach [state:ready]
+2. In a second tab, open [screen:user.settings] and wait for [app-shell.status] to reach [state:ready]
 3. In the first tab, choose [value:es] in [user.settings.locale-select]
 
 ### Expected result

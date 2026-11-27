@@ -8,15 +8,15 @@ data: {}
 ---
 # Keep the theme of an account in every tab and on every device
 
-Where: [/settings] in two tabs of device A, then [/sign-in] and [/settings] on device B, another browser
+Where: [screen:user.settings] in two tabs of device A, then [screen:user.sign-in] and [screen:user.settings] on device B, another browser
 
 ## Scenario: A theme chosen in one tab shows in the account's other tab at once, and on the next device it signs in on
 
 ### Steps
-1. On device A, open [/settings] and wait for [app-shell.status] to reach [state:ready]
-2. On device A, open [/settings] in a second tab and wait for [app-shell.status] to reach [state:ready]
+1. On device A, open [screen:user.settings] and wait for [app-shell.status] to reach [state:ready]
+2. On device A, open [screen:user.settings] in a second tab and wait for [app-shell.status] to reach [state:ready]
 3. In the first tab of device A, choose [value:dark] in [user.settings.theme-select]
-4. On device B, sign in with the same account, wait for [/me] and open [/settings]
+4. On device B, sign in with the same account, wait for [screen:user.profile] and open [screen:user.settings]
 5. On device B, choose [value:light] in [user.settings.theme-select]
 
 ### Expected result

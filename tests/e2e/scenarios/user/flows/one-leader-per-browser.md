@@ -11,14 +11,14 @@ data:
 ---
 # Sync from one tab per browser
 
-Where: [/me] in two tabs of device A, and [/me] on device B, another browser
+Where: [screen:user.profile] in two tabs of device A, and [screen:user.profile] on device B, another browser
 
 ## Scenario: Two tabs of one browser share one sync leader, both tabs' edits reach the other device, and the other tab takes over when the leader closes
 
 ### Steps
-1. On device A, open [/me] in a first tab and wait for [app-shell.status] to reach [state:ready]
-2. On device A, open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]
-3. On device B, sign in with the same account and wait for [/me]
+1. On device A, open [screen:user.profile] in a first tab and wait for [app-shell.status] to reach [state:ready]
+2. On device A, open [screen:user.profile] in a second tab and wait for [app-shell.status] to reach [state:ready]
+3. On device B, sign in with the same account and wait for [screen:user.profile]
 4. In the tab of device A that does not lead the sync, enter the new name into [user.profile.name-input] and click [user.profile.save-button]
 5. On device A, enter the second name into [user.profile.name-input] in the tab that leads the sync and the bio into [user.profile.bio-textarea] in the other tab, then click [user.profile.save-button] in both tabs at the same moment
 6. Close the tab of device A that leads the sync

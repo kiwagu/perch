@@ -11,7 +11,7 @@ data:
 ---
 # Open an email confirmation link a second time
 
-Where: [/confirm-email] from [mail:change-email], once its link has changed the email
+Where: [screen:user.confirm-email] from [mail:change-email], once its link has changed the email
 
 ## Scenario: A confirmation link changes the email once; opened again it says it does not work
 

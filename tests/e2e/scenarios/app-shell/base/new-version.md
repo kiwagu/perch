@@ -7,12 +7,12 @@ data: {}
 ---
 # Load the newer version of the app the server serves
 
-Where: [/sign-in], while the server starts serving a newer version of the app
+Where: [screen:user.sign-in], while the server starts serving a newer version of the app
 
 ## Scenario: A tab coming back to the front says a newer version is served, its button loads it, and a tab sent to the background with nothing unsaved loads it by itself
 
 ### Steps
-1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]
+1. Open [screen:user.sign-in] and wait for [app-shell.status] to reach [state:ready]
 2. Serve a newer version of the app: the manifest at /ui-manifest/manifest.json names a version or a commit other than the one the tab runs
 3. Switch to another tab, then back to this one
 4. Click [app-shell.update-button]
