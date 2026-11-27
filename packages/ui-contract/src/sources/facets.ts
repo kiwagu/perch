@@ -7,6 +7,10 @@
  *
  * - `maxLength`, on no element that carries an anchor: the kit gives a text field the limit its
  *   value takes (`fieldValueOf`) from the generated field facts, whatever the number a view writes;
+ * - `required`, on no element that carries an anchor: the kit gives a field the contract marks
+ *   `required: true` from the same facts; one a wrapper fixes, by a literal, a `const`, a default,
+ *   a local object's member or a fallback, on the field it passes an anchor to is `REQUIRED_ANCHOR`
+ *   (`kit-facts.ts`);
  * - `type`, on no declared text field (an `input` or a `textarea`): the kit gives it the type its
  *   value has (an email) from the same facts, and any other a view writes would override them; a
  *   `type` on a button, a link or a part of a field is no field's;
@@ -42,7 +46,8 @@ import {
 import { declaredAnchors, own } from '../check'
 import { flowNodes, type Problem, type ScreensFile } from '../files'
 
-import { type Collected, type FacetProp, LEFT_TO_THE_KIT } from './collect'
+import type { Collected, FacetProp } from './collect'
+import { LEFT_TO_THE_KIT } from './kit-facts'
 import { unhandledWhere } from './unhandled'
 
 interface Place {
@@ -98,6 +103,9 @@ const ENABLE = /^!\s*(props\.)?can\(/
 
 /** The limit of a text field: the kit takes it from the field facts, so no element carries one. */
 const limits: Rule = () => ({ name: 'maxLength', on: new Map(), elsewhere: LEFT_TO_THE_KIT })
+
+/** Whether a field must be filled: the kit takes it from the field facts, so no element carries it. */
+const requireds: Rule = () => ({ name: 'required', on: new Map(), elsewhere: LEFT_TO_THE_KIT })
 
 /** The type of a text field: the kit takes it from the field facts, so no text field carries one. */
 const types: Rule = ({ screens }) => ({
@@ -182,7 +190,7 @@ const enabling: Rule = ({ screens }) => ({
   question: true,
 })
 
-const RULES: readonly Rule[] = [limits, types, marks, enabling]
+const RULES: readonly Rule[] = [limits, requireds, types, marks, enabling]
 
 /** A prop as the source writes it: bare, a string, or an expression in braces. */
 const written = (name: string, text: string): string =>

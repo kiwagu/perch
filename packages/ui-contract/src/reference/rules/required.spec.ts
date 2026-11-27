@@ -19,11 +19,13 @@ describe('the rule of a field that must be filled', () => {
       'the flow shows no new code (what the page already showed stays)',
     )
   })
-  it('says no more of a field without the mark than what holds while a view may still write it', () => {
+  it('says a view never writes it, and a field without the mark may be pressed empty', () => {
     const text = textOf('required-field')
 
-    expect(text).toContain('A field without the mark is not said to be optional')
-    expect(text).not.toContain('may be pressed empty')
+    expect(text).toContain("the kit puts `required` on the field's element from them")
+    expect(text).toContain('A view never writes `required`: the sources check refuses one')
+    expect(text).toContain('A field without the mark may be pressed empty')
+    expect(text).not.toContain('not said to be optional')
   })
   it('names no other rule, as the manifest carries only the rules it names itself', () => {
     expect(textOf('required-field')).not.toContain('see the rule')
@@ -42,15 +44,24 @@ describe('the rule of a field that must be filled', () => {
       texts.some((text) => text.includes('error fields, input, colour, filling, questions')),
     ).toBe(true)
   })
+  it('says the coverage counts the contract as loaded, a place the check refuses included', () => {
+    const text = REFERENCE_RULES.map(({ text }) => text).find((candidate) =>
+      candidate.includes('The block also lists, per screen, its anchors'),
+    )
+
+    expect(text).toContain('runs no scenario check')
+  })
   it('says a state never disables a text field that is not read-only', () => {
     expect(textOf('renders')).toContain(
       'a text field that is not read-only takes typing in every state that renders it',
     )
   })
-  it('leaves required out of what the kit is said to take from the field facts', () => {
+  it('names required among what the kit takes from the field facts and the sources check refuses', () => {
     const kit = textOf('emitted-modules').split('The kit finds')[1] ?? ''
 
-    expect(kit).toContain("the entry's `maxLength`, `type`, `marksState` and `holdsInput`")
-    expect(kit).not.toContain('`required`')
+    expect(kit).toContain(
+      "the entry's `maxLength`, `required`, `type`, `marksState` and `holdsInput`",
+    )
+    expect(kit).toContain('the sources check refuses a `maxLength`, a `required`,')
   })
 })

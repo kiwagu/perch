@@ -221,7 +221,7 @@ export function sampleContract(): Contract {
         tags: ['smoke'],
         activity: 'thing',
         devices: { A: 'member' },
-        where: '[/sample/$key]',
+        where: '[screen:sample]',
         data: { Title: 'generate' },
         scenario:
           'A member picks [value:a] in [sample.mode-select.option], then [sample.key-select.option] carries [value:k12]',

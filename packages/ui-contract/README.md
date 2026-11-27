@@ -196,8 +196,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     scenarios and the consumers check alike (`contract/REFERENCE.md#rule-scenario-brackets`).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and returns
     its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
-    (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`), following a name
-    of the file to what it declares (`sources/locals.ts`, in the scope that binds it,
+    (`marksState`) and `props` (`maxLength`, `required`, `type`, `aria-invalid`, `disabled`),
+    following a name of the file to what it declares (`sources/locals.ts`, in the scope that
+    binds it,
     `sources/bindings.ts`, `sources/scopes.ts`, every object a value may be in
     `sources/alternatives.ts`: an anchor a `<NAME>_TEST_ID` constant
     holds, the props a spread on an element supplies, `sources/spreads.ts`, read per element in
@@ -209,11 +210,13 @@ links to as `contract/REFERENCE.md#<slug>`.
     read as a separator (`sources/augmentation.ts`; only a fixture project outside the web app
     and the UI kit with a `tsconfig.json` of its own inside its `__fixtures__` folder is left out);
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
-    `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
-    and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
-    `sources/facets.ts` refuse it, the size select's `holdsInput` included); the
+    `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`,
+    `required` and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
+    `sources/facets.ts` refuse it, the size select's `holdsInput` included, and
+    `sources/kit-facts.ts` a `required` a wrapper fixes, by a literal, a `const`, a default, a local
+    object's member or a fallback, on a field it passes an anchor to); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,
-    `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` and `MARKS_STATE_ANCHOR`
+    `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE`, `MARKS_STATE_ANCHOR` and `REQUIRED_ANCHOR`
     (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-field-holds-input`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file (`IgnoreMarker`; the faults `IGNORE_WITHOUT_REASON`, `IGNORE_MALFORMED`,

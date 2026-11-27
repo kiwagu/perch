@@ -6,8 +6,8 @@
  * literal plus a derived suffix (that one is built with `testIdFor()`); every code is in the
  * vocabulary, and every suffix of `testIdFor()` too, listed in the `derived` of an anchor of the
  * contract (of the base itself when the call writes it as a literal); a `holdsInput` or a
- * `marksState` written on a field (`opt-outs.ts`), a `maxLength` and a `type` on a text field
- * (`facets.ts`) are problems, since the kit takes them from the contract's field facts, and the
+ * `marksState` written on a field (`opt-outs.ts`), a `maxLength` or a `required` on an element that
+ * carries an anchor and a `type` on a text field (`facets.ts`) are problems, since the kit takes them from the contract's field facts, and the
  * `aria-invalid` and `disabled` of a control's element are held to the contract (`facets.ts`). The
  * problems carry `file:line`.
  */

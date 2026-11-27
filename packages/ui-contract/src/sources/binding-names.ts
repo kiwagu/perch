@@ -3,7 +3,13 @@
  * destructures, and the type an annotation writes for each.
  */
 
-import type { BindingPattern, BindingRestElement, ParamPattern, TSType } from 'oxc-parser'
+import type {
+  BindingPattern,
+  BindingRestElement,
+  Expression,
+  ParamPattern,
+  TSType,
+} from 'oxc-parser'
 
 import { keyName } from './values'
 
@@ -24,6 +30,31 @@ export function namesIn(pattern: BindingPattern | ParamPattern | BindingRestElem
       return pattern.elements.flatMap((element) => (element === null ? [] : namesIn(element)))
     case 'TSParameterProperty':
       return namesIn(pattern.parameter)
+    default:
+      return []
+  }
+}
+
+/**
+ * The default a pattern gives a name it binds directly: `{ a = x }`, `{ b: c = x }` and `(a = x)`
+ * give `a`, `c` and `a` the value `x`; a default of a part (`{ b: { c } = {} }`) gives none to `c`.
+ */
+export function defaultsIn(
+  pattern: BindingPattern | ParamPattern | BindingRestElement,
+): Array<{ readonly name: string; readonly fallback: Expression }> {
+  switch (pattern.type) {
+    case 'AssignmentPattern':
+      return pattern.left.type === 'Identifier'
+        ? [{ name: pattern.left.name, fallback: pattern.right }]
+        : defaultsIn(pattern.left)
+    case 'ObjectPattern':
+      return pattern.properties.flatMap((property) =>
+        property.type === 'RestElement' ? [] : defaultsIn(property.value),
+      )
+    case 'ArrayPattern':
+      return pattern.elements.flatMap((element) => (element === null ? [] : defaultsIn(element)))
+    case 'TSParameterProperty':
+      return defaultsIn(pattern.parameter)
     default:
       return []
   }

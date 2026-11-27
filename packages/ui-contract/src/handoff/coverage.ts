@@ -72,7 +72,8 @@ function moduleOf(path: string): string | undefined {
 
 /**
  * The screens a scenario reaches: through an anchor it names, a route of the screen, or the screen
- * named as a place, when a binding opens it (`screenPlaces`).
+ * named as a place, when a binding opens it (`screenPlaces`). The contract as loaded: a route the
+ * scenario check refuses (a first binding's path) still reaches its screen here.
  */
 function screensReached(contract: Contract): (scenario: Scenario) => Set<string> {
   const screenOfAnchor = new Map(

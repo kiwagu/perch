@@ -13,7 +13,7 @@
  * boolean literal, or a name or a member passed as written, on the element that carries the anchor
  * as a literal or as `testIdFor()` of two literals (a paged list's size select, with the base it
  * derives from), or through a `<NAME>_TEST_ID` constant the file declares (`locals.ts`); a prop passed through on an element that carries no anchor the check can read (a
- * wrapper handing its own anchor on) is let by. And the facets the contract decides on a control's element, `maxLength`, `type`,
+ * wrapper handing its own anchor on) is let by. And the facets the contract decides on a control's element, `maxLength`, `required`, `type`,
  * `aria-invalid` and `disabled`, as their source text on an element that carries its anchor so. A
  * prop a spread on the element supplies counts as written there, at the spread, and one a spread
  * the file cannot follow is refused on an element whose anchor the check reads, one the check gives
@@ -35,6 +35,7 @@ import {
   UNDECLARED_ANCHOR,
   undeclaredAnchorOf,
 } from './element'
+import { LEFT_TO_THE_KIT, requiredOverrides } from './kit-facts'
 import { localsOf } from './locals'
 import {
   type AnchorValue,
@@ -57,8 +58,6 @@ export const RUNTIME_SUFFIX =
   'the suffix of testIdFor() is built at runtime; pass a literal suffix of the vocabulary'
 
 /** Why a view writes none of the props the contract decides for a field and the kit takes. */
-export const LEFT_TO_THE_KIT = "the kit takes it from the contract's field facts; leave it out"
-
 export const HOLDS_INPUT_ANCHOR = `holdsInput on an element that carries no anchor as a literal or as testIdFor() of two literals: ${LEFT_TO_THE_KIT}`
 
 export const HOLDS_INPUT_VALUE = `holdsInput is neither a boolean literal nor a prop passed through: ${LEFT_TO_THE_KIT}`
@@ -106,9 +105,9 @@ export interface Collected {
 
 /**
  * The props of a control's element whose value the contract decides (`facets.ts`): `aria-invalid`
- * and `disabled` it calls for, `maxLength` and `type` the kit takes from the field facts.
+ * and `disabled` it calls for, `maxLength`, `required` and `type` the kit takes from the field facts.
  */
-export const FACET_PROPS = ['maxLength', 'type', 'aria-invalid', 'disabled'] as const
+export const FACET_PROPS = ['maxLength', 'required', 'type', 'aria-invalid', 'disabled'] as const
 
 export type FacetProp = (typeof FACET_PROPS)[number]
 
@@ -317,6 +316,7 @@ export function collectFromSource(text: string, file: string): Collected {
       const marks = flag(element, MARKS_STATE)
 
       facets(element)
+      collected.problems.push(...requiredOverrides(element, locals, file, line))
 
       if (holds !== undefined) {
         const { value: holdsInput, ...carried } = holds

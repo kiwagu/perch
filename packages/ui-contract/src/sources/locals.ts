@@ -32,6 +32,8 @@ export interface Locals {
   valueNamed(name: string, at: number): Expression | undefined
   /** The value of `name`, written at `at`, where a `const` declares it: it never holds another. */
   constantNamed(name: string, at: number): Expression | undefined
+  /** The defaults its own pattern gives `name`, written at `at`, in the declarations read there. */
+  fallbacksNamed(name: string, at: number): Expression[]
   /** Whether the file binds `name` where it is written at `at`: declared, or a parameter. */
   declares(name: string, at: number): boolean
   /** What `node`, written at `at`, may be, each alternative once (`alternatives.ts`). */
@@ -191,6 +193,8 @@ export function localsOf(program: Program): Locals {
   return {
     valueNamed,
     constantNamed,
+    fallbacksNamed: (name, at) =>
+      boundAt(name, at).flatMap(({ fallback }) => (fallback === undefined ? [] : [fallback])),
     declares: (name, at) => visible(name, at).length > 0,
     declaredTypeOf: (node, at) => declaredTypeOf(node, at),
     types,
