@@ -1060,6 +1060,16 @@ describe('collectFromSource', () => {
         'const h = <Input required />',
         'const i = ({ required = false, ...props }) => <Input {...props} required={required} />',
         'const j = ({ required = props.required }) => <Input required={required} testId={testId} />',
+        'const k = <Input data-testid={testId} required={props.required ?? false} />',
+        'const l = <Input data-testid={testId} required={ready ? props.required : true} />',
+        'const fieldProps = ({ required = false }) => ({ required })',
+        'const n = ({ testId, ...props }) => <Input data-testid={testId} {...fieldProps(props)} />',
+        'const pass = (required) => ({ required })',
+        'const p = ({ required = false, testId }) => <Input data-testid={testId} {...pass(other)} />',
+        "const q = <Input {...{ className: 'wide' }} required />",
+        'const r = <Input data-testid={testId} required={required ?? facts?.required} />',
+        'const FIXED = false',
+        'const t = <Input data-testid={testId} required={FIXED} />',
       ].join('\n'),
       'x.tsx',
     )
@@ -1071,6 +1081,10 @@ describe('collectFromSource', () => {
       [6, REQUIRED_ANCHOR],
       [7, REQUIRED_ANCHOR],
       [9, REQUIRED_ANCHOR],
+      [11, REQUIRED_ANCHOR],
+      [12, REQUIRED_ANCHOR],
+      [14, REQUIRED_ANCHOR],
+      [20, REQUIRED_ANCHOR],
     ])
     expect(REQUIRED_ANCHOR).toBe(
       "required on an element that carries no anchor as a literal or as testIdFor() of two literals: the kit takes it from the contract's field facts; leave it out",

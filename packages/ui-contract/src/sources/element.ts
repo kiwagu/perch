@@ -76,6 +76,8 @@ export interface ReadElement {
    * and one the check gives up following at `DEPTH`, on any element (`DEEP_SPREAD`).
    */
   readonly refused: ReadonlyArray<{ readonly at: number; readonly message: string }>
+  /** Whether a spread on it is one the file cannot follow, which may carry an anchor. */
+  readonly unfollowed: boolean
 }
 
 /** An attribute that carries an anchor: `data-testid`, `testId` or a `*TestId` prop. */
@@ -246,5 +248,10 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
         : [{ at, message: UNFOLLOWED_SPREAD(carried.anchor) }],
   )
 
-  return { attributes, ...(carried === undefined ? {} : { carried }), refused }
+  return {
+    attributes,
+    ...(carried === undefined ? {} : { carried }),
+    refused,
+    unfollowed: unfollowed.length > 0,
+  }
 }

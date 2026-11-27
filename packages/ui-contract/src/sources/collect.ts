@@ -316,7 +316,7 @@ export function collectFromSource(text: string, file: string): Collected {
       const marks = flag(element, MARKS_STATE)
 
       facets(element)
-      collected.problems.push(...requiredOverrides(node, element, locals, file, line))
+      collected.problems.push(...requiredOverrides(element, locals, file, line))
 
       if (holds !== undefined) {
         const { value: holdsInput, ...carried } = holds
