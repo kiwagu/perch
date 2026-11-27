@@ -35,6 +35,7 @@ import {
   UNDECLARED_ANCHOR,
   undeclaredAnchorOf,
 } from './element'
+import { LEFT_TO_THE_KIT, requiredOverrides } from './kit-facts'
 import { localsOf } from './locals'
 import {
   type AnchorValue,
@@ -57,8 +58,6 @@ export const RUNTIME_SUFFIX =
   'the suffix of testIdFor() is built at runtime; pass a literal suffix of the vocabulary'
 
 /** Why a view writes none of the props the contract decides for a field and the kit takes. */
-export const LEFT_TO_THE_KIT = "the kit takes it from the contract's field facts; leave it out"
-
 export const HOLDS_INPUT_ANCHOR = `holdsInput on an element that carries no anchor as a literal or as testIdFor() of two literals: ${LEFT_TO_THE_KIT}`
 
 export const HOLDS_INPUT_VALUE = `holdsInput is neither a boolean literal nor a prop passed through: ${LEFT_TO_THE_KIT}`
@@ -263,6 +262,8 @@ export function collectFromSource(text: string, file: string): Collected {
     }
 
     if (carried === undefined) {
+      collected.problems.push(...requiredOverrides(attributes, file, line))
+
       return
     }
 

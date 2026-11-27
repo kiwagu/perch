@@ -42,7 +42,8 @@ import {
 import { declaredAnchors, own } from '../check'
 import { flowNodes, type Problem, type ScreensFile } from '../files'
 
-import { type Collected, type FacetProp, LEFT_TO_THE_KIT } from './collect'
+import type { Collected, FacetProp } from './collect'
+import { LEFT_TO_THE_KIT } from './kit-facts'
 import { unhandledWhere } from './unhandled'
 
 interface Place {

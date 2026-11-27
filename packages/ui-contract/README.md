@@ -212,9 +212,10 @@ links to as `contract/REFERENCE.md#<slug>`.
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
     `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`,
     `required` and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
-    `sources/facets.ts` refuse it, the size select's `holdsInput` included); the
+    `sources/facets.ts` refuse it, the size select's `holdsInput` included, and
+    `sources/kit-facts.ts` a literal `required` on a field a wrapper passes its anchor to); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,
-    `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` and `MARKS_STATE_ANCHOR`
+    `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE`, `MARKS_STATE_ANCHOR` and `REQUIRED_ANCHOR`
     (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-field-holds-input`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file (`IgnoreMarker`; the faults `IGNORE_WITHOUT_REASON`, `IGNORE_MALFORMED`,

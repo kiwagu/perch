@@ -18,7 +18,8 @@ import { FIELD_KINDS, SIZE_SELECT, STATEFUL_FIELD_KINDS, testIdFor } from '../an
 import type { DeclaredAnchor } from '../check'
 import type { Problem } from '../files'
 
-import { type Collected, type FlagValue, LEFT_TO_THE_KIT } from './collect'
+import type { Collected, FlagValue } from './collect'
+import { LEFT_TO_THE_KIT } from './kit-facts'
 
 interface OptOuts {
   readonly collected: readonly Collected[]

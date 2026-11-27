@@ -16,6 +16,7 @@ import {
   UNDECLARED_ANCHOR,
   UNFOLLOWED_SPREAD,
 } from './collect'
+import { REQUIRED_ANCHOR } from './kit-facts'
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__/sources')
 
@@ -1044,6 +1045,27 @@ describe('collectFromSource', () => {
     ])
     expect(MARKS_STATE_VALUE).toBe(
       "marksState is neither a boolean literal nor a prop passed through: the kit takes it from the contract's field facts; leave it out",
+    )
+  })
+  it('reports a required written as a literal on an element whose anchor it cannot read', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input required={false} data-testid={testId} />',
+        'const b = <Input required data-testid={testId} />',
+        'const c = <Input {...{ required: true }} data-testid={testId} />',
+        'const d = <Input required={required} data-testid={testId} />',
+        'const e = <InputPrimitive required={required ?? facts?.required} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.problems.map(({ line, message }) => [line, message])).toEqual([
+      [1, REQUIRED_ANCHOR],
+      [2, REQUIRED_ANCHOR],
+      [3, REQUIRED_ANCHOR],
+    ])
+    expect(REQUIRED_ANCHOR).toBe(
+      "required on an element that carries no anchor as a literal or as testIdFor() of two literals: the kit takes it from the contract's field facts; leave it out",
     )
   })
   it("collects holdsInput beside a testIdFor() of two literals, with the derived anchor's base", () => {
