@@ -17,9 +17,14 @@ export type ConfirmEmailListed =
 export interface ConfirmEmailViewProps {
   /**
    * Whether the flow's state renders an anchor: the status while the link is checked, then where
-   * the page leads once the email changed, by who is signed in here, or nowhere.
+   * the page leads once the email changed, by who was signed in here then, or nowhere.
    */
   readonly renders: (anchor: ConfirmEmailListed) => boolean
+  /**
+   * Whether nobody is signed in here now: the sign-in link is a guest's alone and the profile link
+   * an account's, whatever state the flow is in.
+   */
+  readonly guest: boolean
   /** The code the message shows once the email is the new one. */
   readonly message?: 'email-changed' | undefined
   /** The code of the failure the error shows. */
@@ -68,7 +73,7 @@ export function ConfirmEmailView(props: ConfirmEmailViewProps) {
               </AlertDescription>
             </Alert>
           ) : null}
-          {props.renders('user.confirm-email.profile-link') ? (
+          {props.renders('user.confirm-email.profile-link') && !props.guest ? (
             <Link
               to={CONTRACT_ROUTES['user.profile']}
               className="text-sm underline"
@@ -77,7 +82,7 @@ export function ConfirmEmailView(props: ConfirmEmailViewProps) {
               {t('user.confirm-email.profile')}
             </Link>
           ) : null}
-          {props.renders('user.confirm-email.sign-in-link') ? (
+          {props.renders('user.confirm-email.sign-in-link') && props.guest ? (
             <Link
               to={CONTRACT_ROUTES['user.sign-in']}
               className="text-sm underline"
