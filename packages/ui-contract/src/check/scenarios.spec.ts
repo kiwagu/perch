@@ -4,11 +4,27 @@ import { formatProblem } from '../files'
 import { fixtureContract } from '../manifest/manifest.fixture'
 import type { Scenario } from '../scenarios'
 
+import type { Contract } from './contract'
 import { sampleContract, screenIn } from './contract.fixture'
 import { scenariosProblems } from './scenarios'
 
 const printed = (contract = sampleContract()): string[] =>
   scenariosProblems(contract).map(formatProblem)
+
+/** The sample with a further binding of its screen, at `/sample/$key/edit`, beside its first. */
+function withFurtherBinding(): Contract {
+  const contract = sampleContract()
+  const sample = screenIn(contract, 'sample')
+  const [first] = sample.bindings
+
+  if (first === undefined) {
+    throw new Error('the sample screen has a binding')
+  }
+
+  sample.bindings = [first, { ...first, path: '/sample/$key/edit' }]
+
+  return contract
+}
 
 function firstScenario(contract: ReturnType<typeof sampleContract>): Scenario {
   const [scenario] = contract.scenarios
@@ -34,7 +50,7 @@ describe('scenariosProblems', () => {
     scenario.expected = ['It shows [code:lost]']
 
     expect(printed(contract)).toEqual([
-      'tests/e2e/scenarios/sample/base/thing.md:1: where: [/elsewhere] is the path of no binding',
+      'tests/e2e/scenarios/sample/base/thing.md:1: where: [/elsewhere] names a place by its path, and no binding has it: write the [screen:<id>] of the screen meant',
       'tests/e2e/scenarios/sample/base/thing.md:1: scenario: [sample.gone-button] is not a declared anchor',
       'tests/e2e/scenarios/sample/base/thing.md:1: scenario: [sample.page.confirm-button] is not a declared anchor',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [state:busy] is not a state of the vocabulary',
@@ -160,8 +176,8 @@ describe('scenariosProblems', () => {
     expect(printed(contract)).toEqual([
       'tests/e2e/scenarios/sample/base/thing.md:4: activity: "gone" is not an activity of contract/domain/activities',
       'tests/e2e/scenarios/sample/base/thing.md:5: devices.B: "visitor" is not a role of the contract',
-      'tests/e2e/scenarios/sample/base/thing.md:12: where: [/sample] is the path of no binding',
-      'tests/e2e/scenarios/sample/base/thing.md:17: steps[0]: [/sample] is the path of no binding',
+      'tests/e2e/scenarios/sample/base/thing.md:12: where: [/sample] names a place by its path, and no binding has it: write the [screen:<id>] of the screen meant',
+      'tests/e2e/scenarios/sample/base/thing.md:17: steps[0]: [/sample] names a place by its path, and no binding has it: write the [screen:<id>] of the screen meant',
       'tests/e2e/scenarios/sample/base/thing.md:20: expected[1]: [code:lost] is not a code of the vocabulary',
     ])
   })
@@ -187,7 +203,7 @@ describe('scenariosProblems', () => {
     const contract = sampleContract()
     const scenario = firstScenario(contract)
 
-    scenario.where = '[/sample/$key] with [sample.list] in [state:current]'
+    scenario.where = '[screen:sample] with [sample.list] in [state:current]'
     scenario.scenario = 'A member sees [sample.thing-item] in [state:loading]'
     scenario.steps = ['Wait for [app-shell.status] to reach [state:empty]']
 
@@ -235,11 +251,28 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: sample.save-button never carries code devices-read-failed',
     ])
   })
-  it('reads past a route to the anchor before it', () => {
+  it("refuses a place named by the path of its screen's first binding, naming the screen to write", () => {
     const contract = sampleContract()
 
+    firstScenario(contract).where = '[/sample/$key] then [/elsewhere]'
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: where: [/sample/$key] names a place by its path: write [screen:sample]',
+      'tests/e2e/scenarios/sample/base/thing.md:1: where: [/elsewhere] names a place by its path, and no binding has it: write the [screen:<id>] of the screen meant',
+    ])
+  })
+  it('takes the path of a further binding, which no screen id names', () => {
+    const contract = withFurtherBinding()
+
+    firstScenario(contract).where = '[/sample/$key/edit] then [screen:sample]'
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('reads past a route to the anchor before it', () => {
+    const contract = withFurtherBinding()
+
     firstScenario(contract).expected = [
-      '[sample.save-button] on [/sample/$key] carries [code:devices-read-failed]',
+      '[sample.save-button] on [/sample/$key/edit] carries [code:devices-read-failed]',
     ]
 
     expect(printed(contract)).toEqual([

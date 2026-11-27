@@ -9,12 +9,12 @@ data:
 ---
 # Edit the thing
 
-Where: [/sample/$key]
+Where: [screen:sample]
 
 ## Scenario: A member renames the thing
 
 ### Steps
-1. Open [/sample/$key]
+1. Open [screen:sample]
 2. Enter the title into [sample.title-input]
 
 ### Expected result

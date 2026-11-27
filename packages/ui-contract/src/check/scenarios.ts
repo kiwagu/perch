@@ -129,8 +129,33 @@ export function pairingResolver(
       : `${anchor} never carries ${kind} ${value}`
 }
 
+/**
+ * A scenario names a place by its screen, never by the path of that screen's first binding: the
+ * path is stated once, in the binding, and a change of it changes no scenario. A further binding
+ * of a screen, which no screen id names, is the one place a scenario writes by its path.
+ */
+function placeByPath(contract: Contract): (reference: Reference) => string | undefined {
+  const named = new Map(
+    [...screenPlaces(contract.screens)].map(([screen, path]) => [path, screen] as const),
+  )
+  const paths = bindingPaths(contract.screens)
+
+  return ({ kind, value, raw }) => {
+    if (kind !== 'route' || (paths.has(value) && !named.has(value))) {
+      return undefined
+    }
+
+    const screen = named.get(value)
+
+    return screen === undefined
+      ? `${raw} names a place by its path, and no binding has it: write the [screen:<id>] of the screen meant`
+      : `${raw} names a place by its path: write [screen:${screen}]`
+  }
+}
+
 export function scenariosProblems(contract: Contract): Problem[] {
   const resolve = referenceResolver(contract)
+  const byPath = placeByPath(contract)
   const pair = pairingResolver(contract)
   const activities = new Set(contract.activities.map(({ id }) => id))
 
@@ -155,7 +180,7 @@ export function scenariosProblems(contract: Contract): Problem[] {
 
         return [
           ...pairedIn(references).flatMap(({ reference, anchor }) => {
-            const unresolved = resolve(reference) ?? pair(reference, anchor)
+            const unresolved = byPath(reference) ?? resolve(reference) ?? pair(reference, anchor)
 
             return unresolved === undefined ? [] : [problem(at, unresolved)]
           }),
