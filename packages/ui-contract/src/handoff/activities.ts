@@ -4,14 +4,15 @@
  * scenarios walk. A scenario is read in the order of its file, by the lines the loader keeps
  * (`where`, the steps and the expected results, each text's references left to right), with
  * an address per device: a text that opens with `On device X` or `Device X:` speaks for device
- * X, any other for the only device, or else for the device last named (`A` at first). A route
- * moves its device to that address; an anchor named in a step walks the transition on it from
+ * X, any other for the only device, or else for the device last named (`A` at first). A place
+ * moves its device to its address: a route to its path, a screen named as a place to the path of
+ * its first binding (`screenPlaces`); an anchor named in a step walks the transition on it from
  * every state at its device's address, or from the initial state while that device has named
- * no route. A report, not a rule.
+ * no place. A report, not a rule.
  */
 
 import type { Contract } from '../check'
-import { own, textsOf } from '../check'
+import { own, screenPlaces, textsOf } from '../check'
 import type { Activity } from '../files'
 import { type Lines, lineAt } from '../files'
 import { referencesIn, type Scenario } from '../scenarios'
@@ -57,10 +58,15 @@ function deviceOf(text: string, devices: readonly string[]): string | undefined 
 }
 
 /** The transitions a scenario walks in an activity, each as `<state> on <anchor>`. */
-function walkedBy(activity: Activity, scenario: Scenario, lines: Lines | undefined): Set<string> {
+function walkedBy(
+  activity: Activity,
+  scenario: Scenario,
+  lines: Lines | undefined,
+  places: ReadonlyMap<string, string>,
+): Set<string> {
   const walked = new Set<string>()
   const devices = Object.keys(scenario.devices)
-  /** The most recent route of each device. */
+  /** The most recent place of each device, as its path. */
   const routes = new Map<string, string>()
   let device = devices.includes('A') ? 'A' : (devices[0] ?? '')
 
@@ -70,8 +76,10 @@ function walkedBy(activity: Activity, scenario: Scenario, lines: Lines | undefin
     for (const { kind, value } of referencesIn(text).references) {
       const route = routes.get(device)
 
-      if (kind === 'route') {
-        routes.set(device, value)
+      const place = kind === 'route' ? value : kind === 'screen' ? places.get(value) : undefined
+
+      if (place !== undefined) {
+        routes.set(device, place)
       } else if (kind === 'anchor' && at[0] === 'steps') {
         for (const [name, state] of Object.entries(activity.states)) {
           const here =
@@ -92,12 +100,15 @@ export function activityCoverage({
   activities,
   scenarios,
   scenarioLines,
+  screens,
 }: Contract): ActivityCoverage[] {
+  const places = screenPlaces(screens)
+
   return activities.map((activity) => {
     const naming = scenarios.filter((scenario) => scenario.activity === activity.id)
     const walked = new Set(
       naming.flatMap((scenario) => [
-        ...walkedBy(activity, scenario, scenarioLines.get(scenario.id)),
+        ...walkedBy(activity, scenario, scenarioLines.get(scenario.id), places),
       ]),
     )
     const branches = branchesOf(activity)

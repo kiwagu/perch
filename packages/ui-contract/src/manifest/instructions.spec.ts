@@ -90,6 +90,20 @@ describe('instructionsOf', () => {
       "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid; every other code shows beside the controls of its part, rule `error-placement`)",
     )
   })
+  it('says a blocked press of a field that must be filled shows no new code', () => {
+    expect(instructions.screenMap).toContain(
+      'nothing is sent and the flow shows no new code, whatever its transitions on that press say',
+    )
+  })
+  it('says a field takes typing in every state that renders it, a request running included', () => {
+    expect(instructions.screenMap).toContain('a text field that is not read-only takes typing')
+    expect(instructions.screenMap).toContain(
+      'a state that does not handle its typing does not judge it, and does not disable it',
+    )
+    expect(instructions.screenMap).toContain(
+      'A text field and a link are never disabled by state: typing goes on while a request runs.',
+    )
+  })
   it("says a password input's visibility-button is presentation only, held by the input itself", () => {
     expect(instructions.screenMap).toContain('`<input>.visibility-button`')
     expect(instructions.screenMap).toContain('never an event of a flow and always enabled')

@@ -7,6 +7,7 @@
  * - `type: 'email'`: on an input that is no secret whose value has `format: email`, a read-only
  *   one included;
  * - `marksState: false`: where the field writes it;
+ * - `required: true`: where the field writes it, a field that must be filled before its form's submit;
  * - `holdsInput: false`: on a field that holds no input, as the loader finds it or the file
  *   writes it, and on the size select a paged list derives, which holds none by its facet.
  *
@@ -24,6 +25,7 @@ interface FieldFacts {
   readonly type?: 'email'
   readonly marksState?: false
   readonly holdsInput?: false
+  readonly required?: true
 }
 
 const EMAIL = 'email'
@@ -48,6 +50,7 @@ export function fieldFactsModuleOf({
       ...(email ? { type: EMAIL } : {}),
       ...(def.marksState === false ? { marksState: false } : {}),
       ...(def.holdsInput === false ? { holdsInput: false } : {}),
+      ...(def.required === true ? { required: true } : {}),
     }
 
     return Object.keys(facts).length === 0 ? [] : [[anchor, facts] as const]

@@ -117,6 +117,8 @@ code and the tests follow; the checks hold them to the contract.
    of a text field are the contract's, and a view writes none of them: the kit takes them from the
    generated field facts, and the sources check refuses a view that does
    (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-emitted-modules`);
+   a field that must be filled before its form's press is taken says `required: true`, and the
+   field facts carry it to the kit (`contract/REFERENCE.md#rule-required-field`);
    a field that holds a secret says `secret: true`, and the loader derives its `visibility-button`
    from version 4 (a file of version 3 or below may list `derived: [ visibility-button ]`;
    `contract/REFERENCE.md#rule-kind-parts`, `contract/REFERENCE.md#rule-visibility-button`;
@@ -124,7 +126,8 @@ code and the tests follow; the checks hold them to the contract.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
-   bracket references: write the anchor first, then its code, state or value
+   bracket references: a place by its screen's id, `[screen:<screen>]`, never by its path;
+   write the anchor first, then its code, state or value
    (`contract/REFERENCE.md#rule-scenario-brackets`,
    `contract/REFERENCE.md#rule-scenario-format`). When it cannot be written from the contract,
    the scenario has found a gap: go back to steps 2 to 4, never work around it in the test. A gap

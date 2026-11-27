@@ -176,7 +176,7 @@ The authored files, edited by hand or by a model in the modeling thread:
     sign-in:
       # description, params, changes
       result:
-        - the device is signed in, and the app moves to /me with code welcome
+        - the device is signed in, and the app moves to user.profile with code welcome
         - "with the second factor on: the answer asks for a code and signs no device in"
       codes:
         invalid-credentials: the email or the password is wrong
@@ -426,6 +426,7 @@ with its params, a route or a search parameter
 [`roles`](REFERENCE.md#screen-anchors-name-roles), [`own`](REFERENCE.md#screen-anchors-name-own),
 [`holdsInput`](REFERENCE.md#screen-anchors-name-holdsinput),
 [`secret`](REFERENCE.md#screen-anchors-name-secret),
+[`required`](REFERENCE.md#screen-anchors-name-required),
 [`composite`](REFERENCE.md#screen-anchors-name-composite) and
 [`source`](REFERENCE.md#screen-anchors-name-source). An anchor's
 [`description`](REFERENCE.md#screen-anchors-name-description) says what it is for; where the
@@ -692,8 +693,9 @@ e2e tree beside its test (`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.
 `tests/e2e/scenarios/` without `.md`, never written inside the file
 ([the files](REFERENCE.md#rule-scenario-files)). The file is a front matter and fixed
 sections ([the format](REFERENCE.md#rule-scenario-format)), and its brackets reference the
-contract, each one resolved by the check, a code, a state or a value to the anchor the text
-names last before it ([the brackets](REFERENCE.md#rule-scenario-brackets)).
+contract, each one resolved by the check: a place by its screen's id, `[screen:<screen>]`, whose
+path stays written once, in the screen's binding, and a code, a state or a value to the anchor
+the text names last before it ([the brackets](REFERENCE.md#rule-scenario-brackets)).
 
 The test pairs with the scenario by its path and names it on its first line,
 `// scenario: <id>`, with one `test.step` per step; `bun run e2e:scaffold <id>` writes a

@@ -16,6 +16,7 @@ export {
   locate,
   modelTargetOf,
   own,
+  screenPlaces,
 } from './contract'
 export { descriptionsProblems } from './descriptions'
 export { editionOf, since } from './editions'
