@@ -124,7 +124,8 @@ code and the tests follow; the checks hold them to the contract.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
-   bracket references: write the anchor first, then its code, state or value
+   bracket references: a place by its screen's id, `[screen:<screen>]`, never by its path;
+   write the anchor first, then its code, state or value
    (`contract/REFERENCE.md#rule-scenario-brackets`,
    `contract/REFERENCE.md#rule-scenario-format`). When it cannot be written from the contract,
    the scenario has found a gap: go back to steps 2 to 4, never work around it in the test. A gap

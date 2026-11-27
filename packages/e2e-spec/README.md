@@ -8,7 +8,8 @@ follow by hand: a YAML front matter with `tags`, `devices` (the role each device
 `data`, then the title, where it starts, the scenario in one sentence, the steps and the
 expected results. Its text names the user interface through bracket references that
 `bun run contract:check` resolves against the contract: `[<anchor>]` (a declared anchor or a
-derived one), `[/path]` (the path of a binding), `[code:<code>]`, `[state:<state>]` and
+derived one), `[screen:<screen>]` (a place, by its screen's id: the path of the screen's first
+binding), `[/path]` (the path of a binding), `[code:<code>]`, `[state:<state>]` and
 `[value:<value>]`. Each scenario pairs by its id, the file's path without `.md`, with a
 Playwright test at the same path under `tests/e2e/src`: `user/base/sign-up` with
 `tests/e2e/src/user/base/sign-up.e2e.spec.ts`, whose first line is

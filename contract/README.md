@@ -692,8 +692,9 @@ e2e tree beside its test (`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.
 `tests/e2e/scenarios/` without `.md`, never written inside the file
 ([the files](REFERENCE.md#rule-scenario-files)). The file is a front matter and fixed
 sections ([the format](REFERENCE.md#rule-scenario-format)), and its brackets reference the
-contract, each one resolved by the check, a code, a state or a value to the anchor the text
-names last before it ([the brackets](REFERENCE.md#rule-scenario-brackets)).
+contract, each one resolved by the check: a place by its screen's id, `[screen:<screen>]`, whose
+path stays written once, in the screen's binding, and a code, a state or a value to the anchor
+the text names last before it ([the brackets](REFERENCE.md#rule-scenario-brackets)).
 
 The test pairs with the scenario by its path and names it on its first line,
 `// scenario: <id>`, with one `test.step` per step; `bun run e2e:scaffold <id>` writes a
