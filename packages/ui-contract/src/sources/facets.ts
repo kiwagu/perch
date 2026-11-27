@@ -99,6 +99,9 @@ const ENABLE = /^!\s*(props\.)?can\(/
 /** The limit of a text field: the kit takes it from the field facts, so no element carries one. */
 const limits: Rule = () => ({ name: 'maxLength', on: new Map(), elsewhere: LEFT_TO_THE_KIT })
 
+/** Whether a field must be filled: the kit takes it from the field facts, so no element carries it. */
+const requireds: Rule = () => ({ name: 'required', on: new Map(), elsewhere: LEFT_TO_THE_KIT })
+
 /** The type of a text field: the kit takes it from the field facts, so no text field carries one. */
 const types: Rule = ({ screens }) => ({
   name: 'type',
@@ -182,7 +185,7 @@ const enabling: Rule = ({ screens }) => ({
   question: true,
 })
 
-const RULES: readonly Rule[] = [limits, types, marks, enabling]
+const RULES: readonly Rule[] = [limits, requireds, types, marks, enabling]
 
 /** A prop as the source writes it: bare, a string, or an expression in braces. */
 const written = (name: string, text: string): string =>

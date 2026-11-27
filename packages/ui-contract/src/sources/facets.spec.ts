@@ -132,6 +132,18 @@ describe('facetProblems', () => {
     ).toEqual([`view.tsx:9: "sample.title-input.visibility-button": maxLength={80}, but ${KIT}`])
   })
 
+  describe('whether a field must be filled, which the kit takes from the contract', () => {
+    it('refuses a required a view writes, bare or as a value, in ahead mode too', () => {
+      for (const written of ['required', 'required={true}', 'required={false}']) {
+        const title = `<Input data-testid="sample.title-input" ${written} aria-invalid={${MARK}} />`
+        const expected = [`view.tsx:${LINE['title']}: "sample.title-input": ${written}, but ${KIT}`]
+
+        expect(problemsOf({ title })).toEqual(expected)
+        expect(problemsOf({ title }, { ahead: true })).toEqual(expected)
+      }
+    })
+  })
+
   describe('the limit and the type of a text field, which the kit takes from the contract', () => {
     // The sample's model gives `thing.title` at most 80 characters, and the agreeing view lacks it.
     it('refuses a maxLength a view writes, whatever the number or the way it is written, in ahead mode too', () => {
