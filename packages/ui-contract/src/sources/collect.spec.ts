@@ -1047,7 +1047,7 @@ describe('collectFromSource', () => {
       "marksState is neither a boolean literal nor a prop passed through: the kit takes it from the contract's field facts; leave it out",
     )
   })
-  it('reports a required written as a literal on an element whose anchor it cannot read', () => {
+  it('reports a required a wrapper fixes on a field it passes an anchor to, by a literal or a default', () => {
     const found = collectFromSource(
       [
         'const a = <Input required={false} data-testid={testId} />',
@@ -1055,6 +1055,11 @@ describe('collectFromSource', () => {
         'const c = <Input {...{ required: true }} data-testid={testId} />',
         'const d = <Input required={required} data-testid={testId} />',
         'const e = <InputPrimitive required={required ?? facts?.required} />',
+        'const f = <Input required={false as const} data-testid={testId} />',
+        'const g = <Input {...props} required={false} />',
+        'const h = <Input required />',
+        'const i = ({ required = false, ...props }) => <Input {...props} required={required} />',
+        'const j = ({ required = props.required }) => <Input required={required} testId={testId} />',
       ].join('\n'),
       'x.tsx',
     )
@@ -1063,6 +1068,9 @@ describe('collectFromSource', () => {
       [1, REQUIRED_ANCHOR],
       [2, REQUIRED_ANCHOR],
       [3, REQUIRED_ANCHOR],
+      [6, REQUIRED_ANCHOR],
+      [7, REQUIRED_ANCHOR],
+      [9, REQUIRED_ANCHOR],
     ])
     expect(REQUIRED_ANCHOR).toBe(
       "required on an element that carries no anchor as a literal or as testIdFor() of two literals: the kit takes it from the contract's field facts; leave it out",

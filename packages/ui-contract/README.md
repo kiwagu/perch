@@ -213,7 +213,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`,
     `required` and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
     `sources/facets.ts` refuse it, the size select's `holdsInput` included, and
-    `sources/kit-facts.ts` a literal `required` on a field a wrapper passes its anchor to); the
+    `sources/kit-facts.ts` a `required` a wrapper fixes, by a literal or a default, on a field it
+    passes an anchor to); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,
     `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE`, `MARKS_STATE_ANCHOR` and `REQUIRED_ANCHOR`
     (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-field-holds-input`).

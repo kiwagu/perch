@@ -22,7 +22,7 @@ import type {
 } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import { namesIn, pathsIn, typedNamesIn, type WrittenType } from './binding-names'
+import { defaultsIn, namesIn, pathsIn, typedNamesIn, type WrittenType } from './binding-names'
 import type { Member } from './names'
 import { type Scopes, type Span, scopeAround } from './scopes'
 
@@ -46,7 +46,20 @@ export interface Binding {
    * the argument) or keeps the one it has (`bare`: `var x`).
    */
   readonly variable?: 'parameter' | 'assigns' | 'bare'
+  /** The default its own pattern gives it (`{ required = false }`, `(required = false)`). */
+  readonly fallback?: Expression
 }
+
+/** Each declaration with the default its pattern gives its name, where the pattern gives one. */
+const withFallbacks = <T extends { readonly name: string }>(
+  declared: readonly T[],
+  fallbacks: ReadonlyArray<{ readonly name: string; readonly fallback: Expression }>,
+): Array<T & Pick<Binding, 'fallback'>> =>
+  declared.map((binding) => {
+    const found = fallbacks.find(({ name }) => name === binding.name)
+
+    return found === undefined ? binding : { ...binding, fallback: found.fallback }
+  })
 
 export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
   const bindings: Binding[] = []
@@ -74,9 +87,12 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
     },
   ): void => {
     const at = { start: node.start, end: node.start }
-    const declared = node.params
-      .flatMap(typedNamesIn)
-      .map((binding) => ({ ...binding, variable: 'parameter' as const }))
+    const declared = withFallbacks(
+      node.params
+        .flatMap(typedNamesIn)
+        .map((binding) => ({ ...binding, variable: 'parameter' as const })),
+      node.params.flatMap(defaultsIn),
+    )
 
     bind(at, scopes.every, declared)
 
@@ -172,12 +188,17 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
         bind(
           at,
           around,
-          pathsIn(node.id).map(({ name, path, defaulted }) => ({
-            name,
-            ...(path === undefined || object === null ? {} : { member: { object, path, ...part } }),
-            ...(path === undefined || defaulted === true ? {} : declaredOf(name, path)),
-            ...variable,
-          })),
+          withFallbacks(
+            pathsIn(node.id).map(({ name, path, defaulted }) => ({
+              name,
+              ...(path === undefined || object === null
+                ? {}
+                : { member: { object, path, ...part } }),
+              ...(path === undefined || defaulted === true ? {} : declaredOf(name, path)),
+              ...variable,
+            })),
+            defaultsIn(node.id),
+          ),
         )
       }
     },

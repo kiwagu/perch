@@ -8,8 +8,8 @@
  * - `maxLength`, on no element that carries an anchor: the kit gives a text field the limit its
  *   value takes (`fieldValueOf`) from the generated field facts, whatever the number a view writes;
  * - `required`, on no element that carries an anchor: the kit gives a field the contract marks
- *   `required: true` from the same facts; a literal one on an element whose anchor the check cannot
- *   read, a wrapper's inner field, is `REQUIRED_ANCHOR` (`kit-facts.ts`);
+ *   `required: true` from the same facts; one a wrapper fixes, by a literal or a default, on the
+ *   field it passes an anchor to is `REQUIRED_ANCHOR` (`kit-facts.ts`);
  * - `type`, on no declared text field (an `input` or a `textarea`): the kit gives it the type its
  *   value has (an email) from the same facts, and any other a view writes would override them; a
  *   `type` on a button, a link or a part of a field is no field's;

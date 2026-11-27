@@ -17,6 +17,34 @@ function valueAt(
   return staticText(localsOf(program)[lookup](name, text.indexOf(marker)))
 }
 
+/** The defaults a pattern gives `name` where `marker` is written in `text`, as source text. */
+function fallbacksAt(text: string, name: string, marker: string): string[] {
+  const { program } = parseSync('x.tsx', text, { lang: 'tsx', sourceType: 'module' })
+
+  return localsOf(program)
+    .fallbacksNamed(name, text.indexOf(marker))
+    .map(({ start, end }) => text.slice(start, end))
+}
+
+describe('the default a pattern gives a name', () => {
+  it("reads a parameter's and a destructuring's own default, in the scope that binds it", () => {
+    const text = [
+      "const a = ({ required = false, label: name = 'x' }) => one(required, name)",
+      'function b() { const { required = true } = props; return two(required) }',
+      'const c = (required = false) => three(required)',
+      'function d({ required }) { return four(required) }',
+      'const e = ({ required = false }) => { const required2 = required; return (required) => five(required) }',
+    ].join('\n')
+
+    expect(fallbacksAt(text, 'required', 'one(')).toEqual(['false'])
+    expect(fallbacksAt(text, 'name', 'one(')).toEqual(["'x'"])
+    expect(fallbacksAt(text, 'required', 'two(')).toEqual(['true'])
+    expect(fallbacksAt(text, 'required', 'three(')).toEqual(['false'])
+    expect(fallbacksAt(text, 'required', 'four(')).toEqual([])
+    expect(fallbacksAt(text, 'required', 'five(')).toEqual([])
+  })
+})
+
 describe('localsOf', () => {
   const text = [
     "const KEY = 'outer'",
