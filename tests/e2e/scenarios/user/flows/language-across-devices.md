@@ -8,14 +8,14 @@ data: {}
 ---
 # Keep the language of an account on every device
 
-Where: [/settings] on device A, and [/sign-in] then [/settings] on device B, another browser
+Where: [screen:user.settings] on device A, and [screen:user.sign-in] then [screen:user.settings] on device B, another browser
 
 ## Scenario: A language chosen on one device is the language of the account on the next device it signs in on
 
 ### Steps
-1. On device A, open [/settings] and wait for [app-shell.status] to reach [state:ready]
+1. On device A, open [screen:user.settings] and wait for [app-shell.status] to reach [state:ready]
 2. On device A, choose [value:es] in [user.settings.locale-select]
-3. On device B, sign in with the same account, wait for [/me] and open [/settings]
+3. On device B, sign in with the same account, wait for [screen:user.profile] and open [screen:user.settings]
 4. On device A, choose [value:en] in [user.settings.locale-select]
 
 ### Expected result

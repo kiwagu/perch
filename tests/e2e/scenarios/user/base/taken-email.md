@@ -11,7 +11,7 @@ data:
 ---
 # Sign up again with an email that has an account
 
-Where: [/sign-in] then [user.sign-in.toggle-button], for an email that has an account
+Where: [screen:user.sign-in] then [user.sign-in.toggle-button], for an email that has an account
 
 ## Scenario: A sign-up with a taken email answers as a new one does, sends no mail, and the account keeps its own password
 
@@ -22,6 +22,6 @@ Where: [/sign-in] then [user.sign-in.toggle-button], for an email that has an ac
 4. Enter the password into [user.sign-in.password-input] and click [user.sign-in.submit-button]
 
 ### Expected result
-- After step 2 [user.sign-in.mail-message] carries [code:check-your-mail], as after the sign-up of a new email, the URL stays [/sign-in], and no second [mail:sign-up] reaches the email
+- After step 2 [user.sign-in.mail-message] carries [code:check-your-mail], as after the sign-up of a new email, the URL stays [screen:user.sign-in], and no second [mail:sign-up] reaches the email
 - After step 3 [user.sign-in.error] carries [code:invalid-credentials]
-- After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]
+- After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is [screen:user.profile]

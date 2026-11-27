@@ -15,13 +15,13 @@ data:
 ---
 # Open an email confirmation link in a browser signed in to another account
 
-Where: [/confirm-email] from [mail:change-email] on device B, where another account is signed in
+Where: [screen:user.confirm-email] from [mail:change-email] on device B, where another account is signed in
 
 ## Scenario: The link changes the email whichever account this browser holds; with another account signed in, the page offers no link that would not work
 
 ### Steps
-1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up], open [/settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]
-2. On device B, sign up with the other email, the other password and the other name, open the link of [mail:sign-up] and wait for [/me]
+1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up], open [screen:user.settings], enter the new email into [user.settings.email.email-input] and the password into [user.settings.email.password-input], and click [user.settings.email.send-button]
+2. On device B, sign up with the other email, the other password and the other name, open the link of [mail:sign-up] and wait for [screen:user.profile]
 3. On device B, open the link of [mail:change-email]
 
 ### Expected result

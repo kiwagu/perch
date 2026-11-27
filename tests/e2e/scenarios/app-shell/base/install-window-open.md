@@ -7,12 +7,12 @@ data: {}
 ---
 # Follow the sync while the browser's install window is open
 
-Where: [/me] on device A, after sign-up, in a browser that offers to install the app
+Where: [screen:user.profile] on device A, after sign-up, in a browser that offers to install the app
 
 ## Scenario: The state of the sync shows while the browser's window to install the app is open, and the reminder goes once the app is installed
 
 ### Steps
-1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]
+1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [screen:user.profile]
 2. The browser offers to install the app
 3. Click [app-shell.install-button]; the browser's window to install the app opens and stays open
 4. Take the browser offline
