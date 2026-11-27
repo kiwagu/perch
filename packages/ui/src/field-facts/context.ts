@@ -17,7 +17,7 @@ export interface FieldFacts {
   readonly marksState?: boolean | undefined
   /** Whether the field keeps what is typed until an action takes it; false for a choice that applies at once. */
   readonly holdsInput?: boolean | undefined
-  /** Whether an `Input` or a `Textarea` must be filled before its form's press is taken: the browser stops the press while it is empty. */
+  /** The native `required` of an `Input` or a `Textarea` whose own prop leaves it unset: a form the browser validates is not submitted while the field is empty. */
   readonly required?: boolean | undefined
 }
 

@@ -369,7 +369,7 @@ describe.each([
     expect(element.required).toBe(true)
   })
 
-  it('takes nothing without a provider, for an anchor with no entry, or with no anchor', () => {
+  it('takes nothing without a provider, for an anchor with an empty entry or none, or with no anchor', () => {
     render(field({ 'data-testid': 'x.name-input' }))
 
     const bare = screen.getByLabelText('f')
@@ -380,6 +380,12 @@ describe.each([
 
     cleanup()
     inFacts(field({ 'data-testid': 'x.silent-input' }))
+    expect(screen.getByLabelText('f').hasAttribute('maxlength')).toBe(false)
+    expect(screen.getByLabelText('f').hasAttribute('required')).toBe(false)
+    expect(screen.getByLabelText('f').className).toContain('border-warning')
+
+    cleanup()
+    inFacts(field({ 'data-testid': 'x.unlisted-input' }))
     expect(screen.getByLabelText('f').hasAttribute('maxlength')).toBe(false)
     expect(screen.getByLabelText('f').hasAttribute('required')).toBe(false)
     expect(screen.getByLabelText('f').className).toContain('border-warning')
