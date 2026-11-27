@@ -481,11 +481,11 @@ flow:
             - clear: user.sign-in.mail-message
             - show: user.sign-in.error
     done:
-      description: The app has moved to /me.
+      description: The app has moved to user.profile.
       type: final
       meta: { renders: [ user.sign-in.forgot-link ] }
     forgot-password:
-      description: The app has moved to /forgot-password, carrying the email typed.
+      description: The app has moved to user.forgot-password, carrying the email typed.
       type: final
       meta: { renders: [ user.sign-in.forgot-link ] }
 wireframe: |-

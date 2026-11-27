@@ -131,7 +131,7 @@ actions:
         value: settings.locale
         description: "The language the new account's mails speak and its settings start with, unless an organisation's pending invitation to the email sets one."
     result:
-      - "the account is created and the mail below is sent to it; the device is not signed in, and /sign-in asks to check the mail"
+      - "the account is created and the mail below is sent to it; the device is not signed in, and user.sign-in asks to check the mail"
       - "an email that has an account already gets the same answer, and no mail"
       - "an email with a pending invitation of an organisation whose settings on the server name a language: the account starts in it, the newest such invitation's"
     changes: [ accounts.list ]
@@ -159,7 +159,7 @@ actions:
         optional: true
         description: Sign in past the account's limit of devices, signing out its device seen least recently, but only when this device would otherwise be one too many.
     result:
-      - "the device is signed in, and the app moves to /me with code welcome"
+      - "the device is signed in, and the app moves to user.profile with code welcome"
       - "the first sign-in of an account whose email was verified without a device signing in also creates its settings and profile, as verify-email does"
       - "such an email was verified by a password reset, by its verification link opened while it was banned, or by an operator's email change confirmed"
       - "with the second factor on: a banned account is refused at this step; else the answer asks for a code (confirm-sign-in), signing nothing in or out; the device limit is judged then"
@@ -228,10 +228,10 @@ actions:
       token:
         value: token
         codes: [ link-invalid, link-expired ]
-        description: The token the link of the verification mail carries in the address of /verify-email.
+        description: The token the link of the verification mail carries in the address of user.verify-email.
     result:
       - "the first time, the email is verified, this device is signed in, and the account's settings (the language it starts in) and profile (its name as it signed up) are created"
-      - "then the app moves to /me with code welcome"
+      - "then the app moves to user.profile with code welcome"
       - "a link opened once the email is verified (an earlier opening, a password reset) answers verified-before, signs nothing in and creates nothing"
       - "a link of a banned account verifies the email but signs nothing in and creates nothing; its first sign-in once the ban is lifted creates its settings and profile"
     changes: [ devices.list, accounts.list, accounts.read ]
@@ -288,7 +288,7 @@ actions:
       token:
         value: token
         codes: [ link-invalid, link-expired ]
-        description: The token the link of the reset mail carries in the address of /reset-password.
+        description: The token the link of the reset mail carries in the address of user.reset-password.
       password:
         value: new-password
         description: The new password, kept to the composite password-rules.
@@ -361,7 +361,7 @@ actions:
       token:
         value: token
         codes: [ link-invalid, link-expired ]
-        description: The token the link of the confirmation mail carries in the address of /confirm-email.
+        description: The token the link of the confirmation mail carries in the address of user.confirm-email.
     result:
       - "the account's email is the new one, which signs it in from now on, and every device of the account shows it"
       - "every reset link of the account stops working, since it went to the old email"
@@ -404,7 +404,7 @@ actions:
       token:
         value: token
         codes: [ link-invalid, link-expired ]
-        description: The token the link of the deletion mail carries in the address of /delete-account.
+        description: The token the link of the deletion mail carries in the address of user.delete-account.
     result:
       - "the account is gone for good with its profile, settings, sessions and memberships, so every device of it is signed out, this one too when it is"
       - "each organisation it was the only member of goes with it, its data too; the other organisations keep what it wrote there, without it as a member"
@@ -523,7 +523,7 @@ actions:
         optional: true
         description: Sign out even though this device holds changes the server has not received; they are lost.
     result:
-      - "this device signs out, its local data goes, and the app moves to /sign-in"
+      - "this device signs out, its local data goes, and the app moves to user.sign-in"
       - "with unsent changes and no forgetUnsent: asks first (dialog unsent-changes) and changes nothing"
       - "it waits a few seconds for the sync channel first, except when the browser says it has no network, where it answers at once"
     changes: [ devices.list, accounts.read ]
@@ -532,7 +532,7 @@ actions:
   sign-out-everywhere:
     description: Signs every device of the account out, this one included.
     params: {}
-    result: every device of the account signs out, this one included; /sign-in shows signed-out-elsewhere
+    result: every device of the account signs out, this one included; user.sign-in shows signed-out-elsewhere
     changes: [ devices.list, accounts.read ]
     codes:
       device-sign-out-failed: "the devices could not be signed out"
@@ -709,7 +709,7 @@ actions:
       token:
         value: token
         codes: [ link-invalid, link-expired ]
-        description: The token the link of the invitation mail carries in the address of /invitation.
+        description: The token the link of the invitation mail carries in the address of organisation.invitation.
     result:
       - "the organisation's name, the role, and whether the invitation is for the account signed in here, whose email is then the invitation's; never the email"
     changes: []
@@ -865,7 +865,7 @@ actions:
         optional: true
         description: Why, for operators alone; the account never sees it.
     result:
-      - "the account is banned and every device of it is signed out in the same step, so each lands on /sign-in told account-banned"
+      - "the account is banned and every device of it is signed out in the same step, so each lands on user.sign-in told account-banned"
       - "a sign-in with the right password answers account-banned until accounts.unban"
       - "an account banned already keeps its ban, with the reason given now"
     changes: [ accounts.list, accounts.read ]
@@ -899,7 +899,7 @@ actions:
         value: id
         description: The id of the account.
     result:
-      - "every device of the account signs out, and /sign-in shows signed-out-elsewhere on each"
+      - "every device of the account signs out, and user.sign-in shows signed-out-elsewhere on each"
     changes: [ accounts.read ]
     codes:
       own-account: { invariant: not-own-account }

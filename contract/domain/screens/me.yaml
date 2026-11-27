@@ -167,7 +167,7 @@ flow:
                   actions:
                     - navigate: /sign-in
     signed-out:
-      description: The app has moved to /sign-in.
+      description: The app has moved to user.sign-in.
       type: final
 wireframe: |-
   - heading /.+/ [level=1]

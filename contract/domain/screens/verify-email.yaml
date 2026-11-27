@@ -109,7 +109,7 @@ flow:
       on:
         user.verify-email.resend-button: resending
     done:
-      description: The app has moved to /me.
+      description: The app has moved to user.profile.
       type: final
 wireframe: |-
   - heading "Verify your email" [level=1]

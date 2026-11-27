@@ -341,7 +341,7 @@ flow:
       description: The browser keeps no site data, so the app stops with a message.
       type: final
     signed-out:
-      description: The app has moved to /sign-in.
+      description: The app has moved to user.sign-in.
       type: final
 wireframe: |-
   - banner:
