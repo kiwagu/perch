@@ -38,6 +38,7 @@ anchors:
       passwords-differ: user.sign-in.password-confirmation-input
   user.sign-in.email-input:
     kind: input
+    required: true
     description: "The email of the account; it starts with the email a page carried over, when there is one."
     marksState: false
     binding:
@@ -53,6 +54,7 @@ anchors:
           email: user.sign-in.email-input
   user.sign-in.password-input:
     kind: input
+    required: true
     secret: true
     marksState: false
     composite: password-rules
@@ -66,12 +68,14 @@ anchors:
           password: user.sign-in.password-input
   user.sign-in.password-confirmation-input:
     kind: input
+    required: true
     secret: true
     marksState: false
     description: The password typed again; never sent.
     confirms: user.sign-in.password-input
   user.sign-in.name-input:
     kind: input
+    required: true
     description: The name of the new account.
     marksState: false
     binding:

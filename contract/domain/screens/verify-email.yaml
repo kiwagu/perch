@@ -29,6 +29,7 @@ anchors:
     description: Sends a new verification link to the email typed.
   user.verify-email.email-input:
     kind: input
+    required: true
     description: The email to send a new verification link to.
     marksState: false
     binding:
